@@ -11,33 +11,33 @@ import {
 } from '../../lib/tokenService';
 import * as usersRepo from '../users/users.repo';
 
+const isProduction = env.NODE_ENV === 'production';
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? 'none' : 'strict',
+  path: '/',
+} as const;
+
 function setCookieToken(res: Response, token: string): void {
   res.cookie('access_token', token, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    ...cookieOptions,
     maxAge: 60 * 60 * 1000, // 1h
-    path: '/',
   });
 }
 
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie('refresh_token', token, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    ...cookieOptions,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7d
-    path: '/',
   });
 }
 
 function setStageToken(res: Response, token: string): void {
   res.cookie('stage_token', token, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    ...cookieOptions,
     maxAge: 5 * 60 * 1000,
-    path: '/',
   });
 }
 
@@ -89,7 +89,7 @@ export const verifyMfaSetup = async (req: Request, res: Response, next: NextFunc
 
     const { fullToken } = await authService.verifyMfaSetup(req.userId!, parsed.data.otpCode);
     const { token: refreshToken } = generateRefreshToken(req.userId!);
-    res.clearCookie('stage_token', { httpOnly: true, sameSite: 'strict', path: '/' });
+    res.clearCookie('stage_token', cookieOptions);
     setCookieToken(res, fullToken);
     setRefreshCookie(res, refreshToken);
     res.json({ status: 'ok' });
@@ -111,7 +111,7 @@ export const verifyMfa = async (req: Request, res: Response, next: NextFunction)
 
     const { fullToken } = await authService.verifyMfa(req.userId!, parsed.data.otpCode);
     const { token: refreshToken } = generateRefreshToken(req.userId!);
-    res.clearCookie('stage_token', { httpOnly: true, sameSite: 'strict', path: '/' });
+    res.clearCookie('stage_token', cookieOptions);
     setCookieToken(res, fullToken);
     setRefreshCookie(res, refreshToken);
     res.json({ status: 'ok' });
@@ -188,24 +188,9 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
         // Token already invalid — nothing to revoke
       }
     }
-    res.clearCookie('access_token', {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-    });
-    res.clearCookie('refresh_token', {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-    });
-    res.clearCookie('stage_token', {
-      httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-    });
+    res.clearCookie('access_token', cookieOptions);
+    res.clearCookie('refresh_token', cookieOptions);
+    res.clearCookie('stage_token', cookieOptions);
     res.json({ status: 'ok' });
   } catch (err) {
     next(err);
