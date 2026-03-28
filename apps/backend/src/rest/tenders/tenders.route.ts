@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { validateUUID } from '../../middleware/validateUUID';
+import { resolveCompany } from '../../middleware/resolveCompany';
 import * as tendersController from './tenders.controller';
 
 const router = Router();
+
+router.use(resolveCompany);
 
 router.get('/', tendersController.getAll);
 router.get('/:id', validateUUID(), tendersController.getById);

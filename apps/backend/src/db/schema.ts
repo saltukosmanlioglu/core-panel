@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, timestamp, numeric, text } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, boolean, timestamp } from 'drizzle-orm/pg-core';
 
 // ─── companies ───────────────────────────────────────────────────────────────
 
@@ -46,34 +46,3 @@ export const users = pgTable('users', {
 });
 
 export type User = typeof users.$inferSelect;
-
-// ─── projects ─────────────────────────────────────────────────────────────────
-
-export const projects = pgTable('projects', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 255 }).notNull(),
-  description: text('description'),
-  status: varchar('status', { length: 50 }).notNull().default('active'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
-export type Project = typeof projects.$inferSelect;
-
-// ─── tenders ─────────────────────────────────────────────────────────────────
-
-export const tenders = pgTable('tenders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  projectId: uuid('project_id')
-    .notNull()
-    .references(() => projects.id, { onDelete: 'cascade' }),
-  title: varchar('title', { length: 255 }).notNull(),
-  description: text('description'),
-  status: varchar('status', { length: 50 }).notNull().default('draft'),
-  budget: numeric('budget', { precision: 15, scale: 2 }),
-  deadline: timestamp('deadline', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
-export type Tender = typeof tenders.$inferSelect;

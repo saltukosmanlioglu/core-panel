@@ -2,10 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import * as tendersRepo from './tenders.repo';
 import { createTenderSchema, updateTenderSchema } from '../../models/tender.model';
 
-export const getAll = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const all = await tendersRepo.findAll();
-    res.json({ tenders: all });
+    const tenders = await tendersRepo.findAll(req.resolvedCompanyId!);
+    res.json({ tenders });
   } catch (err) {
     next(err);
   }
@@ -13,7 +13,7 @@ export const getAll = async (_req: Request, res: Response, next: NextFunction): 
 
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const tender = await tendersRepo.findById(String(req.params.id));
+    const tender = await tendersRepo.findById(req.resolvedCompanyId!, String(req.params.id));
     if (!tender) {
       res.status(404).json({ error: 'Tender not found', code: 'NOT_FOUND' });
       return;
@@ -32,7 +32,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
     const { deadline, ...rest } = parsed.data;
-    const tender = await tendersRepo.create({
+    const tender = await tendersRepo.create(req.resolvedCompanyId!, {
       ...rest,
       deadline: deadline ? new Date(deadline) : undefined,
     });
@@ -50,7 +50,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
     const { deadline, ...rest } = parsed.data;
-    const tender = await tendersRepo.update(String(req.params.id), {
+    const tender = await tendersRepo.update(req.resolvedCompanyId!, String(req.params.id), {
       ...rest,
       ...(deadline !== undefined ? { deadline: deadline ? new Date(deadline) : null } : {}),
     });
@@ -66,7 +66,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
 export const deleteById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const deleted = await tendersRepo.deleteById(String(req.params.id));
+    const deleted = await tendersRepo.deleteById(req.resolvedCompanyId!, String(req.params.id));
     if (!deleted) {
       res.status(404).json({ error: 'Tender not found', code: 'NOT_FOUND' });
       return;

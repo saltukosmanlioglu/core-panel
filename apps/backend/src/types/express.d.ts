@@ -5,5 +5,6 @@ declare namespace Express {
     userRole?: string;
     userCompanyId?: string | null;
     userTenantId?: string | null;
+    resolvedCompanyId?: string;
   }
 }

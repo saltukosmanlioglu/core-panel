@@ -1,35 +1,84 @@
-import { eq } from 'drizzle-orm';
-import { db } from '../../db/connection';
-import { projects } from '../../db/schema';
-import type { Project } from '../../db/schema';
+import { TenantDb } from '../../lib/tenantDb';
 
-export async function findAll(): Promise<Project[]> {
-  return db.select().from(projects).orderBy(projects.createdAt);
+interface ProjectRow {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
 }
 
-export async function findById(id: string): Promise<Project | null> {
-  const result = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
-  return result[0] ?? null;
+function mapRow(row: ProjectRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-export async function create(data: { name: string; description?: string; status?: string }): Promise<Project> {
-  const [project] = await db
-    .insert(projects)
-    .values({ name: data.name, description: data.description, status: data.status ?? 'active' })
-    .returning();
-  return project!;
+export type ProjectRecord = ReturnType<typeof mapRow>;
+
+export async function findAll(companyId: string): Promise<ProjectRecord[]> {
+  const tdb = new TenantDb(companyId);
+  const { rows } = await tdb.query<ProjectRow>(
+    `SELECT * FROM ${tdb.ref('projects')} ORDER BY created_at ASC`,
+  );
+  return rows.map(mapRow);
 }
 
-export async function update(id: string, data: { name?: string; description?: string; status?: string }): Promise<Project | null> {
-  const [updated] = await db
-    .update(projects)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(projects.id, id))
-    .returning();
-  return updated ?? null;
+export async function findById(companyId: string, id: string): Promise<ProjectRecord | null> {
+  const tdb = new TenantDb(companyId);
+  const { rows } = await tdb.query<ProjectRow>(
+    `SELECT * FROM ${tdb.ref('projects')} WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  return rows[0] ? mapRow(rows[0]) : null;
 }
 
-export async function deleteById(id: string): Promise<boolean> {
-  const deleted = await db.delete(projects).where(eq(projects.id, id)).returning();
-  return deleted.length > 0;
+export async function create(
+  companyId: string,
+  data: { name: string; description?: string; status?: string },
+): Promise<ProjectRecord> {
+  const tdb = new TenantDb(companyId);
+  const { rows } = await tdb.query<ProjectRow>(
+    `INSERT INTO ${tdb.ref('projects')} (name, description, status)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [data.name, data.description ?? null, data.status ?? 'active'],
+  );
+  return mapRow(rows[0]!);
+}
+
+export async function update(
+  companyId: string,
+  id: string,
+  data: { name?: string; description?: string; status?: string },
+): Promise<ProjectRecord | null> {
+  const tdb = new TenantDb(companyId);
+  const setClauses: string[] = ['updated_at = NOW()'];
+  const params: unknown[] = [];
+
+  if (data.name !== undefined) { params.push(data.name); setClauses.push(`name = $${params.length}`); }
+  if (data.description !== undefined) { params.push(data.description); setClauses.push(`description = $${params.length}`); }
+  if (data.status !== undefined) { params.push(data.status); setClauses.push(`status = $${params.length}`); }
+
+  params.push(id);
+  const { rows } = await tdb.query<ProjectRow>(
+    `UPDATE ${tdb.ref('projects')} SET ${setClauses.join(', ')} WHERE id = $${params.length} RETURNING *`,
+    params,
+  );
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
+export async function deleteById(companyId: string, id: string): Promise<boolean> {
+  const tdb = new TenantDb(companyId);
+  const { rowCount } = await tdb.query(
+    `DELETE FROM ${tdb.ref('projects')} WHERE id = $1`,
+    [id],
+  );
+  return rowCount > 0;
 }
