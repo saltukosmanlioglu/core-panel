@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -40,17 +40,20 @@ function ShieldLogo({ color = 'white' }: { color?: string }) {
   );
 }
 
-export default function LoginPage() {
-  const router = useRouter();
+function SearchParamsHandler({ onError }: { onError: (msg: string) => void }) {
   const searchParams = useSearchParams();
-  const { setUser, setIsLoading } = useUser();
-  const [apiError, setApiError] = useState<string | null>(null);
-
   useEffect(() => {
     if (searchParams.get('error') === 'deactivated') {
-      setApiError('Your account has been deactivated. Please contact your administrator.');
+      onError('Your account has been deactivated. Please contact your administrator.');
     }
-  }, [searchParams]);
+  }, [searchParams, onError]);
+  return null;
+}
+
+function LoginPageInner() {
+  const router = useRouter();
+  const { setUser, setIsLoading } = useUser();
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const {
     register,
@@ -106,6 +109,9 @@ export default function LoginPage() {
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex' }}>
+      <Suspense fallback={null}>
+        <SearchParamsHandler onError={setApiError} />
+      </Suspense>
       {/* Left Panel — desktop only */}
       <Box
         sx={{
@@ -289,4 +295,8 @@ export default function LoginPage() {
       </Box>
     </Box>
   );
+}
+
+export default function LoginPage() {
+  return <LoginPageInner />;
 }

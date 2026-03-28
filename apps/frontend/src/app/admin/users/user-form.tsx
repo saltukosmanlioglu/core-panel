@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Box, Card, Typography, Divider, Grid } from '@mui/material';
@@ -68,7 +68,7 @@ export function UserForm({ id }: { id?: string }) {
 
   const schema = isEdit ? updateSchema : createSchema;
   const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as Resolver<FormData>,
     defaultValues: { isActive: true, role: UserRole.USER },
   });
   const watchedRole = watch('role');

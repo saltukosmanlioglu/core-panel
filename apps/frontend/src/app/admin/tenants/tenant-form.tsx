@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Box, Card, Typography, Divider } from '@mui/material';
@@ -46,7 +46,7 @@ export function TenantForm({ id }: { id?: string }) {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema as z.ZodType<FormData>),
+    resolver: zodResolver(schema) as Resolver<FormData>,
   });
 
   useEffect(() => {
@@ -63,11 +63,12 @@ export function TenantForm({ id }: { id?: string }) {
     if (!pendingData) return;
     setLoading(true);
     try {
+      const payload = { name: pendingData.name, companyId: pendingData.companyId ?? '' };
       if (isEdit && id) {
-        await updateTenantApi(id, pendingData);
+        await updateTenantApi(id, payload);
         setSnackbar({ open: true, message: 'Tenant updated successfully', severity: 'success' });
       } else {
-        await createTenantApi(pendingData);
+        await createTenantApi(payload);
         setSnackbar({ open: true, message: 'Tenant created successfully', severity: 'success' });
         setTimeout(() => router.push('/admin/tenants'), 1200);
       }
