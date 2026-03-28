@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Drizzle generated migrations (keep the folder, ignore snapshots if preferred)
+# Uncomment below if you don't want to commit migration snapshots
+# src/migrations/public/meta/
+
+# Logs
+*.log
+
+# TypeScript
+*.tsbuildinfo

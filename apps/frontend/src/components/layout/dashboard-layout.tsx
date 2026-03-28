@@ -1,0 +1,97 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Box, CircularProgress, Drawer } from '@mui/material';
+import { Gavel as GavelIcon, Assignment as AssignmentIcon } from '@mui/icons-material';
+import { useRouter } from 'next/navigation';
+import { Sidebar, type SidebarGroup } from './sidebar';
+import { Navbar } from './navbar';
+import { useAuth } from '@/hooks/useAuth';
+import { useUser } from '@/contexts/UserContext';
+
+const dashboardGroups: SidebarGroup[] = [
+  {
+    label: 'Quick Links',
+    items: [
+      { label: 'Projects', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/dashboard/projects' },
+      { label: 'Tenders', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/dashboard/tenders' },
+    ],
+  },
+];
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export function DashboardLayout({ children }: DashboardLayoutProps) {
+  const router = useRouter();
+  const { user, isLoading, logout } = useUser();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) router.push('/login');
+  }, [isLoading, user, router]);
+
+  const sidebarWidth = sidebarCollapsed ? 56 : 240;
+
+  if (isLoading || !user) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <CircularProgress sx={{ color: '#1F2937' }} />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      {/* Sidebar */}
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: sidebarWidth,
+          flexShrink: 0,
+          transition: 'width 0.2s ease',
+          '& .MuiDrawer-paper': {
+            width: sidebarWidth,
+            boxSizing: 'border-box',
+            border: 'none',
+            borderRadius: 0,
+            boxShadow: '2px 0 8px rgba(0,0,0,0.08)',
+            transition: 'width 0.2s ease',
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <Sidebar
+          title="Dashboard"
+          groups={dashboardGroups}
+          user={{ name: user.name, email: user.email, role: user.role }}
+          onLogout={logout}
+          collapsed={sidebarCollapsed}
+        />
+      </Drawer>
+
+      {/* Main */}
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          marginLeft: 0,
+          transition: 'margin-left 0.2s ease',
+        }}
+      >
+        <Navbar onMenuToggle={() => setSidebarCollapsed((v) => !v)} sidebarCollapsed={sidebarCollapsed} />
+
+        {/* Content */}
+        <Box sx={{ flex: 1, p: 4, backgroundColor: '#F8F9FA' }}>
+          {children}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
