@@ -129,7 +129,7 @@ function splitStatements(sql: string): string[] {
 
 // ─── Migration definitions ────────────────────────────────────────────────────
 
-const TENANT_MIGRATIONS_DIR = path.resolve(process.cwd(), 'src/migrations/tenant');
+const TENANT_MIGRATIONS_DIR = path.resolve(__dirname, '../migrations/tenant');
 
 function loadTenantMigrations(): { name: string; sql: (schema: string) => string }[] {
   return fs
