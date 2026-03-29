@@ -43,9 +43,9 @@ export default function MfaEnrollPage() {
           return;
         }
         const d = err.response?.data as { error?: string } | undefined;
-        setError(d?.error ?? 'Failed to initialize MFA enrollment. Please try again.');
+        setError(d?.error ?? 'MFA kaydı başlatılamadı. Lütfen tekrar deneyin.');
       } else {
-        setError('An unexpected error occurred.');
+        setError('Beklenmeyen bir hata oluştu.');
       }
     } finally {
       setEnrolling(false);
@@ -81,15 +81,15 @@ export default function MfaEnrollPage() {
           const seconds = retryAfter ? parseInt(retryAfter, 10) : null;
           setError(
             seconds
-              ? `Too many attempts. Please try again in ${seconds} seconds.`
-              : 'Too many attempts. Please try again later.'
+              ? `Çok fazla deneme. Lütfen ${seconds} saniye sonra tekrar deneyin.`
+              : 'Çok fazla deneme. Lütfen daha sonra tekrar deneyin.'
           );
         } else {
           const d = err.response?.data as { error?: string } | undefined;
-          setError(d?.error ?? 'Invalid code. Please try again.');
+          setError(d?.error ?? 'Geçersiz kod. Lütfen tekrar deneyin.');
         }
       } else {
-        setError('An unexpected error occurred.');
+        setError('Beklenmeyen bir hata oluştu.');
       }
       setOtp('');
     } finally {
@@ -103,7 +103,7 @@ export default function MfaEnrollPage() {
       <Box sx={{ mb: 3 }}>
         <Box className="flex justify-between items-center mb-2">
           <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '12px' }}>
-            Step {step} of 2 — {step === 1 ? 'Scan QR Code' : 'Verify'}
+            Adım {step}/2 — {step === 1 ? 'QR Kodu Tara' : 'Doğrula'}
           </Typography>
           <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '12px' }}>
             {step}/2
@@ -122,7 +122,7 @@ export default function MfaEnrollPage() {
       </Box>
 
       <Typography variant="h5" sx={{ fontWeight: 700, fontSize: '22px', mb: 1 }}>
-        Set up two-factor authentication
+        İki faktörlü kimlik doğrulamayı ayarla
       </Typography>
 
       {error && (
@@ -135,7 +135,7 @@ export default function MfaEnrollPage() {
       {step === 1 && (
         <Box>
           <Typography variant="body2" sx={{ color: '#6B7280', mb: 3 }}>
-            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+            QR kodunu kimlik doğrulama uygulamanızla tarayın (Google Authenticator, Authy vb.)
           </Typography>
 
           <Box className="flex flex-col items-center gap-4">
@@ -151,7 +151,7 @@ export default function MfaEnrollPage() {
                   justifyContent: 'center',
                 }}
               >
-                <Typography variant="body2" sx={{ color: '#9CA3AF' }}>Loading…</Typography>
+                <Typography variant="body2" sx={{ color: '#9CA3AF' }}>Yükleniyor…</Typography>
               </Box>
             ) : qrCodeUrl ? (
               <Box
@@ -170,7 +170,7 @@ export default function MfaEnrollPage() {
             {secret && (
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="caption" sx={{ color: '#6B7280', display: 'block', mb: 0.5 }}>
-                  Or enter this code manually:
+                  Ya da bu kodu manuel olarak girin:
                 </Typography>
                 <Typography
                   variant="body2"
@@ -200,7 +200,7 @@ export default function MfaEnrollPage() {
             disabled={!qrCodeUrl || enrolling}
             sx={{ mt: 4 }}
           >
-            Next — Enter Code
+            Devam Et — Kodu Girin
           </FormButton>
         </Box>
       )}
@@ -209,7 +209,7 @@ export default function MfaEnrollPage() {
       {step === 2 && (
         <Box>
           <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>
-            Enter the 6-digit code from your authenticator app to verify setup.
+            Kurulumu doğrulamak için kimlik doğrulama uygulamanızdaki 6 haneli kodu girin.
           </Typography>
 
           <Box className="flex flex-col items-center gap-4">
@@ -230,7 +230,7 @@ export default function MfaEnrollPage() {
               onClick={handleVerify}
               disabled={otp.length !== 6}
             >
-              Verify &amp; Continue
+              Doğrula ve Devam Et
             </FormButton>
             <FormButton
               variant="ghost"
@@ -240,7 +240,7 @@ export default function MfaEnrollPage() {
               disabled={loading}
               startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
             >
-              Back
+              Geri
             </FormButton>
           </Box>
         </Box>

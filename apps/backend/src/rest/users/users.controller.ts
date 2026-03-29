@@ -27,12 +27,12 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
   try {
     const user = await usersRepo.findById(String(req.params.id));
     if (!user) {
-      res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     if (req.userTenantId) {
       if (user.tenantId !== req.userTenantId) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
         return;
       }
     } else if (req.userCompanyId) {
@@ -40,7 +40,7 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
         user.companyId === req.userCompanyId ||
         (await isTenantInCompany(user.tenantId, req.userCompanyId));
       if (!belongsToCompany) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
         return;
       }
     }
@@ -55,17 +55,17 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     const parsed = createUserSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
     }
 
     if (req.userTenantId) {
-      // TENANT_ADMIN: can only create USER-role accounts within their own tenant
-      if (parsed.data.role !== UserRole.USER) {
+      // TENANT_ADMIN: can only create TENANT_ADMIN accounts within their own tenant
+      if (parsed.data.role !== UserRole.TENANT_ADMIN) {
         res.status(403).json({
-          error: 'Tenant admin can only create users with the User role',
+          error: 'Taşeron yöneticisi yalnızca Taşeron Yöneticisi rolüyle kullanıcı oluşturabilir',
           code: 'FORBIDDEN',
         });
         return;
@@ -77,7 +77,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
         parsed.data.role === UserRole.COMPANY_ADMIN
       ) {
         res.status(403).json({
-          error: 'Cannot create users with this role',
+          error: 'Bu role sahip kullanıcılar oluşturulamaz',
           code: 'FORBIDDEN',
         });
         return;
@@ -85,7 +85,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       if (parsed.data.tenantId) {
         const valid = await isTenantInCompany(parsed.data.tenantId, req.userCompanyId);
         if (!valid) {
-          res.status(403).json({ error: 'Tenant does not belong to your company', code: 'FORBIDDEN' });
+          res.status(403).json({ error: 'Taşeron şirketinize ait değil', code: 'FORBIDDEN' });
           return;
         }
       }
@@ -111,7 +111,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -120,29 +120,29 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     if (req.userTenantId) {
       const existing = await usersRepo.findById(String(req.params.id));
       if (!existing) {
-        res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
         return;
       }
       if (existing.tenantId !== req.userTenantId) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
         return;
       }
-      // TENANT_ADMIN cannot change role
-      if (parsed.data.role !== undefined && parsed.data.role !== UserRole.USER) {
-        res.status(403).json({ error: 'Tenant admin can only assign the User role', code: 'FORBIDDEN' });
+      // TENANT_ADMIN cannot escalate role beyond TENANT_ADMIN
+      if (parsed.data.role !== undefined && parsed.data.role !== UserRole.TENANT_ADMIN) {
+        res.status(403).json({ error: 'Taşeron yöneticisi yalnızca Taşeron Yöneticisi rolünü atayabilir', code: 'FORBIDDEN' });
         return;
       }
     } else if (req.userCompanyId) {
       const existing = await usersRepo.findById(String(req.params.id));
       if (!existing) {
-        res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
         return;
       }
       const belongsToCompany =
         existing.companyId === req.userCompanyId ||
         (await isTenantInCompany(existing.tenantId, req.userCompanyId));
       if (!belongsToCompany) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
         return;
       }
       // COMPANY_ADMIN cannot escalate roles
@@ -150,7 +150,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
         parsed.data.role === UserRole.SUPER_ADMIN ||
         parsed.data.role === UserRole.COMPANY_ADMIN
       ) {
-        res.status(403).json({ error: 'Cannot assign this role', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Bu rol atanamaz', code: 'FORBIDDEN' });
         return;
       }
     }
@@ -167,24 +167,24 @@ export const deleteById = async (req: Request, res: Response, next: NextFunction
     if (req.userTenantId) {
       const existing = await usersRepo.findById(String(req.params.id));
       if (!existing) {
-        res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
         return;
       }
       if (existing.tenantId !== req.userTenantId) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
         return;
       }
     } else if (req.userCompanyId) {
       const existing = await usersRepo.findById(String(req.params.id));
       if (!existing) {
-        res.status(404).json({ error: 'User not found', code: 'NOT_FOUND' });
+        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
         return;
       }
       const belongsToCompany =
         existing.companyId === req.userCompanyId ||
         (await isTenantInCompany(existing.tenantId, req.userCompanyId));
       if (!belongsToCompany) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
         return;
       }
     }

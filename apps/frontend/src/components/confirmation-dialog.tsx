@@ -29,8 +29,8 @@ export function ConfirmationDialog({
   onConfirm,
   onCancel,
   loading = false,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = 'Onayla',
+  cancelLabel = 'İptal',
   confirmVariant = 'danger',
 }: ConfirmationDialogProps) {
   return (

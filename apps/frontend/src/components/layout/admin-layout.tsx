@@ -7,6 +7,8 @@ import {
   Business as BusinessIcon,
   Apartment as ApartmentIcon,
   People as PeopleIcon,
+  Assignment as AssignmentIcon,
+  Gavel as GavelIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { Sidebar, type SidebarGroup } from './sidebar';
@@ -17,36 +19,56 @@ import { UserRole } from '@core-panel/shared';
 
 const superAdminGroups: SidebarGroup[] = [
   {
-    label: 'Admin Panel',
+    label: 'Yönetim Paneli',
     items: [
-      { label: 'Overview', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
-      { label: 'Companies', icon: <BusinessIcon sx={{ fontSize: 20 }} />, href: '/admin/companies' },
-      { label: 'Tenants', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
-      { label: 'Users', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
+      { label: 'Genel Bakış', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
+      { label: 'Şirketler', icon: <BusinessIcon sx={{ fontSize: 20 }} />, href: '/admin/companies' },
+      { label: 'Taşeronlar', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
+      { label: 'Kullanıcılar', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
+    ],
+  },
+  {
+    label: 'Yönetim',
+    items: [
+      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/admin/projects' },
+      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/admin/tenders' },
     ],
   },
 ];
 
 const companyAdminGroups: SidebarGroup[] = [
   {
-    label: 'Admin Panel',
+    label: 'Yönetim Paneli',
     items: [
-      { label: 'Overview', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
-      { label: 'Companies', icon: <BusinessIcon sx={{ fontSize: 20 }} />, href: '/admin/companies' },
-      { label: 'Tenants', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
-      { label: 'Users', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
+      { label: 'Genel Bakış', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
+      { label: 'Şirketim', icon: <BusinessIcon sx={{ fontSize: 20 }} />, href: '/admin/companies' },
+      { label: 'Taşeronlar', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
+      { label: 'Kullanıcılar', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
+    ],
+  },
+  {
+    label: 'Yönetim',
+    items: [
+      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/admin/projects' },
+      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/admin/tenders' },
     ],
   },
 ];
 
 const tenantAdminGroups: SidebarGroup[] = [
   {
-    label: 'Admin Panel',
+    label: 'Yönetim Paneli',
     items: [
-      { label: 'Overview', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
-      { label: 'Companies', icon: <BusinessIcon sx={{ fontSize: 20 }} />, href: '/admin/companies' },
-      { label: 'Tenants', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
-      { label: 'Users', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
+      { label: 'Genel Bakış', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
+      { label: 'Taşeronlar', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
+      { label: 'Kullanıcılar', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
+    ],
+  },
+  {
+    label: 'Yönetim',
+    items: [
+      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/admin/projects' },
+      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/admin/tenders' },
     ],
   },
 ];
@@ -111,7 +133,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         }}
       >
         <Sidebar
-          title="Admin Panel"
+          title="Yönetim Paneli"
           groups={adminGroups}
           user={{ name: user.name, email: user.email, role: user.role }}
           onLogout={logout}

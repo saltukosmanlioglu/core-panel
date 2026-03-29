@@ -49,7 +49,7 @@ export default function DashboardPage() {
         dateStyle: 'medium',
         timeStyle: 'short',
       })
-    : 'First login';
+    : 'İlk giriş';
 
   return (
     <DashboardLayout>
@@ -72,10 +72,10 @@ export default function DashboardPage() {
             </Box>
             <Box>
               <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Welcome{user?.name ? `, ${user.name}` : ' back'}
+                Hoş geldiniz{user?.name ? `, ${user.name}` : ''}
               </Typography>
               <Typography variant="body2" sx={{ color: '#6B7280' }}>
-                You&apos;re securely signed in to your workspace.
+                Çalışma alanınıza güvenli şekilde giriş yaptınız.
               </Typography>
             </Box>
           </Box>
@@ -83,13 +83,13 @@ export default function DashboardPage() {
 
         <Card sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '15px', mb: 1 }}>
-            Account Details
+            Hesap Bilgileri
           </Typography>
           <Divider sx={{ mb: 1 }} />
 
           <DetailRow
             icon={<EmailIcon sx={{ fontSize: 18 }} />}
-            label="Email Address"
+            label="E-posta Adresi"
             value={
               <Typography variant="body2" sx={{ fontSize: '14px', color: '#1F2937', fontWeight: 500 }}>
                 {user?.email}
@@ -101,10 +101,10 @@ export default function DashboardPage() {
 
           <DetailRow
             icon={<VerifiedUserIcon sx={{ fontSize: 18 }} />}
-            label="Two-Factor Authentication"
+            label="İki Faktörlü Kimlik Doğrulama"
             value={
               <Chip
-                label={user?.mfaEnabled ? 'Enabled' : 'Not enabled'}
+                label={user?.mfaEnabled ? 'Etkin' : 'Etkin değil'}
                 size="small"
                 sx={{
                   backgroundColor: user?.mfaEnabled ? '#DCFCE7' : '#FEF3C7',
@@ -121,7 +121,7 @@ export default function DashboardPage() {
 
           <DetailRow
             icon={<AccessTimeIcon sx={{ fontSize: 18 }} />}
-            label="Last Login"
+            label="Son Giriş"
             value={
               <Typography variant="body2" sx={{ fontSize: '14px', color: '#1F2937' }}>
                 {lastLoginFormatted}
@@ -134,7 +134,7 @@ export default function DashboardPage() {
               <Divider sx={{ opacity: 0.5 }} />
               <DetailRow
                 icon={<PersonIcon sx={{ fontSize: 18 }} />}
-                label="Display Name"
+                label="Görünen Ad"
                 value={
                   <Typography variant="body2" sx={{ fontSize: '14px', color: '#1F2937' }}>
                     {user.name}

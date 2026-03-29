@@ -22,12 +22,12 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (req.userCompanyId && req.userCompanyId !== req.params.id) {
-      res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }
     const company = await companiesRepo.findById(String(req.params.id));
     if (!company) {
-      res.status(404).json({ error: 'Company not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Şirket bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     res.json({ company });
@@ -41,7 +41,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     const parsed = createCompanySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -58,14 +58,14 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     const parsed = updateCompanySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
     }
     const company = await companiesRepo.update(String(req.params.id), { name: parsed.data.name });
     if (!company) {
-      res.status(404).json({ error: 'Company not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Şirket bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     res.json({ company });
@@ -78,7 +78,7 @@ export const deleteById = async (req: Request, res: Response, next: NextFunction
   try {
     const deleted = await companiesService.deleteCompany(String(req.params.id));
     if (!deleted) {
-      res.status(404).json({ error: 'Company not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Şirket bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     res.json({ status: 'ok' });

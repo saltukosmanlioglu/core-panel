@@ -2,158 +2,120 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Chip, Typography } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
-import { FormButton } from '@/components/form-elements';
-import { ConfirmationDialog, Notification } from '@/components';
-import { DataTable } from '@/components/data-table';
+import { Box, Card, Chip, Typography, Skeleton } from '@mui/material';
+import { Gavel as GavelIcon } from '@mui/icons-material';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { getTendersApi, deleteTenderApi } from '@/services/dashboard/api';
+import { getTendersApi } from '@/services/dashboard/api';
 import type { Tender } from '@core-panel/shared';
-import axios from 'axios';
 
-const statusColors: Record<string, { bg: string; color: string }> = {
-  draft: { bg: '#F3F4F6', color: '#6B7280' },
-  open: { bg: '#DCFCE7', color: '#15803D' },
-  closed: { bg: '#FEF3C7', color: '#92400E' },
-  awarded: { bg: '#DBEAFE', color: '#1D4ED8' },
+const statusConfig: Record<string, { bg: string; color: string; band: string }> = {
+  draft:   { bg: '#F3F4F6', color: '#6B7280', band: '#9CA3AF' },
+  open:    { bg: '#DCFCE7', color: '#15803D', band: '#22C55E' },
+  closed:  { bg: '#FEF3C7', color: '#92400E', band: '#F59E0B' },
+  awarded: { bg: '#DBEAFE', color: '#1D4ED8', band: '#3B82F6' },
 };
 
-export default function TendersPage() {
+function TenderCard({ tender, onClick }: { tender: Tender; onClick: () => void }) {
+  const cfg = statusConfig[tender.status] ?? statusConfig.draft;
+  return (
+    <Card onClick={onClick} sx={{ aspectRatio: '16 / 9', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 2, boxShadow: '0 1px 4px rgba(0,0,0,0.08)', cursor: 'pointer', transition: 'box-shadow 0.15s', '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' } }}>
+      {/* Color band */}
+      <Box sx={{ height: 6, backgroundColor: cfg.band, flexShrink: 0 }} />
+
+      {/* Body */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2.5, gap: 1, minHeight: 0 }}>
+        {/* Icon + title */}
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+          <Box sx={{ mt: 0.25, color: cfg.band, flexShrink: 0 }}>
+            <GavelIcon sx={{ fontSize: 20 }} />
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: '15px', color: '#111827', lineHeight: 1.3 }}>
+              {tender.title}
+            </Typography>
+            {tender.projectName && (
+              <Typography sx={{ fontSize: '11px', color: '#6B7280', mt: 0.25 }}>
+                {tender.projectName}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+
+        {/* Description */}
+        <Typography sx={{
+          fontSize: '12px', color: '#6B7280', lineHeight: 1.5, flex: 1,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {tender.description ?? 'Açıklama girilmemiş.'}
+        </Typography>
+
+        {/* Footer */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 'auto', pt: 1 }}>
+          <Chip
+            label={tender.status.charAt(0).toUpperCase() + tender.status.slice(1)}
+            size="small"
+            sx={{ backgroundColor: cfg.bg, color: cfg.color, fontWeight: 600, fontSize: '11px', height: 22 }}
+          />
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+            {tender.budget && (
+              <Typography sx={{ fontSize: '11px', color: '#374151', fontWeight: 600 }}>
+                ${Number(tender.budget).toLocaleString()}
+              </Typography>
+            )}
+            {tender.deadline && (
+              <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>
+                {new Date(tender.deadline).toLocaleDateString()}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      </Box>
+    </Card>
+  );
+}
+
+function CardSkeleton() {
+  return (
+    <Box sx={{ aspectRatio: '16 / 9' }}>
+      <Skeleton variant="rounded" width="100%" height="100%" />
+    </Box>
+  );
+}
+
+export default function DashboardTendersPage() {
   const router = useRouter();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<Tender | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const load = () => {
-    setLoading(true);
+  useEffect(() => {
     getTendersApi()
       .then(setTenders)
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Failed to load') : 'Failed to load';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
       .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteTenderApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.title}" deleted successfully`, severity: 'success' });
-      setDeleteTarget(null);
-      load();
-    } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Delete failed') : 'Delete failed';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
-    } finally {
-      setDeleting(false);
-    }
-  };
+  }, []);
 
   return (
     <DashboardLayout>
       <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-          <Box>
-            <Typography variant="h5" fontWeight={700} color="#111827">Tenders</Typography>
-            <Typography variant="body2" color="text.secondary">{tenders.length} total</Typography>
-          </Box>
-          <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/dashboard/tenders/create')}>
-            Add Tender
-          </FormButton>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h5" fontWeight={700} color="#111827">İhaleler</Typography>
+          {!loading && (
+            <Typography variant="body2" color="text.secondary">{tenders.length} kayıt</Typography>
+          )}
         </Box>
 
-        <DataTable<Tender>
-          rows={tenders}
-          loading={loading}
-          getRowId={(row) => row.id}
-          columns={[
-            {
-              field: 'title',
-              headerName: 'Title',
-              flex: 1,
-              sortable: true,
-              renderCell: (row) => (
-                <Typography sx={{ fontWeight: 500, color: '#1F2937', fontSize: '14px' }}>{row.title}</Typography>
-              ),
-            },
-            {
-              field: 'projectName',
-              headerName: 'Project',
-              flex: 1,
-              sortable: true,
-              renderCell: (row) => (
-                <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>{row.projectName ?? '—'}</Typography>
-              ),
-            },
-            {
-              field: 'status',
-              headerName: 'Status',
-              width: 120,
-              sortable: true,
-              renderCell: (row) => (
-                <Chip
-                  label={row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                  size="small"
-                  sx={{ ...(statusColors[row.status] ?? statusColors.draft), fontWeight: 600, fontSize: '11px' }}
-                />
-              ),
-            },
-            {
-              field: 'budget',
-              headerName: 'Budget',
-              width: 130,
-              renderCell: (row) => (
-                <Typography sx={{ color: '#1F2937', fontSize: '13px' }}>
-                  {row.budget ? `$${Number(row.budget).toLocaleString()}` : '—'}
-                </Typography>
-              ),
-            },
-            {
-              field: 'deadline',
-              headerName: 'Deadline',
-              width: 120,
-              sortable: true,
-              renderCell: (row) => (
-                <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>
-                  {row.deadline ? new Date(row.deadline).toLocaleDateString() : '—'}
-                </Typography>
-              ),
-            },
-          ]}
-          actions={[
-            {
-              label: 'Edit',
-              icon: <EditIcon fontSize="small" />,
-              onClick: (row) => router.push(`/dashboard/tenders/${row.id}`),
-              color: 'primary',
-            },
-            {
-              label: 'Delete',
-              icon: <DeleteIcon fontSize="small" />,
-              onClick: (row) => setDeleteTarget(row),
-              color: 'error',
-            },
-          ]}
-          emptyMessage="No tenders yet"
-        />
-
-        <ConfirmationDialog
-          open={!!deleteTarget}
-          title="Delete Tender"
-          description={`Are you sure you want to delete "${deleteTarget?.title}"?`}
-          onConfirm={handleDelete}
-          onCancel={() => setDeleteTarget(null)}
-          loading={deleting}
-          confirmLabel="Delete"
-        />
-        <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 3 }}>
+          {loading
+            ? Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)
+            : tenders.length === 0
+            ? (
+              <Box sx={{ gridColumn: '1 / -1', py: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#9CA3AF', gap: 1 }}>
+                <GavelIcon sx={{ fontSize: 48, opacity: 0.4 }} />
+                <Typography sx={{ color: '#6B7280', fontWeight: 500 }}>Henüz ihale yok</Typography>
+              </Box>
+            )
+            : tenders.map((t) => <TenderCard key={t.id} tender={t} onClick={() => router.push(`/dashboard/tenders/${t.id}`)} />)
+          }
+        </Box>
       </Box>
     </DashboardLayout>
   );

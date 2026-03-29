@@ -16,12 +16,7 @@ export async function resolveCompany(
 ): Promise<void> {
   try {
     if (req.userRole === UserRole.SUPER_ADMIN) {
-      const companyId = req.query.companyId as string | undefined;
-      if (!companyId) {
-        res.status(400).json({ error: 'companyId query parameter is required', code: 'COMPANY_REQUIRED' });
-        return;
-      }
-      req.resolvedCompanyId = companyId;
+      // Super admin has no fixed company — controllers handle cross-company queries
       next();
       return;
     }

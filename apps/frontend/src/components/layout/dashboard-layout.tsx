@@ -11,10 +11,10 @@ import { useUser } from '@/contexts/UserContext';
 
 const dashboardGroups: SidebarGroup[] = [
   {
-    label: 'Quick Links',
+    label: 'Hızlı Erişim',
     items: [
-      { label: 'Projects', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/dashboard/projects' },
-      { label: 'Tenders', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/dashboard/tenders' },
+      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/dashboard/projects' },
+      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/dashboard/tenders' },
     ],
   },
 ];
@@ -66,7 +66,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         }}
       >
         <Sidebar
-          title="Dashboard"
+          title="Panel"
           groups={dashboardGroups}
           user={{ name: user.name, email: user.email, role: user.role }}
           onLogout={logout}

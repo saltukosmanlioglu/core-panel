@@ -16,11 +16,11 @@ export async function checkIsActive(
       .limit(1);
 
     if (!user[0]) {
-      res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+      res.status(401).json({ error: 'Kullanıcı bulunamadı', code: 'USER_NOT_FOUND' });
       return;
     }
     if (!user[0].isActive) {
-      res.status(403).json({ error: 'Account is deactivated', code: 'ACCOUNT_DEACTIVATED' });
+      res.status(403).json({ error: 'Hesap devre dışı', code: 'ACCOUNT_DEACTIVATED' });
       return;
     }
     next();

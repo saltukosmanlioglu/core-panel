@@ -69,7 +69,7 @@ export function FormInput({
                 edge="end"
                 size="small"
                 disabled={disabled}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
               >
                 {showPassword ? (
                   <VisibilityOff sx={{ fontSize: 18, color: '#64748B' }} />

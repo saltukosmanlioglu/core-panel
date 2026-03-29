@@ -1,4 +1,5 @@
 import { TenantDb } from '../../lib/tenantDb';
+import * as companiesRepo from '../companies/companies.repo';
 
 interface TenderRow {
   id: string;
@@ -41,6 +42,12 @@ export async function findAll(companyId: string): Promise<TenderRecord[]> {
      ORDER BY t.created_at ASC`,
   );
   return rows.map(mapRow);
+}
+
+export async function findAllAcrossCompanies(): Promise<TenderRecord[]> {
+  const allCompanies = await companiesRepo.findAll();
+  const results = await Promise.all(allCompanies.map((c) => findAll(c.id)));
+  return results.flat();
 }
 
 export async function findById(companyId: string, id: string): Promise<TenderRecord | null> {

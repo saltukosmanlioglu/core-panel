@@ -36,7 +36,7 @@ export default function CompaniesPage() {
     getCompaniesApi()
       .then(setCompanies)
       .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Failed to load') : 'Failed to load';
+        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
         setSnackbar({ open: true, message: msg, severity: 'error' });
       })
       .finally(() => setLoading(false));
@@ -49,11 +49,11 @@ export default function CompaniesPage() {
     setDeleting(true);
     try {
       await deleteCompanyApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.name}" deleted successfully`, severity: 'success' });
+      setSnackbar({ open: true, message: `"${deleteTarget.name}" başarıyla silindi`, severity: 'success' });
       setDeleteTarget(null);
       load();
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Delete failed') : 'Delete failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setDeleting(false);
@@ -65,9 +65,9 @@ export default function CompaniesPage() {
     try {
       const updated = await reprovisionCompanySchemaApi(company.id);
       setCompanies((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-      setSnackbar({ open: true, message: `Schema re-provisioned for "${company.name}"`, severity: 'success' });
+      setSnackbar({ open: true, message: `"${company.name}" için şema yeniden oluşturuldu`, severity: 'success' });
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Re-provision failed') : 'Re-provision failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Şema oluşturulamadı') : 'Şema oluşturulamadı';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setReprovisioning(null);
@@ -78,12 +78,12 @@ export default function CompaniesPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Companies</Typography>
-          <Typography variant="body2" color="text.secondary">{companies.length} total</Typography>
+          <Typography variant="h5" fontWeight={700} color="#111827">Şirketler</Typography>
+          <Typography variant="body2" color="text.secondary">{companies.length} kayıt</Typography>
         </Box>
         {isSuperAdmin && (
           <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/companies/create')}>
-            Add Company
+            Şirket Ekle
           </FormButton>
         )}
       </Box>
@@ -95,7 +95,7 @@ export default function CompaniesPage() {
         columns={[
           {
             field: 'name',
-            headerName: 'Name',
+            headerName: 'Ad',
             flex: 1,
             sortable: true,
             renderCell: (row) => (
@@ -104,7 +104,7 @@ export default function CompaniesPage() {
           },
           {
             field: 'schemaProvisioned',
-            headerName: 'Schema',
+            headerName: 'Şema',
             width: 160,
             sortable: false,
             renderCell: (row) => (
@@ -112,19 +112,19 @@ export default function CompaniesPage() {
                 {row.schemaProvisioned ? (
                   <Chip
                     icon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
-                    label="Provisioned"
+                    label="Şema Oluşturuldu"
                     size="small"
                     sx={{ bgcolor: '#D1FAE5', color: '#065F46', fontWeight: 600, fontSize: '11px', '& .MuiChip-icon': { color: '#065F46' } }}
                   />
                 ) : (
                   <Chip
                     icon={<ErrorIcon sx={{ fontSize: 14 }} />}
-                    label="Not provisioned"
+                    label="Şema Oluşturulmadı"
                     size="small"
                     sx={{ bgcolor: '#FEE2E2', color: '#991B1B', fontWeight: 600, fontSize: '11px', '& .MuiChip-icon': { color: '#991B1B' } }}
                   />
                 )}
-                <Tooltip title="Re-provision schema">
+                <Tooltip title="Şemayı Yeniden Oluştur">
                   <span>
                     <IconButton
                       size="small"
@@ -145,7 +145,7 @@ export default function CompaniesPage() {
           },
           {
             field: 'createdAt',
-            headerName: 'Created',
+            headerName: 'Oluşturulma Tarihi',
             width: 160,
             sortable: true,
             renderCell: (row) => (
@@ -157,29 +157,29 @@ export default function CompaniesPage() {
         ]}
         actions={[
           ...(isSuperAdmin ? [{
-            label: 'Edit',
+            label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,
             onClick: (row: Company) => router.push(`/admin/companies/${row.id}`),
             color: 'primary' as const,
           }] : []),
           ...(isSuperAdmin ? [{
-            label: 'Delete',
+            label: 'Sil',
             icon: <DeleteIcon fontSize="small" />,
             onClick: (row: Company) => setDeleteTarget(row),
             color: 'error' as const,
           }] : []),
         ]}
-        emptyMessage="No companies yet"
+        emptyMessage="Henüz şirket yok"
       />
 
       <ConfirmationDialog
         open={!!deleteTarget}
-        title="Delete Company"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will also delete all associated tenants and the company's data schema.`}
+        title="Şirket Sil"
+        description={`"${deleteTarget?.name}" şirketini silmek istediğinize emin misiniz? Tüm ilişkili taşeronlar ve şirket şema verisi de silinecektir.`}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
-        confirmLabel="Delete"
+        confirmLabel="Sil"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </Box>

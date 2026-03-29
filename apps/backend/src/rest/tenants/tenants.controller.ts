@@ -24,14 +24,14 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
   try {
     const tenant = await tenantsRepo.findById(String(req.params.id));
     if (!tenant) {
-      res.status(404).json({ error: 'Tenant not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     if (req.userTenantId && tenant.id !== req.userTenantId) {
-      res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     } else if (!req.userTenantId && req.userCompanyId && tenant.companyId !== req.userCompanyId) {
-      res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }
     res.json({ tenant });
@@ -45,7 +45,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     const parsed = createTenantSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -53,7 +53,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     // COMPANY_ADMIN: force companyId to their own company
     const companyId = req.userCompanyId ?? parsed.data.companyId;
     if (!companyId) {
-      res.status(400).json({ error: 'Company is required', code: 'VALIDATION_ERROR' });
+      res.status(400).json({ error: 'Şirket zorunludur', code: 'VALIDATION_ERROR' });
       return;
     }
     const tenant = await tenantsRepo.create({ name: parsed.data.name, companyId });
@@ -68,7 +68,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     const parsed = updateTenantSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -86,7 +86,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
       companyId: req.userCompanyId ? undefined : parsed.data.companyId,
     });
     if (!tenant) {
-      res.status(404).json({ error: 'Tenant not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     res.json({ tenant });
@@ -106,7 +106,7 @@ export const deleteById = async (req: Request, res: Response, next: NextFunction
     }
     const deleted = await tenantsRepo.deleteById(String(req.params.id));
     if (!deleted) {
-      res.status(404).json({ error: 'Tenant not found', code: 'NOT_FOUND' });
+      res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;
     }
     res.json({ status: 'ok' });

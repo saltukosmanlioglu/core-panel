@@ -10,12 +10,11 @@ import { Email as EmailIcon } from '@mui/icons-material';
 import { FormInput, FormButton } from '@/components/form-elements';
 import { loginApi, getMeApi } from '@/services/auth/api';
 import { useUser } from '@/contexts/UserContext';
-import { UserRole } from '@core-panel/shared';
 import axios from 'axios';
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email('Geçerli bir e-posta adresi giriniz'),
+  password: z.string().min(1, 'Şifre zorunludur'),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -44,7 +43,7 @@ function SearchParamsHandler({ onError }: { onError: (msg: string) => void }) {
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get('error') === 'deactivated') {
-      onError('Your account has been deactivated. Please contact your administrator.');
+      onError('Hesabınız devre dışı bırakılmıştır. Lütfen yöneticinizle iletişime geçin.');
     }
   }, [searchParams, onError]);
   return null;
@@ -91,18 +90,17 @@ function LoginPageInner() {
         lastLogin: meData.user.lastLogin,
       });
       setIsLoading(false);
-      const adminRoles = [UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN];
-      router.push(adminRoles.includes(meData.user.role as UserRole) ? '/admin' : '/dashboard');
+      router.push('/admin');
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const data = err.response?.data as { error?: string; code?: string } | undefined;
         if (data?.code === 'ACCOUNT_DEACTIVATED') {
-          setApiError('Your account has been deactivated. Please contact your administrator.');
+          setApiError('Hesabınız devre dışı bırakılmıştır. Lütfen yöneticinizle iletişime geçin.');
         } else {
-          setApiError(data?.error ?? 'Invalid email or password. Please try again.');
+          setApiError(data?.error ?? 'Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.');
         }
       } else {
-        setApiError('An unexpected error occurred. Please try again.');
+        setApiError('Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.');
       }
     }
   };
@@ -164,10 +162,10 @@ function LoginPageInner() {
             variant="body1"
             sx={{ color: 'rgba(255,255,255,0.85)', fontSize: '16px', lineHeight: 1.6 }}
           >
-            Secure access to your workspace
+            Çalışma alanınıza güvenli erişim
           </Typography>
           <Box className="mt-8 flex flex-col gap-3">
-            {['Enterprise Security', 'Multi-Factor Authentication', 'Role-Based Access'].map((item) => (
+            {['Kurumsal Güvenlik', 'Çok Faktörlü Kimlik Doğrulama', 'Rol Tabanlı Erişim'].map((item) => (
               <Box key={item} className="flex items-center gap-2">
                 <Box
                   sx={{
@@ -215,16 +213,16 @@ function LoginPageInner() {
           </Box>
 
           <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '28px', mb: 1 }}>
-            Welcome back
+            Hoş geldiniz
           </Typography>
           <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '14px', mb: 4 }}>
-            Sign in to your account
+            Hesabınıza giriş yapın
           </Typography>
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Box className="flex flex-col gap-4">
               <FormInput
-                label="Email address"
+                label="E-posta adresi"
                 type="email"
                 disabled={isSubmitting}
                 error={!!errors.email}
@@ -234,7 +232,7 @@ function LoginPageInner() {
               />
 
               <FormInput
-                label="Password"
+                label="Şifre"
                 password
                 disabled={isSubmitting}
                 error={!!errors.password}
@@ -249,7 +247,7 @@ function LoginPageInner() {
                   underline="hover"
                   sx={{ fontSize: '13px', color: '#1F2937', fontWeight: 500 }}
                 >
-                  Forgot password?
+                  Şifremi unuttum
                 </Link>
               </Box>
 
@@ -277,7 +275,7 @@ function LoginPageInner() {
                 loading={isSubmitting}
                 sx={{ mt: 1 }}
               >
-                Sign In
+                Giriş Yap
               </FormButton>
             </Box>
           </form>
@@ -286,9 +284,9 @@ function LoginPageInner() {
             variant="body2"
             sx={{ mt: 4, color: '#9CA3AF', fontSize: '12px', textAlign: 'center' }}
           >
-            Having trouble?{' '}
+            Sorun mu yaşıyorsunuz?{' '}
             <Link href="mailto:it@company.com" underline="hover" sx={{ color: '#64748B' }}>
-              Contact IT support
+              BT desteğiyle iletişime geçin
             </Link>
           </Typography>
         </Box>

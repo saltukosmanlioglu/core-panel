@@ -235,24 +235,24 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
         >
           <MenuItem onClick={() => setMenuAnchor(null)} sx={{ fontSize: '14px', gap: 1.5 }}>
             <ManageAccountsIcon sx={{ fontSize: 18, color: '#6B7280' }} />
-            My account
+            Hesabım
           </MenuItem>
           {onAdmin && (
             <MenuItem onClick={() => { setMenuAnchor(null); router.push('/dashboard'); }} sx={{ fontSize: '14px', gap: 1.5 }}>
               <ArrowBackIcon sx={{ fontSize: 18, color: '#6B7280' }} />
-              Back to Dashboard
+              Panele Dön
             </MenuItem>
           )}
           {onDashboard && (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.COMPANY_ADMIN) && (
             <MenuItem onClick={() => { setMenuAnchor(null); router.push('/admin'); }} sx={{ fontSize: '14px', gap: 1.5 }}>
               <AdminPanelSettingsIcon sx={{ fontSize: 18, color: '#6B7280' }} />
-              Go to Admin
+              Yönetime Git
             </MenuItem>
           )}
           <Divider />
           <MenuItem onClick={() => { setMenuAnchor(null); onLogout(); }} sx={{ fontSize: '14px', gap: 1.5, color: '#EF4444' }}>
             <LogoutIcon sx={{ fontSize: 18 }} />
-            Logout
+            Çıkış Yap
           </MenuItem>
         </Menu>
       </Box>

@@ -31,7 +31,7 @@ export default function UsersPage() {
     getAdminUsersApi()
       .then(setUsers)
       .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Failed to load') : 'Failed to load';
+        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
         setSnackbar({ open: true, message: msg, severity: 'error' });
       })
       .finally(() => setLoading(false));
@@ -44,11 +44,11 @@ export default function UsersPage() {
     setDeleting(true);
     try {
       await deleteAdminUserApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.email}" deleted successfully`, severity: 'success' });
+      setSnackbar({ open: true, message: `"${deleteTarget.email}" başarıyla silindi`, severity: 'success' });
       setDeleteTarget(null);
       load();
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Delete failed') : 'Delete failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setDeleting(false);
@@ -59,11 +59,11 @@ export default function UsersPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Users</Typography>
-          <Typography variant="body2" color="text.secondary">{users.length} total</Typography>
+          <Typography variant="h5" fontWeight={700} color="#111827">Kullanıcılar</Typography>
+          <Typography variant="body2" color="text.secondary">{users.length} kayıt</Typography>
         </Box>
         <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/users/create')}>
-          Add User
+          Kullanıcı Ekle
         </FormButton>
       </Box>
 
@@ -74,7 +74,7 @@ export default function UsersPage() {
         columns={[
           {
             field: 'name',
-            headerName: 'Name',
+            headerName: 'Ad',
             flex: 1,
             sortable: true,
             renderCell: (row) => (
@@ -86,7 +86,7 @@ export default function UsersPage() {
           },
           {
             field: 'role',
-            headerName: 'Role',
+            headerName: 'Rol',
             width: 160,
             sortable: true,
             renderCell: (row) => (
@@ -99,7 +99,7 @@ export default function UsersPage() {
           },
           {
             field: 'tenantName',
-            headerName: 'Tenant',
+            headerName: 'Taşeron',
             flex: 1,
             sortable: true,
             renderCell: (row) => (
@@ -108,11 +108,11 @@ export default function UsersPage() {
           },
           {
             field: 'isActive',
-            headerName: 'Status',
+            headerName: 'Durum',
             width: 110,
             renderCell: (row) => (
               <Chip
-                label={row.isActive ? 'Active' : 'Inactive'}
+                label={row.isActive ? 'Aktif' : 'Pasif'}
                 size="small"
                 sx={{
                   backgroundColor: row.isActive ? '#DCFCE7' : '#F3F4F6',
@@ -125,7 +125,7 @@ export default function UsersPage() {
           },
           {
             field: 'createdAt',
-            headerName: 'Created',
+            headerName: 'Oluşturulma Tarihi',
             width: 120,
             sortable: true,
             renderCell: (row) => (
@@ -137,29 +137,29 @@ export default function UsersPage() {
         ]}
         actions={[
           {
-            label: 'Edit',
+            label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,
             onClick: (row) => router.push(`/admin/users/${row.id}`),
             color: 'primary',
           },
           {
-            label: 'Delete',
+            label: 'Sil',
             icon: <DeleteIcon fontSize="small" />,
             onClick: (row) => setDeleteTarget(row),
             color: 'error',
           },
         ]}
-        emptyMessage="No users yet"
+        emptyMessage="Henüz kullanıcı yok"
       />
 
       <ConfirmationDialog
         open={!!deleteTarget}
-        title="Delete User"
-        description={`Are you sure you want to delete "${deleteTarget?.email}"? This will also remove them from Auth0.`}
+        title="Kullanıcı Sil"
+        description={`"${deleteTarget?.email}" kullanıcısını silmek istediğinize emin misiniz? Kullanıcı Auth0'dan da kaldırılacaktır.`}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
-        confirmLabel="Delete"
+        confirmLabel="Sil"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </Box>

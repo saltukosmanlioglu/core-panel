@@ -1,4 +1,5 @@
 import { TenantDb } from '../../lib/tenantDb';
+import * as companiesRepo from '../companies/companies.repo';
 
 interface ProjectRow {
   id: string;
@@ -28,6 +29,12 @@ export async function findAll(companyId: string): Promise<ProjectRecord[]> {
     `SELECT * FROM ${tdb.ref('projects')} ORDER BY created_at ASC`,
   );
   return rows.map(mapRow);
+}
+
+export async function findAllAcrossCompanies(): Promise<ProjectRecord[]> {
+  const allCompanies = await companiesRepo.findAll();
+  const results = await Promise.all(allCompanies.map((c) => findAll(c.id)));
+  return results.flat();
 }
 
 export async function findById(companyId: string, id: string): Promise<ProjectRecord | null> {

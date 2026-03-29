@@ -13,7 +13,7 @@ import { getCompanyApi, createCompanyApi, updateCompanyApi } from '@/services/ad
 import axios from 'axios';
 
 const schema = z.object({
-  name: z.string().min(1, 'Name is required').max(255),
+  name: z.string().min(1, 'Ad zorunludur').max(255),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -54,14 +54,14 @@ export function CompanyForm({ id }: CompanyFormProps) {
     try {
       if (isEdit && id) {
         await updateCompanyApi(id, pendingData);
-        setSnackbar({ open: true, message: 'Company updated successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'Şirket başarıyla güncellendi', severity: 'success' });
       } else {
         await createCompanyApi(pendingData);
-        setSnackbar({ open: true, message: 'Company created successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'Şirket başarıyla oluşturuldu', severity: 'success' });
         setTimeout(() => router.push('/admin/companies'), 1200);
       }
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Operation failed') : 'Operation failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'İşlem başarısız') : 'İşlem başarısız';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setLoading(false);
@@ -74,15 +74,15 @@ export function CompanyForm({ id }: CompanyFormProps) {
     <Box>
       <Box className="flex items-center gap-2 mb-4">
         <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/companies')}>
-          Back
+          Geri
         </FormButton>
       </Box>
 
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-        {isEdit ? 'Edit Company' : 'New Company'}
+        {isEdit ? 'Şirket Düzenle' : 'Yeni Şirket'}
       </Typography>
       <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>
-        {isEdit ? 'Update company details' : 'Create a new company'}
+        {isEdit ? 'Şirket bilgilerini güncelle' : 'Yeni şirket oluştur'}
       </Typography>
 
       <Card sx={{ p: 4, maxWidth: 520 }}>
@@ -92,7 +92,7 @@ export function CompanyForm({ id }: CompanyFormProps) {
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Box className="flex flex-col gap-4">
               <FormInput
-                label="Company Name"
+                label="Şirket Adı"
                 error={!!errors.name}
                 errorMessage={errors.name?.message}
                 {...register('name')}
@@ -100,10 +100,10 @@ export function CompanyForm({ id }: CompanyFormProps) {
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">
                 <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/companies')} type="button">
-                  Cancel
+                  İptal
                 </FormButton>
                 <FormButton variant="primary" size="md" type="submit">
-                  {isEdit ? 'Save Changes' : 'Create Company'}
+                  {isEdit ? 'Değişiklikleri Kaydet' : 'Şirket Oluştur'}
                 </FormButton>
               </Box>
             </Box>
@@ -113,12 +113,12 @@ export function CompanyForm({ id }: CompanyFormProps) {
 
       <ConfirmationDialog
         open={confirmOpen}
-        title={isEdit ? 'Save Changes' : 'Create Company'}
-        description={isEdit ? `Save changes to "${pendingData?.name}"?` : `Create company "${pendingData?.name}"?`}
+        title={isEdit ? 'Değişiklikleri Kaydet' : 'Şirket Oluştur'}
+        description={isEdit ? `"${pendingData?.name}" şirketindeki değişiklikleri kaydetmek istiyor musunuz?` : `"${pendingData?.name}" şirketini oluşturmak istiyor musunuz?`}
         onConfirm={handleConfirm}
         onCancel={() => { setConfirmOpen(false); setPendingData(null); }}
         loading={loading}
-        confirmLabel={isEdit ? 'Save' : 'Create'}
+        confirmLabel={isEdit ? 'Kaydet' : 'Oluştur'}
         confirmVariant="primary"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />

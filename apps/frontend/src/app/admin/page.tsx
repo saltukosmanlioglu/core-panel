@@ -49,8 +49,8 @@ export default function AdminOverviewPage() {
       .then(setStats)
       .catch((err: unknown) => {
         const msg = axios.isAxiosError(err)
-          ? ((err.response?.data as { error?: string })?.error ?? 'Failed to load stats')
-          : 'Failed to load stats';
+          ? ((err.response?.data as { error?: string })?.error ?? 'İstatistikler yüklenemedi')
+          : 'İstatistikler yüklenemedi';
         setSnackbar({ open: true, message: msg, severity: 'error' });
       })
       .finally(() => setLoading(false));
@@ -58,9 +58,9 @@ export default function AdminOverviewPage() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Overview</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Genel Bakış</Typography>
       <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>
-        {isSuperAdmin ? 'Platform statistics at a glance' : 'Your company statistics at a glance'}
+        {isSuperAdmin ? 'Platform istatistiklerine genel bakış' : 'Şirket istatistiklerinize genel bakış'}
       </Typography>
 
       {loading ? (
@@ -68,10 +68,10 @@ export default function AdminOverviewPage() {
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { sm: `repeat(${isSuperAdmin ? 3 : 2}, 1fr)` }, gap: 3 }}>
           {isSuperAdmin && (
-            <StatCard icon={<BusinessIcon sx={{ fontSize: 24 }} />} label="Total Companies" value={stats?.companies ?? 0} color="#1F2937" />
+            <StatCard icon={<BusinessIcon sx={{ fontSize: 24 }} />} label="Toplam Şirket" value={stats?.companies ?? 0} color="#1F2937" />
           )}
-          <StatCard icon={<ApartmentIcon sx={{ fontSize: 24 }} />} label={isSuperAdmin ? 'Total Tenants' : 'Your Tenants'} value={stats?.tenants ?? 0} color="#3B82F6" />
-          <StatCard icon={<PeopleIcon sx={{ fontSize: 24 }} />} label={isSuperAdmin ? 'Total Users' : 'Your Users'} value={stats?.users ?? 0} color="#10B981" />
+          <StatCard icon={<ApartmentIcon sx={{ fontSize: 24 }} />} label={isSuperAdmin ? 'Toplam Taşeron' : 'Taşeronlarınız'} value={stats?.tenants ?? 0} color="#3B82F6" />
+          <StatCard icon={<PeopleIcon sx={{ fontSize: 24 }} />} label={isSuperAdmin ? 'Toplam Kullanıcı' : 'Kullanıcılarınız'} value={stats?.users ?? 0} color="#10B981" />
         </Box>
       )}
 

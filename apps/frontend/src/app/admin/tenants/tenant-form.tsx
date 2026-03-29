@@ -21,13 +21,13 @@ import { useUser } from '@/contexts/UserContext';
 import axios from 'axios';
 
 const baseSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(255),
+  name: z.string().min(1, 'Ad zorunludur').max(255),
   companyId: z.string().optional(),
 });
 
 const superAdminSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(255),
-  companyId: z.string().min(1, 'Company is required'),
+  name: z.string().min(1, 'Ad zorunludur').max(255),
+  companyId: z.string().min(1, 'Şirket zorunludur'),
 });
 
 type FormData = { name: string; companyId?: string };
@@ -66,14 +66,14 @@ export function TenantForm({ id }: { id?: string }) {
       const payload = { name: pendingData.name, companyId: pendingData.companyId ?? '' };
       if (isEdit && id) {
         await updateTenantApi(id, payload);
-        setSnackbar({ open: true, message: 'Tenant updated successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'Taşeron başarıyla güncellendi', severity: 'success' });
       } else {
         await createTenantApi(payload);
-        setSnackbar({ open: true, message: 'Tenant created successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'Taşeron başarıyla oluşturuldu', severity: 'success' });
         setTimeout(() => router.push('/admin/tenants'), 1200);
       }
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Operation failed') : 'Operation failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'İşlem başarısız') : 'İşlem başarısız';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setLoading(false); setConfirmOpen(false); setPendingData(null);
@@ -85,10 +85,10 @@ export function TenantForm({ id }: { id?: string }) {
   return (
     <Box>
       <Box className="flex items-center gap-2 mb-4">
-        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/tenants')}>Back</FormButton>
+        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/tenants')}>Geri</FormButton>
       </Box>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Edit Tenant' : 'New Tenant'}</Typography>
-      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Update tenant details' : 'Create a new tenant'}</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Taşeron Düzenle' : 'Yeni Taşeron'}</Typography>
+      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Taşeron bilgilerini güncelle' : 'Yeni taşeron oluştur'}</Typography>
 
       <Card sx={{ p: 4, maxWidth: 520 }}>
         {fetchLoading ? (
@@ -96,16 +96,16 @@ export function TenantForm({ id }: { id?: string }) {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Box className="flex flex-col gap-4">
-              <FormInput label="Tenant Name" error={!!errors.name} errorMessage={errors.name?.message} {...register('name')} />
+              <FormInput label="Taşeron Adı" error={!!errors.name} errorMessage={errors.name?.message} {...register('name')} />
               {!isCompanyAdmin && (
                 <Controller
                   name="companyId"
                   control={control}
                   render={({ field }) => (
                     <FormSelect
-                      label="Company"
+                      label="Şirket"
                       options={companyOptions}
-                      placeholder="Select a company"
+                      placeholder="Şirket seçin"
                       error={!!errors.companyId}
                       errorMessage={errors.companyId?.message}
                       value={field.value ?? ''}
@@ -116,8 +116,8 @@ export function TenantForm({ id }: { id?: string }) {
               )}
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">
-                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/tenants')} type="button">Cancel</FormButton>
-                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Save Changes' : 'Create Tenant'}</FormButton>
+                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/tenants')} type="button">İptal</FormButton>
+                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Değişiklikleri Kaydet' : 'Taşeron Oluştur'}</FormButton>
               </Box>
             </Box>
           </form>
@@ -126,12 +126,12 @@ export function TenantForm({ id }: { id?: string }) {
 
       <ConfirmationDialog
         open={confirmOpen}
-        title={isEdit ? 'Save Changes' : 'Create Tenant'}
-        description={isEdit ? `Save changes to "${pendingData?.name}"?` : `Create tenant "${pendingData?.name}"?`}
+        title={isEdit ? 'Değişiklikleri Kaydet' : 'Taşeron Oluştur'}
+        description={isEdit ? `"${pendingData?.name}" taşeronundaki değişiklikleri kaydetmek istiyor musunuz?` : `"${pendingData?.name}" taşeronunu oluşturmak istiyor musunuz?`}
         onConfirm={handleConfirm}
         onCancel={() => { setConfirmOpen(false); setPendingData(null); }}
         loading={loading}
-        confirmLabel={isEdit ? 'Save' : 'Create'}
+        confirmLabel={isEdit ? 'Kaydet' : 'Oluştur'}
         confirmVariant="primary"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />

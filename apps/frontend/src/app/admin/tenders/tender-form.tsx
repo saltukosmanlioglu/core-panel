@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Box, Card, Typography, Divider } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, FormatListBulleted as ItemsIcon, CompareArrows as OffersIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { getTenderApi, createTenderApi, updateTenderApi, getProjectsApi } from '@/services/dashboard/api';
@@ -14,21 +14,21 @@ import type { Project } from '@core-panel/shared';
 import axios from 'axios';
 
 const schema = z.object({
-  projectId: z.string().uuid('Project is required'),
-  title: z.string().min(1, 'Title is required').max(255),
+  projectId: z.string().uuid('İnşaat zorunludur'),
+  title: z.string().min(1, 'Başlık zorunludur').max(255),
   description: z.string().optional(),
   status: z.enum(['draft', 'open', 'closed', 'awarded']),
-  budget: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount').optional().or(z.literal('')),
+  budget: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Geçerli bir tutar giriniz').optional().or(z.literal('')),
   deadline: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
 const statusOptions = [
-  { label: 'Draft', value: 'draft' },
-  { label: 'Open', value: 'open' },
-  { label: 'Closed', value: 'closed' },
-  { label: 'Awarded', value: 'awarded' },
+  { label: 'Taslak', value: 'draft' },
+  { label: 'Açık', value: 'open' },
+  { label: 'Kapalı', value: 'closed' },
+  { label: 'Verildi', value: 'awarded' },
 ];
 
 export function TenderForm({ id }: { id?: string }) {
@@ -42,14 +42,12 @@ export function TenderForm({ id }: { id?: string }) {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as Resolver<FormData>,
     defaultValues: { status: 'draft' },
   });
 
   useEffect(() => {
-    const loads: Promise<void>[] = [
-      getProjectsApi().then(setProjects),
-    ];
+    const loads: Promise<void>[] = [getProjectsApi().then(setProjects)];
     if (id) {
       loads.push(
         getTenderApi(id).then((t) =>
@@ -65,7 +63,7 @@ export function TenderForm({ id }: { id?: string }) {
       );
     }
     Promise.all(loads)
-      .catch(() => router.replace('/dashboard/tenders'))
+      .catch(() => router.replace('/admin/tenders'))
       .finally(() => setFetchLoading(false));
   }, [id, reset, router]);
 
@@ -82,14 +80,14 @@ export function TenderForm({ id }: { id?: string }) {
       };
       if (isEdit && id) {
         await updateTenderApi(id, payload);
-        setSnackbar({ open: true, message: 'Tender updated successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'İhale başarıyla güncellendi', severity: 'success' });
       } else {
         await createTenderApi(payload);
-        setSnackbar({ open: true, message: 'Tender created successfully', severity: 'success' });
-        setTimeout(() => router.push('/dashboard/tenders'), 1200);
+        setSnackbar({ open: true, message: 'İhale başarıyla oluşturuldu', severity: 'success' });
+        setTimeout(() => router.push('/admin/tenders'), 1200);
       }
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Operation failed') : 'Operation failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'İşlem başarısız') : 'İşlem başarısız';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setLoading(false); setConfirmOpen(false); setPendingData(null);
@@ -101,10 +99,16 @@ export function TenderForm({ id }: { id?: string }) {
   return (
     <Box>
       <Box className="flex items-center gap-2 mb-4">
-        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/dashboard/tenders')}>Back</FormButton>
+        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/tenders')}>Geri</FormButton>
+        {isEdit && id && (
+          <>
+            <FormButton variant="secondary" size="sm" startIcon={<ItemsIcon sx={{ fontSize: 16 }} />} onClick={() => router.push(`/admin/tenders/${id}/items`)}>Kalemler</FormButton>
+            <FormButton variant="secondary" size="sm" startIcon={<OffersIcon sx={{ fontSize: 16 }} />} onClick={() => router.push(`/admin/tenders/${id}/offers`)}>Teklifler</FormButton>
+          </>
+        )}
       </Box>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Edit Tender' : 'New Tender'}</Typography>
-      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Update tender details' : 'Create a new tender and associate it with a project'}</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'İhale Düzenle' : 'Yeni İhale'}</Typography>
+      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'İhale bilgilerini güncelle' : 'Yeni ihale oluştur ve bir inşaatla ilişkilendir'}</Typography>
 
       <Card sx={{ p: 4, maxWidth: 640 }}>
         {fetchLoading ? (
@@ -116,26 +120,26 @@ export function TenderForm({ id }: { id?: string }) {
                 name="projectId"
                 control={control}
                 render={({ field }) => (
-                  <FormSelect label="Project" options={projectOptions} error={!!errors.projectId} errorMessage={errors.projectId?.message} value={field.value ?? ''} onChange={field.onChange} />
+                  <FormSelect label="İnşaat" options={projectOptions} error={!!errors.projectId} errorMessage={errors.projectId?.message} value={field.value ?? ''} onChange={field.onChange} />
                 )}
               />
-              <FormInput label="Title" error={!!errors.title} errorMessage={errors.title?.message} {...register('title')} />
-              <FormInput label="Description" error={!!errors.description} errorMessage={errors.description?.message} {...register('description')} />
+              <FormInput label="Başlık" error={!!errors.title} errorMessage={errors.title?.message} {...register('title')} />
+              <FormInput label="Açıklama" error={!!errors.description} errorMessage={errors.description?.message} {...register('description')} />
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
                 <Controller
                   name="status"
                   control={control}
                   render={({ field }) => (
-                    <FormSelect label="Status" options={statusOptions} error={!!errors.status} errorMessage={errors.status?.message} value={field.value ?? ''} onChange={field.onChange} />
+                    <FormSelect label="Durum" options={statusOptions} error={!!errors.status} errorMessage={errors.status?.message} value={field.value ?? ''} onChange={field.onChange} />
                   )}
                 />
-                <FormInput label="Budget (e.g. 50000.00)" error={!!errors.budget} errorMessage={errors.budget?.message} {...register('budget')} />
+                <FormInput label="Bütçe (örn. 50000.00)" error={!!errors.budget} errorMessage={errors.budget?.message} {...register('budget')} />
               </Box>
-              <FormInput label="Deadline" type="datetime-local" error={!!errors.deadline} errorMessage={errors.deadline?.message} {...register('deadline')} />
+              <FormInput label="Son Tarih" type="datetime-local" error={!!errors.deadline} errorMessage={errors.deadline?.message} {...register('deadline')} />
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">
-                <FormButton variant="secondary" size="md" onClick={() => router.push('/dashboard/tenders')} type="button">Cancel</FormButton>
-                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Save Changes' : 'Create Tender'}</FormButton>
+                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/tenders')} type="button">İptal</FormButton>
+                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Değişiklikleri Kaydet' : 'İhale Oluştur'}</FormButton>
               </Box>
             </Box>
           </form>
@@ -144,12 +148,12 @@ export function TenderForm({ id }: { id?: string }) {
 
       <ConfirmationDialog
         open={confirmOpen}
-        title={isEdit ? 'Save Changes' : 'Create Tender'}
-        description={isEdit ? 'Save changes to this tender?' : `Create tender "${pendingData?.title}"?`}
+        title={isEdit ? 'Değişiklikleri Kaydet' : 'İhale Oluştur'}
+        description={isEdit ? 'Bu ihaledeki değişiklikleri kaydetmek istiyor musunuz?' : `"${pendingData?.title}" ihalesini oluşturmak istiyor musunuz?`}
         onConfirm={handleConfirm}
         onCancel={() => { setConfirmOpen(false); setPendingData(null); }}
         loading={loading}
-        confirmLabel={isEdit ? 'Save' : 'Create'}
+        confirmLabel={isEdit ? 'Kaydet' : 'Oluştur'}
         confirmVariant="primary"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />

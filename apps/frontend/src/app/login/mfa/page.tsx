@@ -47,18 +47,18 @@ export default function MfaVerifyPage() {
           const seconds = retryAfter ? parseInt(retryAfter, 10) : null;
           setError(
             seconds
-              ? `Too many attempts. Please try again in ${seconds} seconds.`
-              : 'Too many attempts. Please try again later.'
+              ? `Çok fazla deneme. Lütfen ${seconds} saniye sonra tekrar deneyin.`
+              : 'Çok fazla deneme. Lütfen daha sonra tekrar deneyin.'
           );
         } else if (err.response?.status === 401) {
           router.push('/login');
           return;
         } else {
           const d = err.response?.data as { error?: string } | undefined;
-          setError(d?.error ?? 'Invalid code. Please check your app and try again.');
+          setError(d?.error ?? 'Geçersiz kod. Lütfen uygulamanızı kontrol edin ve tekrar deneyin.');
         }
       } else {
-        setError('An unexpected error occurred.');
+        setError('Beklenmeyen bir hata oluştu.');
       }
       setOtp('');
     } finally {
@@ -94,13 +94,13 @@ export default function MfaVerifyPage() {
         </Box>
 
         <Typography variant="h5" sx={{ fontWeight: 700, fontSize: '22px', mb: 1 }}>
-          Two-factor authentication
+          İki faktörlü kimlik doğrulama
         </Typography>
         <Typography
           variant="body2"
           sx={{ color: '#6B7280', fontSize: '14px', textAlign: 'center', maxWidth: 320 }}
         >
-          Enter the 6-digit code from your authenticator app
+          Kimlik doğrulama uygulamanızdaki 6 haneli kodu girin
         </Typography>
       </Box>
 
@@ -128,7 +128,7 @@ export default function MfaVerifyPage() {
             onClick={() => handleVerify()}
             disabled={otp.length !== 6}
           >
-            Verify
+            Doğrula
           </FormButton>
           <FormButton
             variant="ghost"
@@ -138,7 +138,7 @@ export default function MfaVerifyPage() {
             disabled={loading}
             startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
           >
-            Back to login
+            Girişe dön
           </FormButton>
         </Box>
       </Box>

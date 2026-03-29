@@ -4,10 +4,10 @@ import { AppError } from '../lib/AppError';
 export { AppError };
 
 const PG_ERRORS: Record<string, { status: number; error: string; code: string }> = {
-  '23503': { status: 400, error: 'Referenced record does not exist', code: 'FK_VIOLATION' },
-  '23505': { status: 409, error: 'A record with this value already exists', code: 'DUPLICATE_ENTRY' },
-  '22P02': { status: 400, error: 'Invalid ID format', code: 'INVALID_ID' },
-  '23502': { status: 400, error: 'Required field is missing', code: 'NULL_VIOLATION' },
+  '23503': { status: 400, error: 'İlgili kayıt bulunamadı', code: 'FK_VIOLATION' },
+  '23505': { status: 409, error: 'Bu değere sahip bir kayıt zaten mevcut', code: 'DUPLICATE_ENTRY' },
+  '22P02': { status: 400, error: 'Geçersiz ID formatı', code: 'INVALID_ID' },
+  '23502': { status: 400, error: 'Zorunlu alan eksik', code: 'NULL_VIOLATION' },
 };
 
 export function errorHandler(
@@ -40,8 +40,8 @@ export function errorHandler(
 
   const clientMessage =
     statusCode >= 500
-      ? 'An unexpected error occurred'
-      : err.message ?? 'An error occurred';
+      ? 'Beklenmeyen bir hata oluştu'
+      : err.message ?? 'Bir hata oluştu';
 
   res.status(statusCode).json({
     error: clientMessage,

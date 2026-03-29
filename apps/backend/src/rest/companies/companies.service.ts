@@ -74,7 +74,10 @@ export async function deleteCompany(id: string): Promise<boolean> {
     // 1. Drop the tenant schema (CASCADE removes all tables inside)
     await dropTenantSchema(id, client);
 
-    // 2. Delete the company record
+    // 2. Delete all users belonging to this company
+    await client.query(`DELETE FROM users WHERE company_id = $1`, [id]);
+
+    // 3. Delete the company record (also cascades tenants via FK)
     const result = await client.query(
       `DELETE FROM companies WHERE id = $1 RETURNING id`,
       [id],

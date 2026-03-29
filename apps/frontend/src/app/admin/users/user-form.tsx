@@ -22,20 +22,20 @@ import { useUser } from '@/contexts/UserContext';
 import axios from 'axios';
 
 const createSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'At least 8 characters'),
-  role: z.string().min(1, 'Role is required'),
+  name: z.string().min(1, 'Ad zorunludur'),
+  email: z.string().email('Geçersiz e-posta'),
+  password: z.string().min(8, 'En az 8 karakter'),
+  role: z.string().min(1, 'Rol zorunludur'),
   companyId: z.string().uuid('Invalid company ID').nullable().optional(),
   tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
   isActive: z.boolean(),
 });
 
 const updateSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
-  role: z.string().min(1, 'Role is required'),
+  name: z.string().min(1, 'Ad zorunludur'),
+  email: z.string().email('Geçersiz e-posta'),
+  password: z.string().min(8, 'Şifre en az 8 karakter olmalıdır').optional(),
+  role: z.string().min(1, 'Rol zorunludur'),
   companyId: z.string().uuid('Invalid company ID').nullable().optional(),
   tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
   isActive: z.boolean(),
@@ -46,10 +46,9 @@ type UpdateData = z.infer<typeof updateSchema>;
 type FormData = CreateData | UpdateData;
 
 const roleOptions = [
-  { label: 'Super Admin', value: UserRole.SUPER_ADMIN },
-  { label: 'Company Admin', value: UserRole.COMPANY_ADMIN },
-  { label: 'Tenant Admin', value: UserRole.TENANT_ADMIN },
-  { label: 'User', value: UserRole.USER },
+  { label: 'Süper Yönetici', value: UserRole.SUPER_ADMIN },
+  { label: 'Şirket Yöneticisi', value: UserRole.COMPANY_ADMIN },
+  { label: 'Taşeron Yöneticisi', value: UserRole.TENANT_ADMIN },
 ];
 
 export function UserForm({ id }: { id?: string }) {
@@ -69,7 +68,7 @@ export function UserForm({ id }: { id?: string }) {
   const schema = isEdit ? updateSchema : createSchema;
   const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
-    defaultValues: { isActive: true, role: UserRole.USER },
+    defaultValues: { isActive: true, role: UserRole.TENANT_ADMIN },
   });
   const watchedRole = watch('role');
 
@@ -104,14 +103,14 @@ export function UserForm({ id }: { id?: string }) {
       if (isEdit && id) {
         const { password, ...rest } = payload as UpdateData;
         await updateAdminUserApi(id, { ...rest, ...(password ? { password } : {}) });
-        setSnackbar({ open: true, message: 'User updated successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'Kullanıcı başarıyla güncellendi', severity: 'success' });
       } else {
         await createAdminUserApi(payload as CreateData);
-        setSnackbar({ open: true, message: 'User created successfully', severity: 'success' });
+        setSnackbar({ open: true, message: 'Kullanıcı başarıyla oluşturuldu', severity: 'success' });
         setTimeout(() => router.push('/admin/users'), 1200);
       }
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Operation failed') : 'Operation failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'İşlem başarısız') : 'İşlem başarısız';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setLoading(false); setConfirmOpen(false); setPendingData(null);
@@ -121,18 +120,18 @@ export function UserForm({ id }: { id?: string }) {
   const tenantOptions = tenants.map((t) => ({ label: t.name, value: t.id }));
   const companyOptions = companies.map((c) => ({ label: c.name, value: c.id }));
   const availableRoleOptions = isTenantAdmin
-    ? roleOptions.filter((r) => r.value === UserRole.USER)
+    ? roleOptions.filter((r) => r.value === UserRole.TENANT_ADMIN)
     : isCompanyAdmin
-    ? roleOptions.filter((r) => r.value === UserRole.TENANT_ADMIN || r.value === UserRole.USER)
+    ? roleOptions.filter((r) => r.value === UserRole.TENANT_ADMIN)
     : roleOptions;
 
   return (
     <Box>
       <Box className="flex items-center gap-2 mb-4">
-        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/users')}>Back</FormButton>
+        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/users')}>Geri</FormButton>
       </Box>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Edit User' : 'New User'}</Typography>
-      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Update user details' : 'Create a new user in Auth0 and the database'}</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı'}</Typography>
+      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Kullanıcı bilgilerini güncelle' : 'Auth0 ve veritabanında yeni kullanıcı oluştur'}</Typography>
 
       <Card sx={{ p: 4, maxWidth: 640 }}>
         {fetchLoading ? (
@@ -140,10 +139,10 @@ export function UserForm({ id }: { id?: string }) {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Box className="flex flex-col gap-4">
-              <FormInput label="Full Name" error={!!errors.name} errorMessage={errors.name?.message} {...register('name')} />
-              <FormInput label="Email Address" type="email" error={!!errors.email} errorMessage={errors.email?.message} {...register('email')} />
+              <FormInput label="Ad Soyad" error={!!errors.name} errorMessage={errors.name?.message} {...register('name')} />
+              <FormInput label="E-posta Adresi" type="email" error={!!errors.email} errorMessage={errors.email?.message} {...register('email')} />
               <FormInput
-                label={isEdit ? 'New Password (leave blank to keep current)' : 'Password'}
+                label={isEdit ? 'Yeni Şifre (mevcut şifreyi korumak için boş bırakın)' : 'Şifre'}
                 password
                 error={!!errors.password}
                 errorMessage={errors.password?.message}
@@ -155,7 +154,7 @@ export function UserForm({ id }: { id?: string }) {
                   name="role"
                   control={control}
                   render={({ field }) => (
-                    <FormSelect label="Role" options={availableRoleOptions} error={!!errors.role} errorMessage={errors.role?.message} value={field.value ?? ''} onChange={field.onChange} />
+                    <FormSelect label="Rol" options={availableRoleOptions} error={!!errors.role} errorMessage={errors.role?.message} value={field.value ?? ''} onChange={field.onChange} />
                   )}
                 />
                 {!isTenantAdmin && watchedRole === UserRole.COMPANY_ADMIN && (
@@ -163,7 +162,7 @@ export function UserForm({ id }: { id?: string }) {
                     name="companyId"
                     control={control}
                     render={({ field }) => (
-                      <FormSelect label="Company" options={companyOptions} error={!!errors.companyId} errorMessage={errors.companyId?.message} value={field.value ?? ''} onChange={field.onChange} />
+                      <FormSelect label="Şirket" options={companyOptions} error={!!errors.companyId} errorMessage={errors.companyId?.message} value={field.value ?? ''} onChange={field.onChange} />
                     )}
                   />
                 )}
@@ -172,7 +171,7 @@ export function UserForm({ id }: { id?: string }) {
                     name="tenantId"
                     control={control}
                     render={({ field }) => (
-                      <FormSelect label="Tenant" options={tenantOptions} error={!!errors.tenantId} errorMessage={errors.tenantId?.message} value={field.value ?? ''} onChange={field.onChange} />
+                      <FormSelect label="Taşeron" options={tenantOptions} error={!!errors.tenantId} errorMessage={errors.tenantId?.message} value={field.value ?? ''} onChange={field.onChange} />
                     )}
                   />
                 )}
@@ -182,14 +181,14 @@ export function UserForm({ id }: { id?: string }) {
                 name="isActive"
                 control={control}
                 render={({ field }) => (
-                  <FormCheckbox label="Active account" checked={field.value} onChange={(_, checked) => field.onChange(checked)} />
+                  <FormCheckbox label="Aktif hesap" checked={field.value} onChange={(_, checked) => field.onChange(checked)} />
                 )}
               />
 
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">
-                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/users')} type="button">Cancel</FormButton>
-                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Save Changes' : 'Create User'}</FormButton>
+                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/users')} type="button">İptal</FormButton>
+                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Değişiklikleri Kaydet' : 'Kullanıcı Oluştur'}</FormButton>
               </Box>
             </Box>
           </form>
@@ -198,12 +197,12 @@ export function UserForm({ id }: { id?: string }) {
 
       <ConfirmationDialog
         open={confirmOpen}
-        title={isEdit ? 'Save Changes' : 'Create User'}
-        description={isEdit ? `Save changes to this user?` : `Create user "${(pendingData as CreateData)?.email}"?`}
+        title={isEdit ? 'Değişiklikleri Kaydet' : 'Kullanıcı Oluştur'}
+        description={isEdit ? `Bu kullanıcıyı kaydetmek istediğinize emin misiniz?` : `"${(pendingData as CreateData)?.email}" kullanıcısını oluşturmak istiyor musunuz?`}
         onConfirm={handleConfirm}
         onCancel={() => { setConfirmOpen(false); setPendingData(null); }}
         loading={loading}
-        confirmLabel={isEdit ? 'Save' : 'Create'}
+        confirmLabel={isEdit ? 'Kaydet' : 'Oluştur'}
         confirmVariant="primary"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />

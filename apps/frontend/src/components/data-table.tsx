@@ -89,7 +89,7 @@ export function DataTable<T>({
   selectable = false,
   onSelectionChange,
   getRowId,
-  emptyMessage = 'No records found',
+  emptyMessage = 'Kayıt bulunamadı',
   title,
   toolbarActions,
 }: DataTableProps<T>) {
@@ -275,7 +275,7 @@ export function DataTable<T>({
                   align="right"
                   sx={{ color: '#111827', fontWeight: 600, fontSize: '13px', borderBottom: '2px solid #E5E7EB', pr: 2 }}
                 >
-                  Actions
+                  İşlemler
                 </TableCell>
               )}
             </TableRow>

@@ -46,7 +46,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -81,7 +81,7 @@ export const verifyMfaSetup = async (req: Request, res: Response, next: NextFunc
     const parsed = mfaSetupVerifySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -103,7 +103,7 @@ export const verifyMfa = async (req: Request, res: Response, next: NextFunction)
     const parsed = mfaVerifySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
         code: 'VALIDATION_ERROR',
       });
       return;
@@ -124,7 +124,7 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
   try {
     const token = req.cookies?.['refresh_token'] as string | undefined;
     if (!token) {
-      res.status(401).json({ error: 'No refresh token', code: 'NO_REFRESH_TOKEN' });
+      res.status(401).json({ error: 'Yenileme tokeni yok', code: 'NO_REFRESH_TOKEN' });
       return;
     }
 
@@ -132,22 +132,22 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
     try {
       payload = verifyRefreshToken(token);
     } catch {
-      res.status(401).json({ error: 'Invalid or expired refresh token', code: 'REFRESH_TOKEN_INVALID' });
+      res.status(401).json({ error: 'Geçersiz veya süresi dolmuş yenileme tokeni', code: 'REFRESH_TOKEN_INVALID' });
       return;
     }
 
     if (payload.type !== 'refresh') {
-      res.status(401).json({ error: 'Invalid token type', code: 'REFRESH_TOKEN_INVALID' });
+      res.status(401).json({ error: 'Geçersiz token türü', code: 'REFRESH_TOKEN_INVALID' });
       return;
     }
 
     const user = await usersRepo.findById(payload.userId);
     if (!user) {
-      res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+      res.status(401).json({ error: 'Kullanıcı bulunamadı', code: 'USER_NOT_FOUND' });
       return;
     }
     if (!user.isActive) {
-      res.status(403).json({ error: 'Account is deactivated', code: 'ACCOUNT_DEACTIVATED' });
+      res.status(403).json({ error: 'Hesap devre dışı', code: 'ACCOUNT_DEACTIVATED' });
       return;
     }
 
@@ -163,7 +163,7 @@ export const getMe = async (req: Request, res: Response, next: NextFunction): Pr
   try {
     const user = await authService.getMe(req.userId!);
     if (!user) {
-      res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+      res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'USER_NOT_FOUND' });
       return;
     }
     res.json({ user });

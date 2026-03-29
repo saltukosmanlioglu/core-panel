@@ -28,7 +28,7 @@ export default function TenantsPage() {
     getTenantsApi()
       .then(setTenants)
       .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Failed to load') : 'Failed to load';
+        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
         setSnackbar({ open: true, message: msg, severity: 'error' });
       })
       .finally(() => setLoading(false));
@@ -41,11 +41,11 @@ export default function TenantsPage() {
     setDeleting(true);
     try {
       await deleteTenantApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.name}" deleted successfully`, severity: 'success' });
+      setSnackbar({ open: true, message: `"${deleteTarget.name}" başarıyla silindi`, severity: 'success' });
       setDeleteTarget(null);
       load();
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Delete failed') : 'Delete failed';
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setDeleting(false);
@@ -56,12 +56,12 @@ export default function TenantsPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Tenants</Typography>
-          <Typography variant="body2" color="text.secondary">{tenants.length} total</Typography>
+          <Typography variant="h5" fontWeight={700} color="#111827">Taşeronlar</Typography>
+          <Typography variant="body2" color="text.secondary">{tenants.length} kayıt</Typography>
         </Box>
         {!isTenantAdmin && (
           <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/tenants/create')}>
-            Add Tenant
+            Taşeron Ekle
           </FormButton>
         )}
       </Box>
@@ -73,7 +73,7 @@ export default function TenantsPage() {
         columns={[
           {
             field: 'name',
-            headerName: 'Name',
+            headerName: 'Ad',
             flex: 1,
             sortable: true,
             renderCell: (row) => (
@@ -82,7 +82,7 @@ export default function TenantsPage() {
           },
           {
             field: 'companyName',
-            headerName: 'Company',
+            headerName: 'Şirket',
             flex: 1,
             sortable: true,
             renderCell: (row) => (
@@ -93,7 +93,7 @@ export default function TenantsPage() {
           },
           {
             field: 'createdAt',
-            headerName: 'Created',
+            headerName: 'Oluşturulma Tarihi',
             width: 160,
             sortable: true,
             renderCell: (row) => (
@@ -105,29 +105,29 @@ export default function TenantsPage() {
         ]}
         actions={isTenantAdmin ? [] : [
           {
-            label: 'Edit',
+            label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,
             onClick: (row) => router.push(`/admin/tenants/${row.id}`),
             color: 'primary',
           },
           {
-            label: 'Delete',
+            label: 'Sil',
             icon: <DeleteIcon fontSize="small" />,
             onClick: (row) => setDeleteTarget(row),
             color: 'error',
           },
         ]}
-        emptyMessage="No tenants yet"
+        emptyMessage="Henüz taşeron yok"
       />
 
       <ConfirmationDialog
         open={!!deleteTarget}
-        title="Delete Tenant"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"?`}
+        title="Taşeron Sil"
+        description={`"${deleteTarget?.name}" taşeronunu silmek istediğinize emin misiniz?`}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
-        confirmLabel="Delete"
+        confirmLabel="Sil"
       />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </Box>
