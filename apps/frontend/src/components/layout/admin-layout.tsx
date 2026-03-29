@@ -55,23 +55,6 @@ const companyAdminGroups: SidebarGroup[] = [
   },
 ];
 
-const tenantAdminGroups: SidebarGroup[] = [
-  {
-    label: 'Yönetim Paneli',
-    items: [
-      { label: 'Genel Bakış', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
-      { label: 'Taşeronlar', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
-      { label: 'Kullanıcılar', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
-    ],
-  },
-  {
-    label: 'Yönetim',
-    items: [
-      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/admin/projects' },
-      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/admin/tenders' },
-    ],
-  },
-];
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -83,23 +66,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const adminGroups =
-    user?.role === UserRole.SUPER_ADMIN
-      ? superAdminGroups
-      : user?.role === UserRole.TENANT_ADMIN
-      ? tenantAdminGroups
-      : companyAdminGroups;
+    user?.role === UserRole.SUPER_ADMIN ? superAdminGroups : companyAdminGroups;
 
   useAuth();
 
   const isAllowedRole =
     user?.role === UserRole.SUPER_ADMIN ||
-    user?.role === UserRole.COMPANY_ADMIN ||
-    user?.role === UserRole.TENANT_ADMIN;
+    user?.role === UserRole.COMPANY_ADMIN;
 
   useEffect(() => {
     if (isLoading) return;
     if (!user) { router.push('/login'); return; }
-    if (!isAllowedRole) router.push('/dashboard');
+    if (!isAllowedRole) router.push('/workspace');
   }, [isLoading, user, isAllowedRole, router]);
 
   const sidebarWidth = sidebarCollapsed ? 56 : 240;

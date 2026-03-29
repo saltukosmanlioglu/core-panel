@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Card, Chip, Typography, Skeleton } from '@mui/material';
 import { Assignment as AssignmentIcon } from '@mui/icons-material';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { getProjectsApi } from '@/services/dashboard/api';
+import { WorkspaceLayout } from '@/components/layout/workspace-layout';
+import { getProjectsApi } from '@/services/workspace/api';
 import type { Project } from '@core-panel/shared';
 
 const statusConfig: Record<string, { bg: string; color: string; band: string }> = {
@@ -77,7 +77,7 @@ export default function DashboardProjectsPage() {
   }, []);
 
   return (
-    <DashboardLayout>
+    <WorkspaceLayout>
       <Box>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h5" fontWeight={700} color="#111827">İnşaatlar</Typography>
@@ -96,10 +96,10 @@ export default function DashboardProjectsPage() {
                 <Typography sx={{ color: '#6B7280', fontWeight: 500 }}>Henüz inşaat yok</Typography>
               </Box>
             )
-            : projects.map((p) => <ProjectCard key={p.id} project={p} onClick={() => router.push(`/dashboard/projects/${p.id}`)} />)
+            : projects.map((p) => <ProjectCard key={p.id} project={p} onClick={() => router.push(`/workspace/projects/${p.id}`)} />)
           }
         </Box>
       </Box>
-    </DashboardLayout>
+    </WorkspaceLayout>
   );
 }

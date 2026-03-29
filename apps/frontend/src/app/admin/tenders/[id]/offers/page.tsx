@@ -28,7 +28,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import CancelIcon from '@mui/icons-material/Cancel'
 import { FormButton } from '@/components/form-elements'
 import { Notification } from '@/components'
-import { getTenderApi } from '@/services/dashboard/api'
+import { getTenderApi } from '@/services/workspace/api'
 import {
   getOfferComparisonApi,
   approveOfferApi,

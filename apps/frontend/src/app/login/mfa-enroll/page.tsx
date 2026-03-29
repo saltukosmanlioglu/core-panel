@@ -73,7 +73,7 @@ export default function MfaEnrollPage() {
       });
       setIsLoading(false);
       const adminRoles = [UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN];
-      router.push(adminRoles.includes(meData.user.role as UserRole) ? '/admin' : '/dashboard');
+      router.push(adminRoles.includes(meData.user.role as UserRole) ? '/admin' : '/workspace');
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         if (err.response?.status === 429) {

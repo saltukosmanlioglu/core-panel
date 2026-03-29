@@ -19,8 +19,8 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { FormButton } from '@/components/form-elements'
 import { Notification } from '@/components'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { getTenderApi } from '@/services/dashboard/api'
+import { WorkspaceLayout } from '@/components/layout/workspace-layout'
+import { getTenderApi } from '@/services/workspace/api'
 import { getTenderItemsApi } from '@/services/tender-items/api'
 import { getTenderCategoriesApi } from '@/services/tender-categories/api'
 import { getMyOfferApi } from '@/services/tender-offers/api'
@@ -125,11 +125,11 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
   }
 
   return (
-    <DashboardLayout>
+    <WorkspaceLayout>
       <Box sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <IconButton onClick={() => router.push('/dashboard/tenders')} size="small">
+          <IconButton onClick={() => router.push('/workspace/tenders')} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
@@ -314,7 +314,7 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
           <FormButton
             variant="primary"
             size="sm"
-            onClick={() => router.push(`/dashboard/tenders/${id}/offer`)}
+            onClick={() => router.push(`/workspace/tenders/${id}/offer`)}
             disabled={loading}
           >
             Fiyat Gir
@@ -328,7 +328,7 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
         severity={snackbar.severity}
         onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
       />
-    </DashboardLayout>
+    </WorkspaceLayout>
   )
 }
 

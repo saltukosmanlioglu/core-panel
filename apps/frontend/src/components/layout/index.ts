@@ -1,5 +1,5 @@
 export { AdminLayout } from './admin-layout';
-export { DashboardLayout } from './dashboard-layout';
+export { WorkspaceLayout } from './workspace-layout';
 export { Navbar } from './navbar';
 export type { NavbarProps } from './navbar';
 export { Sidebar } from './sidebar';

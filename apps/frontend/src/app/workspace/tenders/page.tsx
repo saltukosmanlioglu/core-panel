@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Card, Chip, Typography, Skeleton } from '@mui/material';
 import { Gavel as GavelIcon } from '@mui/icons-material';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { getTendersApi } from '@/services/dashboard/api';
+import { WorkspaceLayout } from '@/components/layout/workspace-layout';
+import { getTendersApi } from '@/services/workspace/api';
 import type { Tender } from '@core-panel/shared';
 
 const statusConfig: Record<string, { bg: string; color: string; band: string }> = {
@@ -94,7 +94,7 @@ export default function DashboardTendersPage() {
   }, []);
 
   return (
-    <DashboardLayout>
+    <WorkspaceLayout>
       <Box>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h5" fontWeight={700} color="#111827">İhaleler</Typography>
@@ -113,10 +113,10 @@ export default function DashboardTendersPage() {
                 <Typography sx={{ color: '#6B7280', fontWeight: 500 }}>Henüz ihale yok</Typography>
               </Box>
             )
-            : tenders.map((t) => <TenderCard key={t.id} tender={t} onClick={() => router.push(`/dashboard/tenders/${t.id}`)} />)
+            : tenders.map((t) => <TenderCard key={t.id} tender={t} onClick={() => router.push(`/workspace/tenders/${t.id}`)} />)
           }
         </Box>
       </Box>
-    </DashboardLayout>
+    </WorkspaceLayout>
   );
 }

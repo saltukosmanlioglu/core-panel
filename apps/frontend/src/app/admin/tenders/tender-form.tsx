@@ -9,7 +9,7 @@ import { Box, Card, Typography, Divider } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, FormatListBulleted as ItemsIcon, CompareArrows as OffersIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
-import { getTenderApi, createTenderApi, updateTenderApi, getProjectsApi } from '@/services/dashboard/api';
+import { getTenderApi, createTenderApi, updateTenderApi, getProjectsApi } from '@/services/workspace/api';
 import type { Project } from '@core-panel/shared';
 import axios from 'axios';
 

@@ -13,17 +13,17 @@ const dashboardGroups: SidebarGroup[] = [
   {
     label: 'Hızlı Erişim',
     items: [
-      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/dashboard/projects' },
-      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/dashboard/tenders' },
+      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects' },
+      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/workspace/tenders' },
     ],
   },
 ];
 
-interface DashboardLayoutProps {
+interface WorkspaceLayoutProps {
   children: React.ReactNode;
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
   const router = useRouter();
   const { user, isLoading, logout } = useUser();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -66,7 +66,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         }}
       >
         <Sidebar
-          title="Panel"
+          title="Çalışma Alanı"
           groups={dashboardGroups}
           user={{ name: user.name, email: user.email, role: user.role }}
           onLogout={logout}

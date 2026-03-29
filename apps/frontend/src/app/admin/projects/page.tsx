@@ -7,7 +7,7 @@ import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/ico
 import { FormButton } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
-import { getProjectsApi, deleteProjectApi } from '@/services/dashboard/api';
+import { getProjectsApi, deleteProjectApi } from '@/services/workspace/api';
 import type { Project } from '@core-panel/shared';
 import axios from 'axios';
 

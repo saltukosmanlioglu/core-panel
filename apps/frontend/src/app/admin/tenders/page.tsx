@@ -7,7 +7,7 @@ import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/ico
 import { FormButton } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
-import { getTendersApi, deleteTenderApi } from '@/services/dashboard/api';
+import { getTendersApi, deleteTenderApi } from '@/services/workspace/api';
 import type { Tender } from '@core-panel/shared';
 import axios from 'axios';
 

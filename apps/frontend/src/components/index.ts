@@ -4,5 +4,5 @@ export type { DataTableAction, DataTableColumn, DataTableProps } from './data-ta
 export { Notification } from './notification';
 export { ConfirmationDialog } from './confirmation-dialog';
 export { AuthLayout } from './layout/auth-layout';
-export { DashboardLayout } from './layout/dashboard-layout';
+export { WorkspaceLayout } from './layout/workspace-layout';
 export { AdminLayout } from './layout/admin-layout';

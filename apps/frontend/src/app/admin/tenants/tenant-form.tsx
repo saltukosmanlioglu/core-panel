@@ -63,7 +63,7 @@ export function TenantForm({ id }: { id?: string }) {
     if (!pendingData) return;
     setLoading(true);
     try {
-      const payload = { name: pendingData.name, companyId: pendingData.companyId ?? '' };
+      const payload = { name: pendingData.name, ...(pendingData.companyId ? { companyId: pendingData.companyId } : {}) };
       if (isEdit && id) {
         await updateTenantApi(id, payload);
         setSnackbar({ open: true, message: 'Taşeron başarıyla güncellendi', severity: 'success' });

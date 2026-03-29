@@ -7,7 +7,7 @@ import {
   Person as PersonIcon,
   VerifiedUser as VerifiedUserIcon,
 } from '@mui/icons-material';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { WorkspaceLayout } from '@/components/layout/workspace-layout';
 import { useUser } from '@/contexts/UserContext';
 
 function DetailRow({
@@ -52,7 +52,7 @@ export default function DashboardPage() {
     : 'İlk giriş';
 
   return (
-    <DashboardLayout>
+    <WorkspaceLayout>
       <Box sx={{ maxWidth: 640 }}>
         <Card sx={{ p: 4, mb: 3 }}>
           <Box className="flex items-start gap-4">
@@ -145,6 +145,6 @@ export default function DashboardPage() {
           )}
         </Card>
       </Box>
-    </DashboardLayout>
+    </WorkspaceLayout>
   );
 }

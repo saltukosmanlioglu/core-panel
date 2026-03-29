@@ -23,8 +23,8 @@ import SaveIcon from '@mui/icons-material/Save'
 import SendIcon from '@mui/icons-material/Send'
 import { FormButton } from '@/components/form-elements'
 import { ConfirmationDialog, Notification } from '@/components'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
-import { getTenderApi } from '@/services/dashboard/api'
+import { WorkspaceLayout } from '@/components/layout/workspace-layout'
+import { getTenderApi } from '@/services/workspace/api'
 import { getTenderItemsApi } from '@/services/tender-items/api'
 import { getTenderCategoriesApi } from '@/services/tender-categories/api'
 import {
@@ -227,11 +227,11 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
   const totalColCount = fixedColCount + editColCount + calcColCount
 
   return (
-    <DashboardLayout>
+    <WorkspaceLayout>
       <Box sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <IconButton onClick={() => router.push(`/dashboard/tenders/${id}`)} size="small">
+          <IconButton onClick={() => router.push(`/workspace/tenders/${id}`)} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
@@ -452,7 +452,7 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
           onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
         />
       </Box>
-    </DashboardLayout>
+    </WorkspaceLayout>
   )
 }
 

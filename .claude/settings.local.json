@@ -82,7 +82,11 @@
       "Bash(find /Users/saltuk/Desktop/saltuk/claude/core-panel/apps/backend -not -path */node_modules* -type d)",
       "Bash(npx ts-node:*)",
       "Bash(DATABASE_URL=\"postgresql://core_panel_db_user:QYsv6LPlkZDtSPoQn4bnRBZLq3OUtiH4@dpg-d73urou3jp1c738q3h90-a.oregon-postgres.render.com/core_panel_db\" npx drizzle-kit push)",
-      "Bash(DATABASE_URL=\"postgresql://core_panel_db_user:QYsv6LPlkZDtSPoQn4bnRBZLq3OUtiH4@dpg-d73urou3jp1c738q3h90-a.oregon-postgres.render.com/core_panel_db?sslmode=require\" npx drizzle-kit push)"
+      "Bash(DATABASE_URL=\"postgresql://core_panel_db_user:QYsv6LPlkZDtSPoQn4bnRBZLq3OUtiH4@dpg-d73urou3jp1c738q3h90-a.oregon-postgres.render.com/core_panel_db?sslmode=require\" npx drizzle-kit push)",
+      "Bash(sed -i '' \"s|router.push\\(''/dashboard/tenders''\\)|router.push\\(''/workspace/tenders''\\)|g\" \"/Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src/app/workspace/tenders/[id]/page.tsx\")",
+      "Bash(sed -i '' 's|/dashboard/tenders/${id}/offer|/workspace/tenders/${id}/offer|g' \"/Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src/app/workspace/tenders/[id]/page.tsx\")",
+      "Bash(sed -i '' 's|/dashboard/tenders/${id}|/workspace/tenders/${id}|g' \"/Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src/app/workspace/tenders/[id]/offer/page.tsx\")",
+      "Bash(xargs sed:*)"
     ]
   }
 }

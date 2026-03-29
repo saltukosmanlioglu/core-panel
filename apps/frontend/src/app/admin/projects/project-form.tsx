@@ -9,7 +9,7 @@ import { Box, Card, Typography, Divider } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
-import { getProjectApi, createProjectApi, updateProjectApi } from '@/services/dashboard/api';
+import { getProjectApi, createProjectApi, updateProjectApi } from '@/services/workspace/api';
 import axios from 'axios';
 
 const schema = z.object({
