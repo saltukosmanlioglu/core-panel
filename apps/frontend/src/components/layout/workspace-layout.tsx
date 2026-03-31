@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Box, CircularProgress, Drawer } from '@mui/material';
-import { Gavel as GavelIcon, Assignment as AssignmentIcon } from '@mui/icons-material';
+import { Box, CircularProgress, Drawer, Paper } from '@mui/material';
+import { Assignment as AssignmentIcon } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { Sidebar, type SidebarGroup } from './sidebar';
 import { Navbar } from './navbar';
@@ -14,16 +14,16 @@ const dashboardGroups: SidebarGroup[] = [
     label: 'Hızlı Erişim',
     items: [
       { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects' },
-      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/workspace/tenders' },
     ],
   },
 ];
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
+  groups?: SidebarGroup[];
 }
 
-export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
   const router = useRouter();
   const { user, isLoading, logout } = useUser();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -67,7 +67,7 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
       >
         <Sidebar
           title="Çalışma Alanı"
-          groups={dashboardGroups}
+          groups={groups ?? dashboardGroups}
           user={{ name: user.name, email: user.email, role: user.role }}
           onLogout={logout}
           collapsed={sidebarCollapsed}
@@ -89,7 +89,9 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
 
         {/* Content */}
         <Box sx={{ flex: 1, p: 4, backgroundColor: '#F8F9FA' }}>
-          {children}
+          <Paper elevation={0} sx={{ borderRadius: '4px', backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', p: 3, minHeight: '100%' }}>
+            {children}
+          </Paper>
         </Box>
       </Box>
     </Box>

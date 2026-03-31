@@ -39,7 +39,7 @@ export interface FileQueryParams {
 
 export interface TenantPayload {
   name: string;
-  companyId: string;
+  companyId?: string;
 }
 
 export interface CreateAdminUserPayload {

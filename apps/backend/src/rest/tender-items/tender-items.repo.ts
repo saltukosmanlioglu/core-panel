@@ -4,7 +4,6 @@ interface ItemRow {
   id: string;
   tender_id: string;
   category_id: string | null;
-  category_name: string | null;
   row_no: number;
   pos_no: string | null;
   description: string;
@@ -21,7 +20,6 @@ function mapRow(row: ItemRow) {
     id: row.id,
     tenderId: row.tender_id,
     categoryId: row.category_id,
-    categoryName: row.category_name,
     rowNo: row.row_no,
     posNo: row.pos_no,
     description: row.description,
@@ -39,13 +37,8 @@ export type ItemRecord = ReturnType<typeof mapRow>;
 export async function findByTenderId(companyId: string, tenderId: string): Promise<ItemRecord[]> {
   const tdb = new TenantDb(companyId);
   const items = tdb.ref('tender_items');
-  const cats = tdb.ref('tender_categories');
   const { rows } = await tdb.query<ItemRow>(
-    `SELECT i.*, c.name AS category_name
-     FROM ${items} i
-     LEFT JOIN ${cats} c ON i.category_id = c.id
-     WHERE i.tender_id = $1
-     ORDER BY i.order_no ASC, i.row_no ASC`,
+    `SELECT * FROM ${items} WHERE tender_id = $1 ORDER BY order_no ASC, row_no ASC`,
     [tenderId],
   );
   return rows.map(mapRow);
@@ -54,12 +47,8 @@ export async function findByTenderId(companyId: string, tenderId: string): Promi
 export async function findById(companyId: string, id: string): Promise<ItemRecord | null> {
   const tdb = new TenantDb(companyId);
   const items = tdb.ref('tender_items');
-  const cats = tdb.ref('tender_categories');
   const { rows } = await tdb.query<ItemRow>(
-    `SELECT i.*, c.name AS category_name
-     FROM ${items} i
-     LEFT JOIN ${cats} c ON i.category_id = c.id
-     WHERE i.id = $1 LIMIT 1`,
+    `SELECT * FROM ${items} WHERE id = $1 LIMIT 1`,
     [id],
   );
   return rows[0] ? mapRow(rows[0]) : null;
@@ -70,7 +59,7 @@ export async function create(
   tenderId: string,
   data: {
     categoryId?: string | null;
-    rowNo: number;
+    rowNo?: number;
     posNo?: string;
     description: string;
     unit: string;
@@ -84,11 +73,11 @@ export async function create(
     `INSERT INTO ${tdb.ref('tender_items')}
        (tender_id, category_id, row_no, pos_no, description, unit, quantity, location, order_no)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING *, NULL::text AS category_name`,
+     RETURNING *`,
     [
       tenderId,
       data.categoryId ?? null,
-      data.rowNo,
+      data.rowNo ?? 1,
       data.posNo ?? null,
       data.description,
       data.unit,
@@ -130,7 +119,7 @@ export async function update(
   params.push(id);
   const { rows } = await tdb.query<ItemRow>(
     `UPDATE ${tdb.ref('tender_items')} SET ${setClauses.join(', ')} WHERE id = $${params.length}
-     RETURNING *, NULL::text AS category_name`,
+     RETURNING *`,
     params,
   );
   return rows[0] ? mapRow(rows[0]) : null;
@@ -145,17 +134,64 @@ export async function remove(companyId: string, id: string): Promise<boolean> {
   return rowCount > 0;
 }
 
-export async function reorder(companyId: string, items: { id: string; orderNo: number }[]): Promise<void> {
-  if (items.length === 0) return;
+export async function reorder(
+  companyId: string,
+  items: { id: string; orderNo: number }[],
+): Promise<void> {
   const tdb = new TenantDb(companyId);
-  // Use a VALUES list to update all at once
-  const valueParts = items.map((_, i) => `($${i * 2 + 1}::uuid, $${i * 2 + 2}::int)`).join(', ');
-  const params = items.flatMap((item) => [item.id, item.orderNo]);
-  await tdb.query(
-    `UPDATE ${tdb.ref('tender_items')} AS t
-     SET order_no = v.order_no, updated_at = NOW()
-     FROM (VALUES ${valueParts}) AS v(id, order_no)
-     WHERE t.id = v.id`,
-    params,
+  const table = tdb.ref('tender_items');
+  for (const item of items) {
+    await tdb.query(
+      `UPDATE ${table} SET order_no = $1, updated_at = NOW() WHERE id = $2`,
+      [item.orderNo, item.id],
+    );
+  }
+}
+
+export async function syncItems(
+  companyId: string,
+  tenderId: string,
+  items: { id?: string; description: string; unit: string; quantity: number; location?: string }[],
+): Promise<void> {
+  const tdb = new TenantDb(companyId);
+  const table = tdb.ref('tender_items');
+
+  // Get existing item IDs for this tender
+  const { rows: existingRows } = await tdb.query<{ id: string }>(
+    `SELECT id FROM ${table} WHERE tender_id = $1`,
+    [tenderId],
   );
+  const existingIds = new Set(existingRows.map((r) => r.id));
+
+  // Determine which IDs to keep
+  const incomingIds = new Set(items.filter((i) => i.id).map((i) => i.id as string));
+
+  // Delete items not in incoming list
+  const toDelete = [...existingIds].filter((id) => !incomingIds.has(id));
+  if (toDelete.length > 0) {
+    const placeholders = toDelete.map((_, i) => `$${i + 1}`).join(', ');
+    await tdb.query(`DELETE FROM ${table} WHERE id IN (${placeholders})`, toDelete);
+  }
+
+  // Upsert each item
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    const rowNo = i + 1;
+    if (item.id && existingIds.has(item.id)) {
+      // UPDATE
+      await tdb.query(
+        `UPDATE ${table}
+         SET row_no = $1, description = $2, unit = $3, quantity = $4, location = $5, updated_at = NOW()
+         WHERE id = $6`,
+        [rowNo, item.description, item.unit, item.quantity, item.location ?? null, item.id],
+      );
+    } else {
+      // INSERT
+      await tdb.query(
+        `INSERT INTO ${table} (tender_id, row_no, description, unit, quantity, location)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [tenderId, rowNo, item.description, item.unit, item.quantity, item.location ?? null],
+      );
+    }
+  }
 }

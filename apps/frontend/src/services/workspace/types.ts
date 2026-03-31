@@ -4,11 +4,19 @@ export interface ProjectPayload {
   status: string;
 }
 
+export interface BoqItemPayload {
+  id?: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  location?: string;
+}
+
 export interface TenderPayload {
   projectId: string;
   title: string;
   description?: string;
   status: string;
-  budget?: string;
   deadline?: string;
+  items?: BoqItemPayload[];
 }

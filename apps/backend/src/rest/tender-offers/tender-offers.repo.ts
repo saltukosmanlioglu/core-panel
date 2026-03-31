@@ -19,12 +19,9 @@ interface OfferItemRow {
   offer_id: string;
   item_id: string;
   row_no: number;
-  pos_no: string | null;
   description: string;
   unit: string;
   quantity: string;
-  category_id: string | null;
-  category_name: string | null;
   material_unit_price: string;
   labor_unit_price: string;
   created_at: Date;
@@ -58,12 +55,9 @@ function mapOfferItem(row: OfferItemRow) {
     offerId: row.offer_id,
     itemId: row.item_id,
     rowNo: row.row_no,
-    posNo: row.pos_no,
     description: row.description,
     unit: row.unit,
     quantity: row.quantity,
-    categoryId: row.category_id,
-    categoryName: row.category_name,
     materialUnitPrice: row.material_unit_price,
     laborUnitPrice: row.labor_unit_price,
     unitPrice: unitPrice.toFixed(2),
@@ -167,15 +161,12 @@ export async function findOfferItems(companyId: string, offerId: string): Promis
   const tdb = new TenantDb(companyId);
   const oi = tdb.ref('tender_offer_items');
   const ti = tdb.ref('tender_items');
-  const tc = tdb.ref('tender_categories');
   const { rows } = await tdb.query<OfferItemRow>(
-    `SELECT oi.*, ti.row_no, ti.pos_no, ti.description, ti.unit, ti.quantity,
-            ti.category_id, tc.name AS category_name
+    `SELECT oi.*, ti.row_no, ti.description, ti.unit, ti.quantity
      FROM ${oi} oi
      JOIN ${ti} ti ON oi.item_id = ti.id
-     LEFT JOIN ${tc} tc ON ti.category_id = tc.id
      WHERE oi.offer_id = $1
-     ORDER BY ti.order_no ASC, ti.row_no ASC`,
+     ORDER BY ti.row_no ASC`,
     [offerId],
   );
   return rows.map(mapOfferItem);
@@ -200,10 +191,7 @@ export async function upsertOfferItem(
 
 interface ComparisonItemRow {
   item_id: string;
-  category_id: string | null;
-  category_name: string | null;
   row_no: number;
-  pos_no: string | null;
   description: string;
   unit: string;
   quantity: string;
@@ -223,30 +211,33 @@ export async function getOfferComparison(
 ): Promise<{
   offers: { id: string; tenantId: string; tenantName: string | null; status: string; submittedAt: Date | null; total: string }[];
   items: {
-    id: string; categoryId: string | null; categoryName: string | null;
-    rowNo: number; posNo: string | null; description: string; unit: string;
-    quantity: string; location: string | null;
+    id: string;
+    rowNo: number;
+    description: string;
+    unit: string;
+    quantity: string;
+    location: string | null;
     prices: { offerId: string; tenantId: string; materialUnitPrice: string; laborUnitPrice: string; unitPrice: string; tutar: string }[];
   }[];
 }> {
   const tdb = new TenantDb(companyId);
   const ti = tdb.ref('tender_items');
-  const tc = tdb.ref('tender_categories');
   const to = tdb.ref('tender_offers');
   const toi = tdb.ref('tender_offer_items');
 
   // Get all items
   const { rows: itemRows } = await tdb.query<{
-    id: string; category_id: string | null; category_name: string | null;
-    row_no: number; pos_no: string | null; description: string; unit: string;
-    quantity: string; location: string | null;
+    id: string;
+    row_no: number;
+    description: string;
+    unit: string;
+    quantity: string;
+    location: string | null;
   }>(
-    `SELECT i.id, i.category_id, c.name AS category_name,
-            i.row_no, i.pos_no, i.description, i.unit, i.quantity, i.location
+    `SELECT i.id, i.row_no, i.description, i.unit, i.quantity, i.location
      FROM ${ti} i
-     LEFT JOIN ${tc} c ON i.category_id = c.id
      WHERE i.tender_id = $1
-     ORDER BY i.order_no ASC, i.row_no ASC`,
+     ORDER BY i.row_no ASC`,
     [tenderId],
   );
 
@@ -327,10 +318,7 @@ export async function getOfferComparison(
     });
     return {
       id: item.id,
-      categoryId: item.category_id,
-      categoryName: item.category_name,
       rowNo: item.row_no,
-      posNo: item.pos_no,
       description: item.description,
       unit: item.unit,
       quantity: item.quantity,

@@ -157,43 +157,7 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
     })
   }
 
-  // Category subtotals per offer
-  const categorySubtotals: Record<string, Record<string, number>> = {}
-  if (comparison) {
-    comparison.items?.forEach(item => {
-      const catId = item.categoryId ?? '__none__'
-      if (!categorySubtotals[catId]) {
-        categorySubtotals[catId] = {}
-        offers.forEach(o => { categorySubtotals[catId][o.id] = 0 })
-      }
-      offers.forEach(offer => {
-        const price = item.prices?.find(p => p.offerId === offer.id)
-        if (price) {
-          const tutar =
-            parseFloat(String(item.quantity ?? 0)) *
-            (parseFloat(String(price.materialUnitPrice ?? 0)) +
-              parseFloat(String(price.laborUnitPrice ?? 0)))
-          categorySubtotals[catId][offer.id] = (categorySubtotals[catId][offer.id] ?? 0) + tutar
-        }
-      })
-    })
-  }
-
-  // Group items by category (derive categories from items since OfferComparison has no categories field)
   const allItems = comparison?.items ?? []
-  const uncategorizedItems = allItems.filter(item => !item.categoryId)
-  const seenCatIds = new Set<string>()
-  const categories: { id: string; name: string }[] = []
-  allItems.forEach(item => {
-    if (item.categoryId && !seenCatIds.has(item.categoryId)) {
-      seenCatIds.add(item.categoryId)
-      categories.push({ id: item.categoryId, name: item.categoryName ?? item.categoryId })
-    }
-  })
-  const categorizedGroups = categories.map(cat => ({
-    category: cat,
-    items: allItems.filter(item => item.categoryId === cat.id),
-  }))
 
   const leftColCount = 4
   const rightColsPerOffer = 3
@@ -362,78 +326,14 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
               </TableHead>
 
               <TableBody>
-                {/* Uncategorized */}
-                {uncategorizedItems.length > 0 && (
-                  <>
-                    <TableRow>
-                      <TableCell
-                        colSpan={leftColCount + offers.length * rightColsPerOffer}
-                        sx={{
-                          backgroundColor: '#F3F4F6',
-                          fontWeight: 700,
-                          color: '#6B7280',
-                          fontSize: 13,
-                          py: 0.75,
-                        }}
-                      >
-                        Genel
-                      </TableCell>
-                    </TableRow>
-                    {uncategorizedItems.map(item => (
-                      <ComparisonItemRow
-                        key={item.id}
-                        item={item}
-                        offers={offers}
-                        fmt={fmt}
-                      />
-                    ))}
-                    {/* Subtotal for uncategorized */}
-                    {categorySubtotals['__none__'] && (
-                      <SubtotalRow
-                        label="Ara Toplam"
-                        offers={offers}
-                        subtotals={categorySubtotals['__none__']}
-                        leftColCount={leftColCount}
-                        fmt={fmt}
-                      />
-                    )}
-                  </>
-                )}
-
-                {/* Categorized */}
-                {categorizedGroups.map(({ category, items: catItems }) => (
-                  <>
-                    <TableRow key={`cat-${category.id}`}>
-                      <TableCell
-                        colSpan={leftColCount + offers.length * rightColsPerOffer}
-                        sx={{
-                          backgroundColor: '#F3F4F6',
-                          fontWeight: 700,
-                          fontSize: 13,
-                          py: 0.75,
-                        }}
-                      >
-                        {category.name}
-                      </TableCell>
-                    </TableRow>
-                    {catItems.map(item => (
-                      <ComparisonItemRow
-                        key={item.id}
-                        item={item}
-                        offers={offers}
-                        fmt={fmt}
-                      />
-                    ))}
-                    {categorySubtotals[category.id] && (
-                      <SubtotalRow
-                        label="Ara Toplam"
-                        offers={offers}
-                        subtotals={categorySubtotals[category.id]}
-                        leftColCount={leftColCount}
-                        fmt={fmt}
-                      />
-                    )}
-                  </>
+                {/* Flat list of items */}
+                {allItems.map(item => (
+                  <ComparisonItemRow
+                    key={item.id}
+                    item={item}
+                    offers={offers}
+                    fmt={fmt}
+                  />
                 ))}
 
                 {/* Grand Total */}
@@ -586,44 +486,6 @@ function ComparisonItemRow({
           </>
         )
       })}
-    </TableRow>
-  )
-}
-
-function SubtotalRow({
-  label,
-  offers,
-  subtotals,
-  leftColCount,
-  fmt,
-}: {
-  label: string
-  offers: OfferComparisonOffer[]
-  subtotals: Record<string, number>
-  leftColCount: number
-  fmt: (v: number) => string
-}) {
-  return (
-    <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
-      <TableCell
-        colSpan={leftColCount}
-        sx={{ fontWeight: 600, fontSize: 13, color: '#374151' }}
-      >
-        {label}
-      </TableCell>
-      {offers.map(offer => (
-        <>
-          <TableCell key={`${offer.id}-sub-mat`} sx={{ borderLeft: '2px solid #E5E7EB' }} />
-          <TableCell key={`${offer.id}-sub-lab`} />
-          <TableCell
-            key={`${offer.id}-sub-tot`}
-            align="right"
-            sx={{ fontWeight: 700, fontSize: 13 }}
-          >
-            {fmt(subtotals[offer.id] ?? 0)}
-          </TableCell>
-        </>
-      ))}
     </TableRow>
   )
 }

@@ -71,6 +71,7 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
 
   const onAdmin = pathname.startsWith('/admin');
   const onDashboard = pathname.startsWith('/workspace');
+  const onProject = /^\/workspace\/projects\/[^/]+/.test(pathname);
   const initials = getInitials(user.name, user.email);
 
   return (
@@ -241,6 +242,12 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
             <MenuItem onClick={() => { setMenuAnchor(null); router.push('/workspace'); }} sx={{ fontSize: '14px', gap: 1.5 }}>
               <ArrowBackIcon sx={{ fontSize: 18, color: '#6B7280' }} />
               Çalışma Alanına Dön
+            </MenuItem>
+          )}
+          {onProject && (
+            <MenuItem onClick={() => { setMenuAnchor(null); router.push('/workspace/projects'); }} sx={{ fontSize: '14px', gap: 1.5 }}>
+              <ArrowBackIcon sx={{ fontSize: 18, color: '#6B7280' }} />
+              İnşaatlara Dön
             </MenuItem>
           )}
           {onDashboard && (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.COMPANY_ADMIN) && (

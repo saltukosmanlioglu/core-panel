@@ -33,7 +33,6 @@ export interface TenderItem {
   id: string;
   tenderId: string;
   categoryId: string | null;
-  categoryName: string | null;
   rowNo: number;
   posNo: string | null;
   description: string;
@@ -64,12 +63,9 @@ export interface TenderOfferItem {
   offerId: string;
   itemId: string;
   rowNo: number;
-  posNo: string | null;
   description: string;
   unit: string;
   quantity: string;
-  categoryId: string | null;
-  categoryName: string | null;
   materialUnitPrice: string;
   laborUnitPrice: string;
   unitPrice: string;
@@ -89,10 +85,7 @@ export interface OfferComparisonItemPrice {
 
 export interface OfferComparisonItem {
   id: string;
-  categoryId: string | null;
-  categoryName: string | null;
   rowNo: number;
-  posNo: string | null;
   description: string;
   unit: string;
   quantity: string;

@@ -37,6 +37,15 @@ export async function findAllAcrossCompanies(): Promise<ProjectRecord[]> {
   return results.flat();
 }
 
+export async function findByIdAcrossCompanies(id: string): Promise<ProjectRecord | null> {
+  const allCompanies = await companiesRepo.findAll();
+  for (const company of allCompanies) {
+    const record = await findById(company.id, id);
+    if (record) return record;
+  }
+  return null;
+}
+
 export async function findById(companyId: string, id: string): Promise<ProjectRecord | null> {
   const tdb = new TenantDb(companyId);
   const { rows } = await tdb.query<ProjectRow>(

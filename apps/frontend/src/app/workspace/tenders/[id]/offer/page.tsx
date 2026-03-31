@@ -26,14 +26,14 @@ import { ConfirmationDialog, Notification } from '@/components'
 import { WorkspaceLayout } from '@/components/layout/workspace-layout'
 import { getTenderApi } from '@/services/workspace/api'
 import { getTenderItemsApi } from '@/services/tender-items/api'
-import { getTenderCategoriesApi } from '@/services/tender-categories/api'
 import {
   upsertOfferApi,
   getOfferItemsApi,
   bulkUpdateOfferItemsApi,
   submitOfferApi,
 } from '@/services/tender-offers/api'
-import type { Tender, TenderItem, TenderCategory, TenderOffer } from '@core-panel/shared'
+import type { Tender, TenderItem, TenderOffer } from '@core-panel/shared'
+import { TenderItemUnitLabels } from '@core-panel/shared'
 
 const offerStatusColors: Record<string, 'default' | 'primary' | 'success' | 'error'> = {
   draft: 'default',
@@ -60,7 +60,6 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
 
   const [tender, setTender] = useState<Tender | null>(null)
   const [items, setItems] = useState<TenderItem[]>([])
-  const [categories, setCategories] = useState<TenderCategory[]>([])
   const [offer, setOffer] = useState<TenderOffer | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -80,15 +79,13 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
       try {
         setLoading(true)
 
-        const [tenderRes, itemsRes, categoriesRes] = await Promise.all([
+        const [tenderRes, itemsRes] = await Promise.all([
           getTenderApi(id),
           getTenderItemsApi(id),
-          getTenderCategoriesApi(id),
         ])
         setTender(tenderRes)
         const loadedItems: TenderItem[] = itemsRes
         setItems(loadedItems)
-        setCategories(categoriesRes)
 
         // Upsert offer (creates draft if none, returns existing otherwise)
         const currentOffer: TenderOffer = await upsertOfferApi(id)
@@ -131,38 +128,15 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
     offer?.status === 'approved' ||
     offer?.status === 'rejected'
 
-  // Price calculation helpers
-  const calcUnitPrice = useCallback(
-    (itemId: string) => {
-      const mat = parseFloat(prices[itemId]?.materialUnitPrice || '0') || 0
-      const lab = parseFloat(prices[itemId]?.laborUnitPrice || '0') || 0
-      return mat + lab
-    },
-    [prices]
-  )
-
   const calcTutar = useCallback(
     (itemId: string, quantity: string | number | null | undefined) => {
       const qty = parseFloat(String(quantity ?? 0)) || 0
-      return qty * calcUnitPrice(itemId)
+      const mat = parseFloat(prices[itemId]?.materialUnitPrice || '0') || 0
+      const lab = parseFloat(prices[itemId]?.laborUnitPrice || '0') || 0
+      return qty * (mat + lab)
     },
-    [calcUnitPrice]
+    [prices]
   )
-
-  const calcCategorySubtotal = useCallback(
-    (categoryId: string) => {
-      return items
-        .filter(item => item.categoryId === categoryId)
-        .reduce((sum, item) => sum + calcTutar(item.id, item.quantity), 0)
-    },
-    [items, calcTutar]
-  )
-
-  const calcUncategorizedSubtotal = useCallback(() => {
-    return items
-      .filter(item => !item.categoryId)
-      .reduce((sum, item) => sum + calcTutar(item.id, item.quantity), 0)
-  }, [items, calcTutar])
 
   const calcGrandTotal = useCallback(() => {
     return items.reduce((sum, item) => sum + calcTutar(item.id, item.quantity), 0)
@@ -211,20 +185,8 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
     }
   }
 
-  // Group items
-  const uncategorizedItems = items.filter(item => !item.categoryId)
-  const categorizedGroups = categories
-    .slice()
-    .sort((a, b) => (a.orderNo ?? 0) - (b.orderNo ?? 0))
-    .map(cat => ({
-      category: cat,
-      items: items.filter(item => item.categoryId === cat.id),
-    }))
-
-  const fixedColCount = 6
-  const editColCount = 2
-  const calcColCount = 2
-  const totalColCount = fixedColCount + editColCount + calcColCount
+  // # | Tanımı | Birim | Miktar | Malzeme B.F. | İşçilik B.F. | Tutar
+  const totalColCount = 7
 
   return (
     <WorkspaceLayout>
@@ -255,115 +217,44 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
             </Box>
           ) : (
             <TableContainer sx={{ overflowX: 'auto' }}>
-              <Table size="small" sx={{ minWidth: 1000 }}>
+              <Table size="small" sx={{ minWidth: 900 }}>
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
-                    <TableCell sx={{ fontWeight: 700, width: 55 }}>Sıra No</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: 75 }}>Poz No</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 55 }}>#</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Tanımı</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: 65 }}>Birim</TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: 75 }} align="right">
+                    <TableCell sx={{ fontWeight: 700, width: 80 }}>Birim</TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 80 }} align="right">
                       Miktar
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: 120 }}>Uyg. Yer</TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 700, width: 130, borderLeft: '2px solid #E5E7EB' }}
+                      align="right"
+                    >
+                      Malzeme Birim Fiyat
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700, width: 130 }} align="right">
+                      İşçilik Birim Fiyat
+                    </TableCell>
                     <TableCell
                       sx={{ fontWeight: 700, width: 120, borderLeft: '2px solid #E5E7EB' }}
                       align="right"
                     >
-                      Malzeme B.F.
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: 120 }} align="right">
-                      İşçilik B.F.
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 700, width: 100, borderLeft: '2px solid #E5E7EB' }}
-                      align="right"
-                    >
-                      Birim Fiyat
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700, width: 120 }} align="right">
                       Tutar
                     </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* Uncategorized */}
-                  {uncategorizedItems.length > 0 && (
-                    <>
-                      <TableRow>
-                        <TableCell
-                          colSpan={totalColCount}
-                          sx={{
-                            backgroundColor: '#F3F4F6',
-                            fontWeight: 700,
-                            color: '#6B7280',
-                            fontSize: 13,
-                            py: 0.75,
-                          }}
-                        >
-                          Genel
-                        </TableCell>
-                      </TableRow>
-                      {uncategorizedItems.map(item => (
-                        <PriceInputRow
-                          key={item.id}
-                          item={item}
-                          prices={prices}
-                          setPrices={setPrices}
-                          isReadOnly={isReadOnly}
-                          calcUnitPrice={calcUnitPrice}
-                          calcTutar={calcTutar}
-                          fmt={fmt}
-                        />
-                      ))}
-                      <SubtotalRow
-                        label="Ara Toplam"
-                        value={calcUncategorizedSubtotal()}
-                        totalColCount={totalColCount}
-                        fmt={fmt}
-                      />
-                    </>
-                  )}
-
-                  {/* Categorized */}
-                  {categorizedGroups.map(({ category, items: catItems }) =>
-                    catItems.length > 0 ? (
-                      <>
-                        <TableRow key={`cat-${category.id}`}>
-                          <TableCell
-                            colSpan={totalColCount}
-                            sx={{
-                              backgroundColor: '#F3F4F6',
-                              fontWeight: 700,
-                              fontSize: 13,
-                              py: 0.75,
-                            }}
-                          >
-                            {category.name}
-                          </TableCell>
-                        </TableRow>
-                        {catItems.map(item => (
-                          <PriceInputRow
-                            key={item.id}
-                            item={item}
-                            prices={prices}
-                            setPrices={setPrices}
-                            isReadOnly={isReadOnly}
-                            calcUnitPrice={calcUnitPrice}
-                            calcTutar={calcTutar}
-                            fmt={fmt}
-                          />
-                        ))}
-                        <SubtotalRow
-                          key={`subtotal-${category.id}`}
-                          label="Ara Toplam"
-                          value={calcCategorySubtotal(category.id)}
-                          totalColCount={totalColCount}
-                          fmt={fmt}
-                        />
-                      </>
-                    ) : null
-                  )}
+                  {items.map(item => (
+                    <PriceInputRow
+                      key={item.id}
+                      item={item}
+                      prices={prices}
+                      setPrices={setPrices}
+                      isReadOnly={isReadOnly}
+                      calcTutar={calcTutar}
+                      fmt={fmt}
+                    />
+                  ))}
 
                   {/* Grand Total */}
                   <TableRow sx={{ backgroundColor: '#1F2937' }}>
@@ -461,7 +352,6 @@ function PriceInputRow({
   prices,
   setPrices,
   isReadOnly,
-  calcUnitPrice,
   calcTutar,
   fmt,
 }: {
@@ -469,19 +359,16 @@ function PriceInputRow({
   prices: Record<string, PriceEntry>
   setPrices: React.Dispatch<React.SetStateAction<Record<string, PriceEntry>>>
   isReadOnly: boolean
-  calcUnitPrice: (itemId: string) => number
   calcTutar: (itemId: string, quantity: any) => number
   fmt: (v: number) => string
 }) {
-  const unitPrice = calcUnitPrice(item.id)
   const tutar = calcTutar(item.id, item.quantity)
 
   return (
     <TableRow hover>
       <TableCell sx={{ fontSize: 13 }}>{item.rowNo ?? '—'}</TableCell>
-      <TableCell sx={{ fontSize: 13 }}>{item.posNo ?? '—'}</TableCell>
       <TableCell sx={{ fontSize: 13 }}>{item.description}</TableCell>
-      <TableCell sx={{ fontSize: 13 }}>{item.unit ?? '—'}</TableCell>
+      <TableCell sx={{ fontSize: 13 }}>{TenderItemUnitLabels[item.unit] ?? item.unit}</TableCell>
       <TableCell sx={{ fontSize: 13 }} align="right">
         {item.quantity != null
           ? parseFloat(String(item.quantity)).toLocaleString('tr-TR', {
@@ -490,7 +377,6 @@ function PriceInputRow({
             })
           : '—'}
       </TableCell>
-      <TableCell sx={{ fontSize: 13 }}>{item.location ?? '—'}</TableCell>
 
       {/* Malzeme Birim Fiyat */}
       <TableCell sx={{ borderLeft: '2px solid #E5E7EB', py: 0.5 }}>
@@ -542,43 +428,12 @@ function PriceInputRow({
         />
       </TableCell>
 
-      {/* Birim Fiyat (calculated) */}
+      {/* Tutar (calculated: qty × (mat + lab)) */}
       <TableCell
         align="right"
-        sx={{ fontSize: 13, fontWeight: 500, borderLeft: '2px solid #E5E7EB' }}
+        sx={{ fontSize: 13, fontWeight: 700, borderLeft: '2px solid #E5E7EB' }}
       >
-        {fmt(unitPrice)}
-      </TableCell>
-
-      {/* Tutar (calculated) */}
-      <TableCell align="right" sx={{ fontSize: 13, fontWeight: 700 }}>
         {fmt(tutar)}
-      </TableCell>
-    </TableRow>
-  )
-}
-
-function SubtotalRow({
-  label,
-  value,
-  totalColCount,
-  fmt,
-}: {
-  label: string
-  value: number
-  totalColCount: number
-  fmt: (v: number) => string
-}) {
-  return (
-    <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
-      <TableCell
-        colSpan={totalColCount - 1}
-        sx={{ fontWeight: 600, fontSize: 13, color: '#374151' }}
-      >
-        {label}
-      </TableCell>
-      <TableCell align="right" sx={{ fontWeight: 700, fontSize: 13 }}>
-        {fmt(value)}
       </TableCell>
     </TableRow>
   )

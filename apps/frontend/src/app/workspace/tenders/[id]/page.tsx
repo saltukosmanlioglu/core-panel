@@ -22,9 +22,9 @@ import { Notification } from '@/components'
 import { WorkspaceLayout } from '@/components/layout/workspace-layout'
 import { getTenderApi } from '@/services/workspace/api'
 import { getTenderItemsApi } from '@/services/tender-items/api'
-import { getTenderCategoriesApi } from '@/services/tender-categories/api'
 import { getMyOfferApi } from '@/services/tender-offers/api'
-import type { Tender, TenderItem, TenderCategory, TenderOffer } from '@core-panel/shared'
+import type { Tender, TenderItem, TenderOffer } from '@core-panel/shared'
+import { TenderItemUnitLabels } from '@core-panel/shared'
 
 const tenderStatusColors: Record<string, 'default' | 'success' | 'warning' | 'primary'> = {
   draft: 'default',
@@ -60,7 +60,6 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
 
   const [tender, setTender] = useState<Tender | null>(null)
   const [items, setItems] = useState<TenderItem[]>([])
-  const [categories, setCategories] = useState<TenderCategory[]>([])
   const [myOffer, setMyOffer] = useState<TenderOffer | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -74,14 +73,12 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
     const loadData = async () => {
       try {
         setLoading(true)
-        const [tenderRes, itemsRes, categoriesRes] = await Promise.all([
+        const [tenderRes, itemsRes] = await Promise.all([
           getTenderApi(id),
           getTenderItemsApi(id),
-          getTenderCategoriesApi(id),
         ])
         setTender(tenderRes)
         setItems(itemsRes)
-        setCategories(categoriesRes)
 
         try {
           const myOfferRes = await getMyOfferApi(id)
@@ -99,29 +96,11 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
     loadData()
   }, [id])
 
-  // Group items
-  const uncategorizedItems = items.filter(item => !item.categoryId)
-  const categorizedGroups = categories
-    .slice()
-    .sort((a, b) => (a.orderNo ?? 0) - (b.orderNo ?? 0))
-    .map(cat => ({
-      category: cat,
-      items: items.filter(item => item.categoryId === cat.id),
-    }))
-
-  const colCount = 6
+  const colCount = 5
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '—'
     return new Date(dateStr).toLocaleDateString('tr-TR')
-  }
-
-  const formatCurrency = (val?: number | string | null) => {
-    if (val == null) return '—'
-    return parseFloat(String(val)).toLocaleString('tr-TR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
   }
 
   return (
@@ -129,7 +108,7 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
       <Box sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <IconButton onClick={() => router.push('/workspace/tenders')} size="small">
+          <IconButton onClick={() => router.push(tender?.projectId ? `/workspace/projects/${tender.projectId}/tenders` : '/workspace/projects')} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
@@ -179,16 +158,6 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
                   <Typography variant="body2">{formatDate(tender.deadline)}</Typography>
                 </Box>
               )}
-              {tender?.budget != null && (
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
-                    Bütçe:
-                  </Typography>
-                  <Typography variant="body2" fontWeight={600}>
-                    {formatCurrency(tender.budget)} ₺
-                  </Typography>
-                </Box>
-              )}
             </Box>
           )}
         </Card>
@@ -204,8 +173,7 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
-                  <TableCell sx={{ fontWeight: 700, width: 60 }}>Sıra No</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 80 }}>Poz No</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 60 }}>#</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Tanımı</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: 70 }}>Birim</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: 80 }}>Miktar</TableCell>
@@ -232,54 +200,9 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <>
-                    {/* Uncategorized */}
-                    {uncategorizedItems.length > 0 && (
-                      <>
-                        <TableRow>
-                          <TableCell
-                            colSpan={colCount}
-                            sx={{
-                              backgroundColor: '#F3F4F6',
-                              fontWeight: 700,
-                              color: '#6B7280',
-                              fontSize: 13,
-                              py: 0.75,
-                            }}
-                          >
-                            Genel
-                          </TableCell>
-                        </TableRow>
-                        {uncategorizedItems.map(item => (
-                          <ReadOnlyItemRow key={item.id} item={item} />
-                        ))}
-                      </>
-                    )}
-
-                    {/* Categorized */}
-                    {categorizedGroups.map(({ category, items: catItems }) =>
-                      catItems.length > 0 ? (
-                        <>
-                          <TableRow key={`cat-${category.id}`}>
-                            <TableCell
-                              colSpan={colCount}
-                              sx={{
-                                backgroundColor: '#F3F4F6',
-                                fontWeight: 700,
-                                fontSize: 13,
-                                py: 0.75,
-                              }}
-                            >
-                              {category.name}
-                            </TableCell>
-                          </TableRow>
-                          {catItems.map(item => (
-                            <ReadOnlyItemRow key={item.id} item={item} />
-                          ))}
-                        </>
-                      ) : null
-                    )}
-                  </>
+                  items.map(item => (
+                    <ReadOnlyItemRow key={item.id} item={item} />
+                  ))
                 )}
               </TableBody>
             </Table>
@@ -336,9 +259,8 @@ function ReadOnlyItemRow({ item }: { item: TenderItem }) {
   return (
     <TableRow hover>
       <TableCell sx={{ fontSize: 13 }}>{item.rowNo ?? '—'}</TableCell>
-      <TableCell sx={{ fontSize: 13 }}>{item.posNo ?? '—'}</TableCell>
       <TableCell sx={{ fontSize: 13 }}>{item.description}</TableCell>
-      <TableCell sx={{ fontSize: 13 }}>{item.unit ?? '—'}</TableCell>
+      <TableCell sx={{ fontSize: 13 }}>{TenderItemUnitLabels[item.unit] ?? item.unit}</TableCell>
       <TableCell sx={{ fontSize: 13 }} align="right">
         {item.quantity != null
           ? parseFloat(String(item.quantity)).toLocaleString('tr-TR', {

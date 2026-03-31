@@ -15,7 +15,9 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
 
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const project = await projectsRepo.findById(req.resolvedCompanyId!, String(req.params.id));
+    const project = req.resolvedCompanyId
+      ? await projectsRepo.findById(req.resolvedCompanyId, String(req.params.id))
+      : await projectsRepo.findByIdAcrossCompanies(String(req.params.id));
     if (!project) {
       res.status(404).json({ error: 'İnşaat bulunamadı', code: 'NOT_FOUND' });
       return;

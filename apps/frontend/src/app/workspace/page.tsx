@@ -1,150 +1,78 @@
 'use client';
 
-import { Box, Card, Chip, Divider, Typography } from '@mui/material';
-import {
-  AccessTime as AccessTimeIcon,
-  Email as EmailIcon,
-  Person as PersonIcon,
-  VerifiedUser as VerifiedUserIcon,
-} from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { Box, Card, CircularProgress, Typography } from '@mui/material';
+import { Assignment as AssignmentIcon, Gavel as GavelIcon, HourglassEmpty as PendingIcon } from '@mui/icons-material';
 import { WorkspaceLayout } from '@/components/layout/workspace-layout';
+import { getProjectsApi, getTendersApi } from '@/services/workspace/api';
+import { Notification } from '@/components';
 import { useUser } from '@/contexts/UserContext';
+import axios from 'axios';
 
-function DetailRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-}) {
+function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
   return (
-    <Box className="flex items-center gap-3 py-3">
-      <Box sx={{ color: '#6B7280', display: 'flex', alignItems: 'center' }}>{icon}</Box>
-      <Box className="flex-1">
-        <Typography
-          variant="caption"
-          sx={{
-            color: '#9CA3AF',
-            fontSize: '11px',
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
+    <Card sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2.5 }}>
+      <Box sx={{ width: 48, height: 48, borderRadius: '12px', backgroundColor: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Box sx={{ color }}>{icon}</Box>
+      </Box>
+      <Box>
+        <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '28px', lineHeight: 1, mb: 0.25 }}>
+          {value.toLocaleString()}
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '13px' }}>
           {label}
         </Typography>
-        <Box sx={{ mt: 0.25 }}>{value}</Box>
       </Box>
-    </Box>
+    </Card>
   );
 }
 
-export default function DashboardPage() {
+export default function WorkspacePage() {
   const { user } = useUser();
+  const [projectCount, setProjectCount] = useState(0);
+  const [tenderCount, setTenderCount] = useState(0);
+  const [openTenderCount, setOpenTenderCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as const });
 
-  const lastLoginFormatted = user?.lastLogin
-    ? new Date(user.lastLogin).toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
+  useEffect(() => {
+    Promise.all([getProjectsApi(), getTendersApi()])
+      .then(([projects, tenders]) => {
+        setProjectCount(projects.length);
+        setTenderCount(tenders.length);
+        setOpenTenderCount(tenders.filter((t) => t.status === 'open').length);
       })
-    : 'İlk giriş';
+      .catch((err: unknown) => {
+        const msg = axios.isAxiosError(err)
+          ? ((err.response?.data as { error?: string })?.error ?? 'İstatistikler yüklenemedi')
+          : 'İstatistikler yüklenemedi';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <WorkspaceLayout>
-      <Box sx={{ maxWidth: 640 }}>
-        <Card sx={{ p: 4, mb: 3 }}>
-          <Box className="flex items-start gap-4">
-            <Box
-              sx={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                backgroundColor: 'rgba(31,41,55,0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <PersonIcon sx={{ fontSize: 28, color: '#1F2937' }} />
-            </Box>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Hoş geldiniz{user?.name ? `, ${user.name}` : ''}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#6B7280' }}>
-                Çalışma alanınıza güvenli şekilde giriş yaptınız.
-              </Typography>
-            </Box>
+      <Box>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Genel Bakış</Typography>
+        <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>
+          Hoş geldiniz{user?.name ? `, ${user.name}` : ''}
+        </Typography>
+
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
+            <CircularProgress sx={{ color: '#1F2937' }} />
           </Box>
-        </Card>
-
-        <Card sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '15px', mb: 1 }}>
-            Hesap Bilgileri
-          </Typography>
-          <Divider sx={{ mb: 1 }} />
-
-          <DetailRow
-            icon={<EmailIcon sx={{ fontSize: 18 }} />}
-            label="E-posta Adresi"
-            value={
-              <Typography variant="body2" sx={{ fontSize: '14px', color: '#1F2937', fontWeight: 500 }}>
-                {user?.email}
-              </Typography>
-            }
-          />
-
-          <Divider sx={{ opacity: 0.5 }} />
-
-          <DetailRow
-            icon={<VerifiedUserIcon sx={{ fontSize: 18 }} />}
-            label="İki Faktörlü Kimlik Doğrulama"
-            value={
-              <Chip
-                label={user?.mfaEnabled ? 'Etkin' : 'Etkin değil'}
-                size="small"
-                sx={{
-                  backgroundColor: user?.mfaEnabled ? '#DCFCE7' : '#FEF3C7',
-                  color: user?.mfaEnabled ? '#15803D' : '#92400E',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  height: 22,
-                }}
-              />
-            }
-          />
-
-          <Divider sx={{ opacity: 0.5 }} />
-
-          <DetailRow
-            icon={<AccessTimeIcon sx={{ fontSize: 18 }} />}
-            label="Son Giriş"
-            value={
-              <Typography variant="body2" sx={{ fontSize: '14px', color: '#1F2937' }}>
-                {lastLoginFormatted}
-              </Typography>
-            }
-          />
-
-          {user?.name && (
-            <>
-              <Divider sx={{ opacity: 0.5 }} />
-              <DetailRow
-                icon={<PersonIcon sx={{ fontSize: 18 }} />}
-                label="Görünen Ad"
-                value={
-                  <Typography variant="body2" sx={{ fontSize: '14px', color: '#1F2937' }}>
-                    {user.name}
-                  </Typography>
-                }
-              />
-            </>
-          )}
-        </Card>
+        ) : (
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
+            <StatCard icon={<AssignmentIcon sx={{ fontSize: 24 }} />} label="Toplam İnşaat"    value={projectCount}    color="#1F2937" />
+            <StatCard icon={<GavelIcon sx={{ fontSize: 24 }} />}      label="Toplam İhale"     value={tenderCount}     color="#3B82F6" />
+            <StatCard icon={<PendingIcon sx={{ fontSize: 24 }} />}    label="Açık İhale"       value={openTenderCount} color="#10B981" />
+          </Box>
+        )}
       </Box>
+
+      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </WorkspaceLayout>
   );
 }
