@@ -23,9 +23,8 @@ export function verifyToken(req: Request, res: Response, next: NextFunction): vo
     req.userId = payload.userId;
     req.userEmail = payload.email;
     req.userRole = payload.role;
-    // SUPER_ADMIN is never scoped to a company or tenant, regardless of their DB record
-    req.userCompanyId = payload.role === UserRole.SUPER_ADMIN ? null : (payload.companyId ?? null);
-    req.userTenantId = payload.role === UserRole.SUPER_ADMIN ? null : (payload.tenantId ?? null);
+    req.userCompanyId = payload.companyId ?? null;
+    req.userTenantId = payload.tenantId ?? null;
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token', code: 'TOKEN_INVALID' });

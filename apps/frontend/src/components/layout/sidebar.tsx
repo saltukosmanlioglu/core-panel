@@ -250,7 +250,7 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
               İnşaatlara Dön
             </MenuItem>
           )}
-          {onDashboard && (user.role === UserRole.SUPER_ADMIN || user.role === UserRole.COMPANY_ADMIN) && (
+          {onDashboard && user.role === UserRole.COMPANY_ADMIN && (
             <MenuItem onClick={() => { setMenuAnchor(null); router.push('/admin'); }} sx={{ fontSize: '14px', gap: 1.5 }}>
               <AdminPanelSettingsIcon sx={{ fontSize: 18, color: '#6B7280' }} />
               Yönetime Git

@@ -2,15 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection';
 import { users, tenants } from '../db/schema';
-import { UserRole } from '@core-panel/shared';
 
 /**
  * Verifies the requesting user has access to the company identified by
  * `req.params.companyId`.
  *
- * - SUPER_ADMIN: always allowed.
- * - All other roles: the user must belong to a tenant that is under the
- *   requested company (users.tenantId → tenants.companyId === companyId).
+ * The user must belong to a tenant that is under the requested company
+ * (users.tenantId → tenants.companyId === companyId).
  *
  * Must be used after `verifyToken` + `checkIsActive`.
  */
@@ -20,12 +18,6 @@ export async function requireCompanyAccess(
   next: NextFunction,
 ): Promise<void> {
   try {
-    // Super admins can access any company
-    if (req.userRole === UserRole.SUPER_ADMIN) {
-      next();
-      return;
-    }
-
     const companyId = req.params.companyId;
 
     // Look up the user's tenant and its associated company

@@ -86,7 +86,8 @@
       "Bash(sed -i '' \"s|router.push\\(''/dashboard/tenders''\\)|router.push\\(''/workspace/tenders''\\)|g\" \"/Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src/app/workspace/tenders/[id]/page.tsx\")",
       "Bash(sed -i '' 's|/dashboard/tenders/${id}/offer|/workspace/tenders/${id}/offer|g' \"/Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src/app/workspace/tenders/[id]/page.tsx\")",
       "Bash(sed -i '' 's|/dashboard/tenders/${id}|/workspace/tenders/${id}|g' \"/Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src/app/workspace/tenders/[id]/offer/page.tsx\")",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(find /Users/saltuk/Desktop/saltuk/claude/core-panel/apps/frontend/src -type f \\\\\\(-name *tender* -o -path */tenders/* \\\\\\))"
     ]
   }
 }

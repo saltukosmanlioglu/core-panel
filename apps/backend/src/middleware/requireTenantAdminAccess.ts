@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@core-panel/shared';
 
 /**
- * Allows SUPER_ADMIN, COMPANY_ADMIN, and TENANT_ADMIN roles.
+ * Allows COMPANY_ADMIN and TENANT_ADMIN roles.
  * COMPANY_ADMIN must have a companyId; TENANT_ADMIN must have a tenantId.
  */
 export function requireTenantAdminAccess(
@@ -12,11 +12,7 @@ export function requireTenantAdminAccess(
 ): void {
   const role = req.userRole;
 
-  if (
-    role !== UserRole.SUPER_ADMIN &&
-    role !== UserRole.COMPANY_ADMIN &&
-    role !== UserRole.TENANT_ADMIN
-  ) {
+  if (role !== UserRole.COMPANY_ADMIN && role !== UserRole.TENANT_ADMIN) {
     res.status(403).json({ error: 'Insufficient permissions', code: 'FORBIDDEN' });
     return;
   }

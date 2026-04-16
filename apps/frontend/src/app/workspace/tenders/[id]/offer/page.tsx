@@ -67,6 +67,7 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false)
+  const [offerError, setOfferError] = useState<string | null>(null)
 
   const [snackbar, setSnackbar] = useState<{
     open: boolean
@@ -88,8 +89,19 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
         setItems(loadedItems)
 
         // Upsert offer (creates draft if none, returns existing otherwise)
-        const currentOffer: TenderOffer = await upsertOfferApi(id)
-        setOffer(currentOffer)
+        let currentOffer: TenderOffer
+        try {
+          currentOffer = await upsertOfferApi(id)
+          setOffer(currentOffer)
+          setOfferError(null)
+        } catch (err) {
+          const msg = axios.isAxiosError(err)
+            ? (err.response?.data as { error?: string })?.error ?? 'Teklif başlatılamadı.'
+            : 'Teklif başlatılamadı.'
+          setOfferError(msg)
+          setPrices(Object.fromEntries(loadedItems.map(i => [i.id, { materialUnitPrice: '0', laborUnitPrice: '0' }])))
+          return
+        }
 
         // Load existing offer items to pre-populate prices
         const initPrices: Record<string, PriceEntry> = {}
@@ -152,15 +164,32 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
       laborUnitPrice: parseFloat(prices[item.id]?.laborUnitPrice || '0') || 0,
     }))
 
+  const ensureOffer = async (): Promise<TenderOffer | null> => {
+    if (offer) return offer
+    try {
+      const created = await upsertOfferApi(id)
+      setOffer(created)
+      setOfferError(null)
+      return created
+    } catch (err) {
+      const msg = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string })?.error ?? 'Teklif başlatılamadı.'
+        : 'Teklif başlatılamadı.'
+      setSnackbar({ open: true, message: msg, severity: 'error' })
+      return null
+    }
+  }
+
   const handleSaveDraft = async () => {
-    if (!offer) return
+    const currentOffer = await ensureOffer()
+    if (!currentOffer) return
     try {
       setSaving(true)
-      await bulkUpdateOfferItemsApi(offer.id, buildBulkPayload())
+      await bulkUpdateOfferItemsApi(currentOffer.id, buildBulkPayload())
       setSnackbar({ open: true, message: 'Taslak kaydedildi.', severity: 'success' })
     } catch (err) {
       let message = 'Kaydetme başarısız.'
-      if (axios.isAxiosError(err)) message = err.response?.data?.message ?? message
+      if (axios.isAxiosError(err)) message = (err.response?.data as { error?: string })?.error ?? message
       setSnackbar({ open: true, message, severity: 'error' })
     } finally {
       setSaving(false)
@@ -168,17 +197,18 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
   }
 
   const handleSubmit = async () => {
-    if (!offer) return
+    const currentOffer = await ensureOffer()
+    if (!currentOffer) return
     try {
       setSubmitting(true)
-      await bulkUpdateOfferItemsApi(offer.id, buildBulkPayload())
-      await submitOfferApi(offer.id)
-      setOffer(prev => (prev ? { ...prev, status: 'submitted' } : prev))
+      await bulkUpdateOfferItemsApi(currentOffer.id, buildBulkPayload())
+      await submitOfferApi(currentOffer.id)
+      setOffer(prev => (prev ? { ...prev, status: 'submitted' } : { ...currentOffer, status: 'submitted' }))
       setSnackbar({ open: true, message: 'Teklifiniz gönderildi.', severity: 'success' })
       setConfirmSubmitOpen(false)
     } catch (err) {
       let message = 'Teklif gönderilemedi.'
-      if (axios.isAxiosError(err)) message = err.response?.data?.message ?? message
+      if (axios.isAxiosError(err)) message = (err.response?.data as { error?: string })?.error ?? message
       setSnackbar({ open: true, message, severity: 'error' })
     } finally {
       setSubmitting(false)
@@ -301,6 +331,11 @@ export default function DashboardTenderOfferPage({ params }: { params: Promise<{
               border: '1px solid #E5E7EB',
             }}
           >
+            {offerError && (
+              <Typography variant="body2" color="error" sx={{ flex: 1 }}>
+                {offerError}
+              </Typography>
+            )}
             <FormButton
               variant="secondary"
               size="sm"

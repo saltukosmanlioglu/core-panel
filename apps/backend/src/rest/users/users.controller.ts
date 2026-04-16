@@ -12,10 +12,8 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
     let all;
     if (req.userTenantId) {
       all = await usersRepo.findAllByTenantId(req.userTenantId);
-    } else if (req.userCompanyId) {
-      all = await usersRepo.findAllByCompanyId(req.userCompanyId);
     } else {
-      all = await usersRepo.findAll();
+      all = await usersRepo.findAllByCompanyId(req.userCompanyId!);
     }
     res.json({ users: all });
   } catch (err) {
@@ -72,10 +70,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       }
     } else if (req.userCompanyId) {
       // COMPANY_ADMIN restrictions
-      if (
-        parsed.data.role === UserRole.SUPER_ADMIN ||
-        parsed.data.role === UserRole.COMPANY_ADMIN
-      ) {
+      if (parsed.data.role === UserRole.COMPANY_ADMIN) {
         res.status(403).json({
           error: 'Bu role sahip kullanıcılar oluşturulamaz',
           code: 'FORBIDDEN',
@@ -146,10 +141,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
         return;
       }
       // COMPANY_ADMIN cannot escalate roles
-      if (
-        parsed.data.role === UserRole.SUPER_ADMIN ||
-        parsed.data.role === UserRole.COMPANY_ADMIN
-      ) {
+      if (parsed.data.role === UserRole.COMPANY_ADMIN) {
         res.status(403).json({ error: 'Bu rol atanamaz', code: 'FORBIDDEN' });
         return;
       }

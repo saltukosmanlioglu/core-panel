@@ -1,37 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Box, Typography, Chip, Tooltip, IconButton, CircularProgress } from '@mui/material';
 import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import { FormButton } from '@/components/form-elements';
-import { ConfirmationDialog, Notification } from '@/components';
+import { Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
-import { getCompaniesApi, deleteCompanyApi, reprovisionCompanySchemaApi } from '@/services/admin/api';
+import { getCompaniesApi, reprovisionCompanySchemaApi } from '@/services/admin/api';
 import type { Company } from '@core-panel/shared';
-import { useUser } from '@/contexts/UserContext';
-import { UserRole } from '@core-panel/shared';
 import axios from 'axios';
 
 export default function CompaniesPage() {
-  const router = useRouter();
-  const { user } = useUser();
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [reprovisioning, setReprovisioning] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const load = () => {
+  useEffect(() => {
     setLoading(true);
     getCompaniesApi()
       .then(setCompanies)
@@ -40,25 +28,7 @@ export default function CompaniesPage() {
         setSnackbar({ open: true, message: msg, severity: 'error' });
       })
       .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await deleteCompanyApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.name}" başarıyla silindi`, severity: 'success' });
-      setDeleteTarget(null);
-      load();
-    } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
-    } finally {
-      setDeleting(false);
-    }
-  };
+  }, []);
 
   const handleReprovision = async (company: Company) => {
     setReprovisioning(company.id);
@@ -78,14 +48,9 @@ export default function CompaniesPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Şirketler</Typography>
+          <Typography variant="h5" fontWeight={700} color="#111827">Şirketim</Typography>
           <Typography variant="body2" color="text.secondary">{companies.length} kayıt</Typography>
         </Box>
-        {isSuperAdmin && (
-          <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/companies/create')}>
-            Şirket Ekle
-          </FormButton>
-        )}
       </Box>
 
       <DataTable<Company>
@@ -155,32 +120,9 @@ export default function CompaniesPage() {
             ),
           },
         ]}
-        actions={[
-          ...(isSuperAdmin ? [{
-            label: 'Düzenle',
-            icon: <EditIcon fontSize="small" />,
-            onClick: (row: Company) => router.push(`/admin/companies/${row.id}`),
-            color: 'primary' as const,
-          }] : []),
-          ...(isSuperAdmin ? [{
-            label: 'Sil',
-            icon: <DeleteIcon fontSize="small" />,
-            onClick: (row: Company) => setDeleteTarget(row),
-            color: 'error' as const,
-          }] : []),
-        ]}
         emptyMessage="Henüz şirket yok"
       />
 
-      <ConfirmationDialog
-        open={!!deleteTarget}
-        title="Şirket Sil"
-        description={`"${deleteTarget?.name}" şirketini silmek istediğinize emin misiniz? Tüm ilişkili taşeronlar ve şirket şema verisi de silinecektir.`}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-        loading={deleting}
-        confirmLabel="Sil"
-      />
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </Box>
   );

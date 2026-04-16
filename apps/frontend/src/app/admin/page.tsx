@@ -3,18 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Box, Card, Typography, CircularProgress } from '@mui/material';
 import {
-  Business as BusinessIcon,
   Apartment as ApartmentIcon,
   People as PeopleIcon,
 } from '@mui/icons-material';
 import { getStatsApi } from '@/services/admin/api';
 import { Notification } from '@/components';
-import { useUser } from '@/contexts/UserContext';
-import { UserRole } from '@core-panel/shared';
 import axios from 'axios';
 
 interface Stats {
-  companies?: number;
   tenants: number;
   users: number;
 }
@@ -38,8 +34,6 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
 }
 
 export default function AdminOverviewPage() {
-  const { user } = useUser();
-  const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as const });
@@ -60,18 +54,15 @@ export default function AdminOverviewPage() {
     <Box>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Genel Bakış</Typography>
       <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>
-        {isSuperAdmin ? 'Platform istatistiklerine genel bakış' : 'Şirket istatistiklerinize genel bakış'}
+        Şirket istatistiklerinize genel bakış
       </Typography>
 
       {loading ? (
         <Box className="flex justify-center py-12"><CircularProgress sx={{ color: '#1F2937' }} /></Box>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { sm: `repeat(${isSuperAdmin ? 3 : 2}, 1fr)` }, gap: 3 }}>
-          {isSuperAdmin && (
-            <StatCard icon={<BusinessIcon sx={{ fontSize: 24 }} />} label="Toplam Şirket" value={stats?.companies ?? 0} color="#1F2937" />
-          )}
-          <StatCard icon={<ApartmentIcon sx={{ fontSize: 24 }} />} label={isSuperAdmin ? 'Toplam Taşeron' : 'Taşeronlarınız'} value={stats?.tenants ?? 0} color="#3B82F6" />
-          <StatCard icon={<PeopleIcon sx={{ fontSize: 24 }} />} label={isSuperAdmin ? 'Toplam Kullanıcı' : 'Kullanıcılarınız'} value={stats?.users ?? 0} color="#10B981" />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { sm: 'repeat(2, 1fr)' }, gap: 3 }}>
+          <StatCard icon={<ApartmentIcon sx={{ fontSize: 24 }} />} label="Taşeronlarınız" value={stats?.tenants ?? 0} color="#3B82F6" />
+          <StatCard icon={<PeopleIcon sx={{ fontSize: 24 }} />} label="Kullanıcılarınız" value={stats?.users ?? 0} color="#10B981" />
         </Box>
       )}
 

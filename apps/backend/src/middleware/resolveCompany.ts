@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { UserRole } from '@core-panel/shared';
 import * as tenantsRepo from '../rest/tenants/tenants.repo';
 
 /**
  * Resolves which company schema to query and attaches it as req.resolvedCompanyId.
  *
- * - SUPER_ADMIN: must pass ?companyId= query param
  * - COMPANY_ADMIN: uses req.userCompanyId from JWT
  * - TENANT_ADMIN / USER: derives companyId via their tenantId → tenants.companyId
  */
@@ -15,12 +13,6 @@ export async function resolveCompany(
   next: NextFunction,
 ): Promise<void> {
   try {
-    if (req.userRole === UserRole.SUPER_ADMIN) {
-      // Super admin has no fixed company — controllers handle cross-company queries
-      next();
-      return;
-    }
-
     if (req.userCompanyId) {
       req.resolvedCompanyId = req.userCompanyId;
       next();

@@ -29,6 +29,10 @@ const createSchema = z.object({
   companyId: z.string().uuid('Invalid company ID').nullable().optional(),
   tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
   isActive: z.boolean(),
+}).superRefine((data, ctx) => {
+  if (data.role === UserRole.TENANT_ADMIN && !data.tenantId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Taşeron Yöneticisi için taşeron seçimi zorunludur', path: ['tenantId'] });
+  }
 });
 
 const updateSchema = z.object({
@@ -39,6 +43,10 @@ const updateSchema = z.object({
   companyId: z.string().uuid('Invalid company ID').nullable().optional(),
   tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
   isActive: z.boolean(),
+}).superRefine((data, ctx) => {
+  if (data.role === UserRole.TENANT_ADMIN && !data.tenantId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Taşeron Yöneticisi için taşeron seçimi zorunludur', path: ['tenantId'] });
+  }
 });
 
 type CreateData = z.infer<typeof createSchema>;
@@ -46,7 +54,6 @@ type UpdateData = z.infer<typeof updateSchema>;
 type FormData = CreateData | UpdateData;
 
 const roleOptions = [
-  { label: 'Süper Yönetici', value: UserRole.SUPER_ADMIN },
   { label: 'Şirket Yöneticisi', value: UserRole.COMPANY_ADMIN },
   { label: 'Taşeron Yöneticisi', value: UserRole.TENANT_ADMIN },
 ];
@@ -96,9 +103,8 @@ export function UserForm({ id }: { id?: string }) {
     setLoading(true);
     try {
       const isCompanyAdminRole = pendingData.role === UserRole.COMPANY_ADMIN;
-      const isSuperAdminRole = pendingData.role === UserRole.SUPER_ADMIN;
-      const companyId = (isSuperAdminRole || !isCompanyAdminRole ? null : (pendingData.companyId || null)) as string | null;
-      const tenantId = (isSuperAdminRole || isCompanyAdminRole ? null : (pendingData.tenantId || null)) as string | null;
+      const companyId = (!isCompanyAdminRole ? null : (pendingData.companyId || null)) as string | null;
+      const tenantId = (isCompanyAdminRole ? null : (pendingData.tenantId || null)) as string | null;
       const payload = { ...pendingData, companyId, tenantId };
       if (isEdit && id) {
         const { password, ...rest } = payload as UpdateData;
@@ -149,7 +155,7 @@ export function UserForm({ id }: { id?: string }) {
                 {...register('password', { setValueAs: (v: string) => v === '' ? undefined : v })}
               />
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: watchedRole === UserRole.SUPER_ADMIN || isTenantAdmin ? '1fr' : '1fr 1fr', gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: isTenantAdmin ? '1fr' : '1fr 1fr', gap: 2 }}>
                 <Controller
                   name="role"
                   control={control}
@@ -166,7 +172,7 @@ export function UserForm({ id }: { id?: string }) {
                     )}
                   />
                 )}
-                {!isTenantAdmin && watchedRole !== UserRole.SUPER_ADMIN && watchedRole !== UserRole.COMPANY_ADMIN && (
+                {!isTenantAdmin && watchedRole !== UserRole.COMPANY_ADMIN && (
                   <Controller
                     name="tenantId"
                     control={control}

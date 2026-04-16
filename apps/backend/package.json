@@ -9,7 +9,10 @@
     "type-check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "seed:bootstrap": "tsx src/scripts/bootstrapCompany.ts",
+    "seed:tenant": "tsx src/scripts/createTenant.ts",
+    "seed:user": "tsx src/scripts/createUser.ts"
   },
   "dependencies": {
     "@core-panel/shared": "*",

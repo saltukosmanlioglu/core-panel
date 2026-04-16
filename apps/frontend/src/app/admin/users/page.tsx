@@ -12,7 +12,6 @@ import type { User } from '@core-panel/shared';
 import axios from 'axios';
 
 const roleColors: Record<string, { bg: string; color: string }> = {
-  super_admin: { bg: '#FEF3C7', color: '#92400E' },
   company_admin: { bg: '#EDE9FE', color: '#5B21B6' },
   tenant_admin: { bg: '#DCFCE7', color: '#15803D' },
   user: { bg: 'rgba(31,41,55,0.08)', color: '#1F2937' },

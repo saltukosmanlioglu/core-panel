@@ -108,7 +108,7 @@ export default function DashboardTenderDetailPage({ params }: { params: Promise<
       <Box sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <IconButton onClick={() => router.push(tender?.projectId ? `/workspace/projects/${tender.projectId}/tenders` : '/workspace/projects')} size="small">
+          <IconButton onClick={() => router.push('/workspace/tenders')} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>

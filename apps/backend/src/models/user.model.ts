@@ -15,7 +15,6 @@ export const createUserSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters').max(72, 'Password must be at most 72 characters'),
   role: z.enum([
-    UserRole.SUPER_ADMIN,
     UserRole.COMPANY_ADMIN,
     UserRole.TENANT_ADMIN,
   ]),
@@ -29,7 +28,6 @@ export const updateUserSchema = z.object({
   email: z.string().email().optional(),
   password: z.string().min(8).max(72).optional(),
   role: z.enum([
-    UserRole.SUPER_ADMIN,
     UserRole.COMPANY_ADMIN,
     UserRole.TENANT_ADMIN,
   ]).optional(),

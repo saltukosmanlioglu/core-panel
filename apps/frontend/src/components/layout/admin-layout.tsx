@@ -17,26 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUser } from '@/contexts/UserContext';
 import { UserRole } from '@core-panel/shared';
 
-const superAdminGroups: SidebarGroup[] = [
-  {
-    label: 'Yönetim Paneli',
-    items: [
-      { label: 'Genel Bakış', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/admin', exact: true },
-      { label: 'Şirketler', icon: <BusinessIcon sx={{ fontSize: 20 }} />, href: '/admin/companies' },
-      { label: 'Taşeronlar', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/tenants' },
-      { label: 'Kullanıcılar', icon: <PeopleIcon sx={{ fontSize: 20 }} />, href: '/admin/users' },
-    ],
-  },
-  {
-    label: 'Yönetim',
-    items: [
-      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/admin/projects' },
-      { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/admin/tenders' },
-    ],
-  },
-];
-
-const companyAdminGroups: SidebarGroup[] = [
+const adminGroups: SidebarGroup[] = [
   {
     label: 'Yönetim Paneli',
     items: [
@@ -65,14 +46,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const { user, isLoading, logout } = useUser();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const adminGroups =
-    user?.role === UserRole.SUPER_ADMIN ? superAdminGroups : companyAdminGroups;
-
   useAuth();
 
-  const isAllowedRole =
-    user?.role === UserRole.SUPER_ADMIN ||
-    user?.role === UserRole.COMPANY_ADMIN;
+  const isAllowedRole = user?.role === UserRole.COMPANY_ADMIN;
 
   useEffect(() => {
     if (isLoading) return;
