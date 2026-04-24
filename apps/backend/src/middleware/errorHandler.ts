@@ -16,6 +16,13 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  if ((err as { name?: string }).name === 'MulterError') {
+    const code = (err as { code?: string }).code;
+    const message = code === 'LIMIT_FILE_SIZE' ? 'File is too large' : err.message;
+    res.status(400).json({ error: message, code: code ?? 'UPLOAD_ERROR' });
+    return;
+  }
+
   // Handle known Postgres errors before anything else
   const pgCode = (err as unknown as Record<string, unknown>).code as string | undefined;
   if (pgCode && PG_ERRORS[pgCode]) {

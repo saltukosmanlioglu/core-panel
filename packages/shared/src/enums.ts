@@ -1,6 +1,5 @@
 export enum UserRole {
   COMPANY_ADMIN = 'company_admin',
-  TENANT_ADMIN = 'tenant_admin',
 }
 
 export enum TenderItemUnit {

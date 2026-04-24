@@ -22,9 +22,16 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@core-panel/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@core-panel/shared/*": [
+        "../../packages/shared/src/*"
       ]
     }
   },

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Box, Card, Typography, Divider, Grid } from '@mui/material';
+import { Box, Card, Typography, Divider } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect, FormCheckbox } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
@@ -13,40 +13,24 @@ import {
   getAdminUserApi,
   createAdminUserApi,
   updateAdminUserApi,
-  getTenantsApi,
-  getCompaniesApi,
 } from '@/services/admin/api';
-import type { Tenant, Company } from '@core-panel/shared';
 import { UserRole } from '@core-panel/shared';
-import { useUser } from '@/contexts/UserContext';
 import axios from 'axios';
 
 const createSchema = z.object({
   name: z.string().min(1, 'Ad zorunludur'),
   email: z.string().email('Geçersiz e-posta'),
   password: z.string().min(8, 'En az 8 karakter'),
-  role: z.string().min(1, 'Rol zorunludur'),
-  companyId: z.string().uuid('Invalid company ID').nullable().optional(),
-  tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
+  role: z.literal(UserRole.COMPANY_ADMIN),
   isActive: z.boolean(),
-}).superRefine((data, ctx) => {
-  if (data.role === UserRole.TENANT_ADMIN && !data.tenantId) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Taşeron Yöneticisi için taşeron seçimi zorunludur', path: ['tenantId'] });
-  }
 });
 
 const updateSchema = z.object({
   name: z.string().min(1, 'Ad zorunludur'),
   email: z.string().email('Geçersiz e-posta'),
   password: z.string().min(8, 'Şifre en az 8 karakter olmalıdır').optional(),
-  role: z.string().min(1, 'Rol zorunludur'),
-  companyId: z.string().uuid('Invalid company ID').nullable().optional(),
-  tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
+  role: z.literal(UserRole.COMPANY_ADMIN),
   isActive: z.boolean(),
-}).superRefine((data, ctx) => {
-  if (data.role === UserRole.TENANT_ADMIN && !data.tenantId) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Taşeron Yöneticisi için taşeron seçimi zorunludur', path: ['tenantId'] });
-  }
 });
 
 type CreateData = z.infer<typeof createSchema>;
@@ -55,39 +39,35 @@ type FormData = CreateData | UpdateData;
 
 const roleOptions = [
   { label: 'Şirket Yöneticisi', value: UserRole.COMPANY_ADMIN },
-  { label: 'Taşeron Yöneticisi', value: UserRole.TENANT_ADMIN },
 ];
 
 export function UserForm({ id }: { id?: string }) {
   const router = useRouter();
-  const { user: loggedInUser } = useUser();
-  const isCompanyAdmin = loggedInUser?.role === UserRole.COMPANY_ADMIN;
-  const isTenantAdmin = loggedInUser?.role === UserRole.TENANT_ADMIN;
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const schema = isEdit ? updateSchema : createSchema;
-  const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
-    defaultValues: { isActive: true, role: UserRole.TENANT_ADMIN },
+    defaultValues: { isActive: true, role: UserRole.COMPANY_ADMIN },
   });
-  const watchedRole = watch('role');
 
   useEffect(() => {
-    const loads: Promise<void>[] = [
-      getTenantsApi().then(setTenants),
-      ...(!isCompanyAdmin ? [getCompaniesApi().then(setCompanies)] : []),
-    ];
+    const loads: Promise<void>[] = [];
     if (id) {
       loads.push(
         getAdminUserApi(id).then((u) =>
-          reset({ name: u.name ?? '', email: u.email, password: '', role: u.role, companyId: u.companyId ?? null, tenantId: u.tenantId ?? null, isActive: u.isActive })
+          reset({
+            name: u.name ?? '',
+            email: u.email,
+            password: '',
+            role: UserRole.COMPANY_ADMIN,
+            isActive: u.isActive,
+          })
         )
       );
     }
@@ -102,16 +82,12 @@ export function UserForm({ id }: { id?: string }) {
     if (!pendingData) return;
     setLoading(true);
     try {
-      const isCompanyAdminRole = pendingData.role === UserRole.COMPANY_ADMIN;
-      const companyId = (!isCompanyAdminRole ? null : (pendingData.companyId || null)) as string | null;
-      const tenantId = (isCompanyAdminRole ? null : (pendingData.tenantId || null)) as string | null;
-      const payload = { ...pendingData, companyId, tenantId };
       if (isEdit && id) {
-        const { password, ...rest } = payload as UpdateData;
+        const { password, ...rest } = pendingData as UpdateData;
         await updateAdminUserApi(id, { ...rest, ...(password ? { password } : {}) });
         setSnackbar({ open: true, message: 'Kullanıcı başarıyla güncellendi', severity: 'success' });
       } else {
-        await createAdminUserApi(payload as CreateData);
+        await createAdminUserApi(pendingData as CreateData);
         setSnackbar({ open: true, message: 'Kullanıcı başarıyla oluşturuldu', severity: 'success' });
         setTimeout(() => router.push('/admin/users'), 1200);
       }
@@ -123,13 +99,7 @@ export function UserForm({ id }: { id?: string }) {
     }
   };
 
-  const tenantOptions = tenants.map((t) => ({ label: t.name, value: t.id }));
-  const companyOptions = companies.map((c) => ({ label: c.name, value: c.id }));
-  const availableRoleOptions = isTenantAdmin
-    ? roleOptions.filter((r) => r.value === UserRole.TENANT_ADMIN)
-    : isCompanyAdmin
-    ? roleOptions.filter((r) => r.value === UserRole.TENANT_ADMIN)
-    : roleOptions;
+  const availableRoleOptions = roleOptions;
 
   return (
     <Box>
@@ -155,7 +125,7 @@ export function UserForm({ id }: { id?: string }) {
                 {...register('password', { setValueAs: (v: string) => v === '' ? undefined : v })}
               />
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: isTenantAdmin ? '1fr' : '1fr 1fr', gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 2 }}>
                 <Controller
                   name="role"
                   control={control}
@@ -163,24 +133,6 @@ export function UserForm({ id }: { id?: string }) {
                     <FormSelect label="Rol" options={availableRoleOptions} error={!!errors.role} errorMessage={errors.role?.message} value={field.value ?? ''} onChange={field.onChange} />
                   )}
                 />
-                {!isTenantAdmin && watchedRole === UserRole.COMPANY_ADMIN && (
-                  <Controller
-                    name="companyId"
-                    control={control}
-                    render={({ field }) => (
-                      <FormSelect label="Şirket" options={companyOptions} error={!!errors.companyId} errorMessage={errors.companyId?.message} value={field.value ?? ''} onChange={field.onChange} />
-                    )}
-                  />
-                )}
-                {!isTenantAdmin && watchedRole !== UserRole.COMPANY_ADMIN && (
-                  <Controller
-                    name="tenantId"
-                    control={control}
-                    render={({ field }) => (
-                      <FormSelect label="Taşeron" options={tenantOptions} error={!!errors.tenantId} errorMessage={errors.tenantId?.message} value={field.value ?? ''} onChange={field.onChange} />
-                    )}
-                  />
-                )}
               </Box>
 
               <Controller

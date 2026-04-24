@@ -9,14 +9,10 @@ import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
 import { getTenantsApi, deleteTenantApi } from '@/services/admin/api';
 import type { Tenant } from '@core-panel/shared';
-import { useUser } from '@/contexts/UserContext';
-import { UserRole } from '@core-panel/shared';
 import axios from 'axios';
 
 export default function TenantsPage() {
   const router = useRouter();
-  const { user } = useUser();
-  const isTenantAdmin = user?.role === UserRole.TENANT_ADMIN;
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null);
@@ -59,11 +55,9 @@ export default function TenantsPage() {
           <Typography variant="h5" fontWeight={700} color="#111827">Taşeronlar</Typography>
           <Typography variant="body2" color="text.secondary">{tenants.length} kayıt</Typography>
         </Box>
-        {!isTenantAdmin && (
-          <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/tenants/create')}>
-            Taşeron Ekle
-          </FormButton>
-        )}
+        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/tenants/create')}>
+          Taşeron Ekle
+        </FormButton>
       </Box>
 
       <DataTable<Tenant>
@@ -103,7 +97,7 @@ export default function TenantsPage() {
             ),
           },
         ]}
-        actions={isTenantAdmin ? [] : [
+        actions={[
           {
             label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,

@@ -4,16 +4,9 @@ import { createTenantSchema, updateTenantSchema } from '../../models/tenant.mode
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    let all;
-    if (req.userTenantId) {
-      // TENANT_ADMIN: only their own tenant
-      const tenant = await tenantsRepo.findById(req.userTenantId);
-      all = tenant ? [tenant] : [];
-    } else if (req.userCompanyId) {
-      all = await tenantsRepo.findAllByCompanyId(req.userCompanyId);
-    } else {
-      all = await tenantsRepo.findAll();
-    }
+    const all = req.userCompanyId
+      ? await tenantsRepo.findAllByCompanyId(req.userCompanyId)
+      : await tenantsRepo.findAll();
     res.json({ tenants: all });
   } catch (err) {
     next(err);
@@ -27,10 +20,7 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
       res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;
     }
-    if (req.userTenantId && tenant.id !== req.userTenantId) {
-      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-      return;
-    } else if (!req.userTenantId && req.userCompanyId && tenant.companyId !== req.userCompanyId) {
+    if (req.userCompanyId && tenant.companyId !== req.userCompanyId) {
       res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }

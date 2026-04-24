@@ -9,9 +9,9 @@ import statsRouter from './stats/stats.route';
 import filesRouter from './files/files.route';
 import projectsRouter from './projects/projects.route';
 import tendersRouter from './tenders/tenders.route';
-import tenderCategoriesRouter from './tender-categories/tender-categories.route';
-import tenderItemsRouter from './tender-items/tender-items.route';
-import { tenderOffersRouter, offerActionsRouter } from './tender-offers/tender-offers.route';
+import tenderInvitationsRouter from './tender-invitations/tender-invitations.route';
+import tenderOfferFilesRouter from './tender-offer-files/tender-offer-files.route';
+import tenderComparisonsRouter from './tender-comparisons/tender-comparisons.route';
 
 const baseRouter = Router();
 
@@ -23,9 +23,8 @@ baseRouter.use('/admin/users', verifyToken, checkIsActive, usersRouter);
 baseRouter.use('/admin/stats', verifyToken, checkIsActive, statsRouter);
 baseRouter.use('/projects', verifyToken, checkIsActive, projectsRouter);
 baseRouter.use('/tenders', verifyToken, checkIsActive, tendersRouter);
-baseRouter.use('/tenders/:tenderId/categories', verifyToken, checkIsActive, tenderCategoriesRouter);
-baseRouter.use('/tenders/:tenderId/items', verifyToken, checkIsActive, tenderItemsRouter);
-baseRouter.use('/tenders/:tenderId/offers', verifyToken, checkIsActive, tenderOffersRouter);
-baseRouter.use('/offers', verifyToken, checkIsActive, offerActionsRouter);
+baseRouter.use('/tenders/:tenderId/invitations', verifyToken, checkIsActive, tenderInvitationsRouter);
+baseRouter.use('/tenders/:tenderId/offer-files', verifyToken, checkIsActive, tenderOfferFilesRouter);
+baseRouter.use('/tenders/:tenderId/comparison', verifyToken, checkIsActive, tenderComparisonsRouter);
 
 export default baseRouter;

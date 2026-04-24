@@ -4,6 +4,7 @@ const required = [
   'COOKIE_SECRET',
   'FRONTEND_URL',
   'MFA_ENCRYPTION_KEY',
+  'ANTHROPIC_API_KEY',
 ] as const;
 
 for (const key of required) {
@@ -27,5 +28,6 @@ export const env = {
   COOKIE_SECRET: process.env.COOKIE_SECRET!,
   FRONTEND_URL: process.env.FRONTEND_URL!,
   MFA_ENCRYPTION_KEY: process.env.MFA_ENCRYPTION_KEY!,
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
   NODE_ENV: process.env.NODE_ENV ?? 'development',
 } as const;

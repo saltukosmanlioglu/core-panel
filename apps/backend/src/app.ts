@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
+import { UPLOADS_DIR } from './config/paths';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 import baseRouter from './rest/base-router';
@@ -35,6 +36,9 @@ app.use(cookieParser(env.COOKIE_SECRET));
 
 // Rate limiting
 app.use('/api', apiLimiter);
+
+// Local uploads
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Routes
 app.use('/api', baseRouter);

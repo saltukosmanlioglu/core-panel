@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import * as tendersRepo from './tenders.repo';
-import * as itemsRepo from '../tender-items/tender-items.repo';
 import { createTenderSchema, updateTenderSchema } from '../../models/tender.model';
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -36,14 +35,11 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
       return;
     }
-    const { deadline, items, ...rest } = parsed.data;
+    const { deadline, ...rest } = parsed.data;
     const tender = await tendersRepo.create(req.resolvedCompanyId!, {
       ...rest,
       deadline: deadline ? new Date(deadline) : undefined,
     });
-    if (items && items.length > 0) {
-      await itemsRepo.syncItems(req.resolvedCompanyId!, tender.id, items);
-    }
     res.status(201).json({ tender });
   } catch (err) {
     next(err);
@@ -57,7 +53,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
       return;
     }
-    const { deadline, items, ...rest } = parsed.data;
+    const { deadline, ...rest } = parsed.data;
     const tender = await tendersRepo.update(req.resolvedCompanyId!, String(req.params.id), {
       ...rest,
       ...(deadline !== undefined ? { deadline: deadline ? new Date(deadline) : null } : {}),
@@ -65,9 +61,6 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     if (!tender) {
       res.status(404).json({ error: 'İhale bulunamadı', code: 'NOT_FOUND' });
       return;
-    }
-    if (items && items.length > 0) {
-      await itemsRepo.syncItems(req.resolvedCompanyId!, tender.id, items);
     }
     res.json({ tender });
   } catch (err) {

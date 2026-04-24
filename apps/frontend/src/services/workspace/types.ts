@@ -18,5 +18,4 @@ export interface TenderPayload {
   description?: string;
   status: string;
   deadline?: string;
-  items?: BoqItemPayload[];
 }

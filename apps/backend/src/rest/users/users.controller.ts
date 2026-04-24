@@ -1,21 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
-import { eq } from 'drizzle-orm';
-import { db } from '../../db/connection';
-import { tenants } from '../../db/schema';
 import * as usersRepo from './users.repo';
 import * as usersService from './users.service';
 import { createUserSchema, updateUserSchema } from '../../models/user.model';
-import { UserRole } from '@core-panel/shared';
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    let all;
-    if (req.userTenantId) {
-      all = await usersRepo.findAllByTenantId(req.userTenantId);
-    } else {
-      all = await usersRepo.findAllByCompanyId(req.userCompanyId!);
-    }
-    res.json({ users: all });
+    const users = await usersRepo.findAllByCompanyId(req.userCompanyId!);
+    res.json({ users });
   } catch (err) {
     next(err);
   }
@@ -28,19 +19,9 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
       res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
       return;
     }
-    if (req.userTenantId) {
-      if (user.tenantId !== req.userTenantId) {
-        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-        return;
-      }
-    } else if (req.userCompanyId) {
-      const belongsToCompany =
-        user.companyId === req.userCompanyId ||
-        (await isTenantInCompany(user.tenantId, req.userCompanyId));
-      if (!belongsToCompany) {
-        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-        return;
-      }
+    if (user.companyId !== req.userCompanyId) {
+      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
+      return;
     }
     res.json({ user });
   } catch (err) {
@@ -59,42 +40,11 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    if (req.userTenantId) {
-      // TENANT_ADMIN: can only create TENANT_ADMIN accounts within their own tenant
-      if (parsed.data.role !== UserRole.TENANT_ADMIN) {
-        res.status(403).json({
-          error: 'Taşeron yöneticisi yalnızca Taşeron Yöneticisi rolüyle kullanıcı oluşturabilir',
-          code: 'FORBIDDEN',
-        });
-        return;
-      }
-    } else if (req.userCompanyId) {
-      // COMPANY_ADMIN restrictions
-      if (parsed.data.role === UserRole.COMPANY_ADMIN) {
-        res.status(403).json({
-          error: 'Bu role sahip kullanıcılar oluşturulamaz',
-          code: 'FORBIDDEN',
-        });
-        return;
-      }
-      if (parsed.data.tenantId) {
-        const valid = await isTenantInCompany(parsed.data.tenantId, req.userCompanyId);
-        if (!valid) {
-          res.status(403).json({ error: 'Taşeron şirketinize ait değil', code: 'FORBIDDEN' });
-          return;
-        }
-      }
-    }
-
-    // Auto-set tenantId/companyId based on the caller's scope
-    let createData = { ...parsed.data };
-    if (req.userTenantId) {
-      createData.tenantId = req.userTenantId;
-      createData.companyId = createData.companyId ?? req.userCompanyId ?? null;
-    } else if (req.userCompanyId) {
-      createData.companyId = createData.companyId ?? req.userCompanyId;
-    }
-    const user = await usersService.createUser(createData);
+    const user = await usersService.createUser({
+      ...parsed.data,
+      companyId: req.userCompanyId!,
+      tenantId: null,
+    });
     res.status(201).json({ user });
   } catch (err) {
     next(err);
@@ -112,42 +62,25 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    if (req.userTenantId) {
-      const existing = await usersRepo.findById(String(req.params.id));
-      if (!existing) {
-        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
-        return;
-      }
-      if (existing.tenantId !== req.userTenantId) {
-        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-        return;
-      }
-      // TENANT_ADMIN cannot escalate role beyond TENANT_ADMIN
-      if (parsed.data.role !== undefined && parsed.data.role !== UserRole.TENANT_ADMIN) {
-        res.status(403).json({ error: 'Taşeron yöneticisi yalnızca Taşeron Yöneticisi rolünü atayabilir', code: 'FORBIDDEN' });
-        return;
-      }
-    } else if (req.userCompanyId) {
-      const existing = await usersRepo.findById(String(req.params.id));
-      if (!existing) {
-        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
-        return;
-      }
-      const belongsToCompany =
-        existing.companyId === req.userCompanyId ||
-        (await isTenantInCompany(existing.tenantId, req.userCompanyId));
-      if (!belongsToCompany) {
-        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-        return;
-      }
-      // COMPANY_ADMIN cannot escalate roles
-      if (parsed.data.role === UserRole.COMPANY_ADMIN) {
-        res.status(403).json({ error: 'Bu rol atanamaz', code: 'FORBIDDEN' });
-        return;
-      }
+    const existing = await usersRepo.findById(String(req.params.id));
+    if (!existing) {
+      res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+    if (existing.companyId !== req.userCompanyId) {
+      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
+      return;
     }
 
-    const user = await usersService.updateUser(String(req.params.id), parsed.data, req.userId!);
+    const user = await usersService.updateUser(
+      String(req.params.id),
+      {
+        ...parsed.data,
+        companyId: req.userCompanyId!,
+        tenantId: null,
+      },
+      req.userId!
+    );
     res.json({ user });
   } catch (err) {
     next(err);
@@ -156,29 +89,14 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
 export const deleteById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (req.userTenantId) {
-      const existing = await usersRepo.findById(String(req.params.id));
-      if (!existing) {
-        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
-        return;
-      }
-      if (existing.tenantId !== req.userTenantId) {
-        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-        return;
-      }
-    } else if (req.userCompanyId) {
-      const existing = await usersRepo.findById(String(req.params.id));
-      if (!existing) {
-        res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
-        return;
-      }
-      const belongsToCompany =
-        existing.companyId === req.userCompanyId ||
-        (await isTenantInCompany(existing.tenantId, req.userCompanyId));
-      if (!belongsToCompany) {
-        res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
-        return;
-      }
+    const existing = await usersRepo.findById(String(req.params.id));
+    if (!existing) {
+      res.status(404).json({ error: 'Kullanıcı bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+    if (existing.companyId !== req.userCompanyId) {
+      res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
+      return;
     }
     await usersService.deleteUser(String(req.params.id), req.userId!);
     res.json({ status: 'ok' });
@@ -186,13 +104,3 @@ export const deleteById = async (req: Request, res: Response, next: NextFunction
     next(err);
   }
 };
-
-async function isTenantInCompany(tenantId: string | null | undefined, companyId: string): Promise<boolean> {
-  if (!tenantId) return false;
-  const result = await db
-    .select({ companyId: tenants.companyId })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
-  return result[0]?.companyId === companyId;
-}

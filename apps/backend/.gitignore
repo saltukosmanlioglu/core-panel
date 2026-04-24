@@ -16,5 +16,9 @@ dist/
 # Logs
 *.log
 
+# Local uploads
+uploads/*
+!uploads/.gitkeep
+
 # TypeScript
 *.tsbuildinfo

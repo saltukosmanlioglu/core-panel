@@ -94,7 +94,7 @@ export default function ProjectTendersPage() {
             </Box>
           )
           : tenders.map((t) => (
-            <TenderCard key={t.id} tender={t} onClick={() => router.push(`/workspace/tenders/${t.id}`)} />
+            <TenderCard key={t.id} tender={t} onClick={() => router.push(`/admin/tenders/${t.id}`)} />
           ))
         }
       </Box>
