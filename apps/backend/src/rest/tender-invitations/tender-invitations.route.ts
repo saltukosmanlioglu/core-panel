@@ -6,10 +6,7 @@ import * as controller from './tender-invitations.controller';
 
 const router = Router({ mergeParams: true });
 
-router.use(resolveCompany);
-router.use(requireAdminAccess);
-
-router.get('/', validateUUID('tenderId'), controller.getByTenderId);
-router.put('/', validateUUID('tenderId'), controller.replaceAll);
+router.get('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.getByTenderId);
+router.put('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.replaceAll);
 
 export default router;

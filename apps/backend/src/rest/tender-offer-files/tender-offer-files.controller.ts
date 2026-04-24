@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { randomUUID } from 'crypto';
 import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
 import { Request, Response, NextFunction } from 'express';
 import { TenantDb } from '../../lib/tenantDb';
 import { UPLOADS_DIR } from '../../config/paths';
@@ -30,25 +30,28 @@ function safeUnlink(filePath: string): void {
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
     cb(null, UPLOADS_DIR);
   },
   filename: (_req, file, cb) => {
-    cb(null, `${randomUUID()}${path.extname(file.originalname)}`);
+    cb(null, `${uuidv4()}${path.extname(file.originalname)}`);
   },
 });
 
-export const offerFileUpload = multer({
+export const upload = multer({
   storage,
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype as (typeof ALLOWED_MIME_TYPES)[number])) {
-      cb(new AppError('Unsupported file type', 400, 'UNSUPPORTED_FILE_TYPE'));
+      cb(new AppError('Invalid file type. Allowed: xlsx, xls, pdf, doc, docx', 400, 'INVALID_FILE_TYPE'));
       return;
     }
 
     cb(null, true);
   },
   limits: {
-    fileSize: 25 * 1024 * 1024,
+    fileSize: 20 * 1024 * 1024,
   },
 });
 
@@ -70,7 +73,7 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
   }
 };
 
-export const upload = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const uploadFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const uploadedFilePath = req.file?.path;
 
   try {
@@ -169,3 +172,5 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 };
+
+export const removeFile = remove;

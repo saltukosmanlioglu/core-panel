@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Box, Card, CircularProgress, Typography } from '@mui/material';
-import { Gavel as GavelIcon, AttachMoney as MoneyIcon, CheckCircle as CheckIcon, HourglassEmpty as PendingIcon } from '@mui/icons-material';
+import { Gavel as GavelIcon, CheckCircle as CheckIcon, HourglassEmpty as PendingIcon } from '@mui/icons-material';
 import { getTendersApi } from '@/services/workspace/api';
 import type { Tender } from '@core-panel/shared';
 
@@ -38,7 +38,6 @@ export default function ProjectOverviewPage() {
 
   const openCount = tenders.filter((t) => t.status === 'open').length;
   const awardedCount = tenders.filter((t) => t.status === 'awarded').length;
-  const totalBudget = tenders.reduce((sum, t) => sum + (t.budget ? Number(t.budget) : 0), 0);
 
   if (loading) {
     return (
@@ -49,11 +48,10 @@ export default function ProjectOverviewPage() {
   }
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3 }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
       <StatCard icon={<GavelIcon sx={{ fontSize: 24 }} />}   label="Toplam İhale"   value={tenders.length}                  color="#1F2937" />
       <StatCard icon={<PendingIcon sx={{ fontSize: 24 }} />} label="Açık İhale"     value={openCount}                       color="#3B82F6" />
       <StatCard icon={<CheckIcon sx={{ fontSize: 24 }} />}   label="Verilmiş İhale" value={awardedCount}                    color="#10B981" />
-      <StatCard icon={<MoneyIcon sx={{ fontSize: 24 }} />}   label="Toplam Bütçe"   value={`$${totalBudget.toLocaleString()}`} color="#F59E0B" />
     </Box>
   );
 }

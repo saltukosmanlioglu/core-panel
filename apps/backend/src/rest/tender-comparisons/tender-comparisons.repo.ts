@@ -42,8 +42,8 @@ export async function findLatestByTenderId(tdb: TenantDb, tenderId: string): Pro
 
 export async function create(tdb: TenantDb, tenderId: string, createdBy: string): Promise<TenderComparisonRecord> {
   const { rows } = await tdb.query<TenderComparisonRow>(
-    `INSERT INTO ${tdb.ref('tender_comparisons')} (tender_id, created_by)
-     VALUES ($1, $2)
+    `INSERT INTO ${tdb.ref('tender_comparisons')} (tender_id, status, created_by)
+     VALUES ($1, 'pending', $2)
      RETURNING *`,
     [tenderId, createdBy],
   );
@@ -61,7 +61,7 @@ export async function updateResult(
      SET status = 'completed', result_json = $2, error_message = NULL, updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
-    [id, JSON.stringify(resultJson)],
+    [id, resultJson],
   );
 
   return rows[0] ? mapRow(rows[0]) : null;

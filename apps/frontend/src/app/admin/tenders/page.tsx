@@ -88,10 +88,6 @@ export default function AdminTendersPage() {
               ),
             },
             {
-              field: 'budget', headerName: 'Bütçe', width: 130,
-              renderCell: (r) => <Typography sx={{ color: '#1F2937', fontSize: '13px' }}>{r.budget ? `$${Number(r.budget).toLocaleString()}` : '—'}</Typography>,
-            },
-            {
               field: 'deadline', headerName: 'Son Tarih', width: 120, sortable: true,
               renderCell: (r) => <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>{r.deadline ? new Date(r.deadline).toLocaleDateString() : '—'}</Typography>,
             },

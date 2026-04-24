@@ -24,7 +24,7 @@ import { Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
 import { getTenderComparison, runTenderComparison } from '@/services/tender-comparisons/api';
 import { getTenderApi } from '@/services/workspace/api';
-import type { Tender, TenderComparison } from '@core-panel/shared';
+import type { ComparisonPriceCell, Tender, TenderComparison } from '@core-panel/shared';
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return axios.isAxiosError(error)
@@ -32,7 +32,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
     : fallback;
 }
 
-function formatMoney(value?: number): string {
+function formatMoney(value?: number | null): string {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return '—';
   }
@@ -41,6 +41,14 @@ function formatMoney(value?: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function getFallbackCell(): ComparisonPriceCell {
+  return {
+    price: null,
+    isCheapest: false,
+    isMostExpensive: false,
+  };
 }
 
 export default function AdminTenderOffersPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,50 +64,31 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
     severity: 'success' as 'success' | 'error',
   });
 
-  const loadData = useCallback(
-    async (showSpinner = true) => {
-      try {
-        if (showSpinner) {
-          setLoading(true);
-        }
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
 
-        const [tenderData, comparisonData] = await Promise.all([
-          getTenderApi(id),
-          getTenderComparison(id),
-        ]);
+      const [tenderData, comparisonData] = await Promise.all([
+        getTenderApi(id),
+        getTenderComparison(id),
+      ]);
 
-        setTender(tenderData);
-        setComparison(comparisonData);
-      } catch (error) {
-        setSnackbar({
-          open: true,
-          message: getErrorMessage(error, 'Karşılaştırma verileri yüklenemedi'),
-          severity: 'error',
-        });
-      } finally {
-        if (showSpinner) {
-          setLoading(false);
-        }
-      }
-    },
-    [id],
-  );
+      setTender(tenderData);
+      setComparison(comparisonData);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: getErrorMessage(error, 'Comparison data could not be loaded'),
+        severity: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  useEffect(() => {
-    if (comparison?.status !== 'pending') {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void loadData(false);
-    }, 3000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [comparison?.status, loadData]);
 
   const handleRunComparison = async () => {
     try {
@@ -108,13 +97,13 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
       setComparison(nextComparison);
       setSnackbar({
         open: true,
-        message: 'AI karşılaştırması başlatıldı',
+        message: 'AI comparison completed',
         severity: 'success',
       });
     } catch (error) {
       setSnackbar({
         open: true,
-        message: getErrorMessage(error, 'Karşılaştırma başlatılamadı'),
+        message: getErrorMessage(error, 'AI comparison could not be run'),
         severity: 'error',
       });
     } finally {
@@ -186,7 +175,7 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
               onClick={handleRunComparison}
               loading={rerunning}
             >
-              Karşılaştırmayı Çalıştır
+              Run AI Comparison
             </FormButton>
           </Box>
         ) : comparison.status === 'pending' ? (
@@ -196,7 +185,7 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
               AI dosyaları analiz ediyor...
             </Typography>
             <Typography variant="body2" sx={{ color: '#6B7280' }}>
-              Sonuçlar hazır olduğunda bu ekran otomatik yenilenecek.
+              Karşılaştırma tamamlandığında bu sayfayı yenileyebilirsiniz.
             </Typography>
           </Box>
         ) : comparison.status === 'failed' ? (
@@ -205,7 +194,7 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
               Karşılaştırma başarısız oldu
             </Typography>
             <Typography variant="body2" sx={{ color: '#6B7280' }}>
-              {comparison.errorMessage ?? 'Anthropic karşılaştırması tamamlanamadı.'}
+              {comparison.errorMessage ?? 'Anthropic comparison could not be completed.'}
             </Typography>
             <FormButton
               variant="secondary"
@@ -236,25 +225,23 @@ export default function AdminTenderOffersPage({ params }: { params: Promise<{ id
                 </TableRow>
               </TableHead>
               <TableBody>
-                {result.items.map((item, index) => (
-                  <TableRow key={`${item.description}-${index}`} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>{item.description}</TableCell>
-                    <TableCell>{item.unit}</TableCell>
+                {result.rows.map((row, index) => (
+                  <TableRow key={`${row.description}-${index}`} hover>
+                    <TableCell sx={{ fontWeight: 500 }}>{row.description}</TableCell>
+                    <TableCell>{row.unit}</TableCell>
                     {tenantEntries.map(([tenantId]) => {
-                      const value = item.prices[tenantId];
-                      const isCheapest = item.cheapestTenantId === tenantId;
-                      const isMostExpensive = item.mostExpensiveTenantId === tenantId && item.mostExpensiveTenantId !== item.cheapestTenantId;
+                      const cell = row.prices[tenantId] ?? getFallbackCell();
 
                       return (
                         <TableCell
-                          key={`${item.description}-${tenantId}`}
+                          key={`${row.description}-${tenantId}`}
                           sx={{
-                            backgroundColor: isCheapest ? '#DCFCE7' : isMostExpensive ? '#FEE2E2' : 'transparent',
-                            color: isCheapest ? '#166534' : isMostExpensive ? '#991B1B' : '#111827',
-                            fontWeight: isCheapest || isMostExpensive ? 700 : 500,
+                            backgroundColor: cell.isCheapest ? '#DCFCE7' : cell.isMostExpensive ? '#FEE2E2' : 'transparent',
+                            color: cell.isCheapest ? '#166534' : cell.isMostExpensive ? '#991B1B' : '#111827',
+                            fontWeight: cell.isCheapest || cell.isMostExpensive ? 700 : 500,
                           }}
                         >
-                          {formatMoney(value)}
+                          {formatMoney(cell.price)}
                         </TableCell>
                       );
                     })}

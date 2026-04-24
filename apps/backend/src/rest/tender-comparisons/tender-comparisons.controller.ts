@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { TenantDb } from '../../lib/tenantDb';
+import { getTdb } from '../../lib/tenantDb';
 import * as tendersRepo from '../tenders/tenders.repo';
-import * as tenderOfferFilesRepo from '../tender-offer-files/tender-offer-files.repo';
+import * as tenantsRepo from '../tenants/tenants.repo';
 import * as tenderComparisonsRepo from './tender-comparisons.repo';
 import { runComparison } from './tender-comparisons.service';
 
@@ -16,8 +16,8 @@ export const getLatest = async (req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    const comparison = await tenderComparisonsRepo.findLatestByTenderId(new TenantDb(companyId), tenderId);
-    res.json({ comparison });
+    const comparison = await tenderComparisonsRepo.findLatestByTenderId(getTdb(req), tenderId);
+    res.json({ comparison: comparison ?? null });
   } catch (error) {
     next(error);
   }
@@ -34,19 +34,14 @@ export const run = async (req: Request, res: Response, next: NextFunction): Prom
       return;
     }
 
-    const offerFiles = await tenderOfferFilesRepo.findByTenderId(new TenantDb(companyId), tenderId);
-    if (offerFiles.length < 2) {
-      res.status(400).json({
-        error: 'At least 2 offer files are required for comparison',
-        code: 'INSUFFICIENT_FILES',
-      });
-      return;
+    const tenants = await tenantsRepo.findAllByCompanyId(companyId);
+    const tenantMap: Record<string, string> = {};
+    for (const tenant of tenants) {
+      tenantMap[tenant.id] = tenant.name;
     }
 
-    const comparison = await tenderComparisonsRepo.create(new TenantDb(companyId), tenderId, req.userId!);
-    void runComparison(companyId, tenderId, comparison.id);
-
-    res.status(202).json({ comparison });
+    const result = await runComparison(getTdb(req), tenderId, req.userId!, tenantMap);
+    res.json(result);
   } catch (error) {
     next(error);
   }

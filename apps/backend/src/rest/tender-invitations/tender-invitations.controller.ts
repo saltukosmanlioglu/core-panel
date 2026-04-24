@@ -57,9 +57,9 @@ export const replaceAll = async (req: Request, res: Response, next: NextFunction
     }
 
     const uniqueTenantIds = Array.from(new Set(parsed.data.tenantIds));
-    const tenantIds = await tenderInvitationsRepo.replaceAll(new TenantDb(companyId), tenderId, uniqueTenantIds);
+    await tenderInvitationsRepo.replaceAll(new TenantDb(companyId), tenderId, uniqueTenantIds);
 
-    res.json({ tenantIds });
+    res.json({ tenantIds: uniqueTenantIds });
   } catch (error) {
     next(error);
   }

@@ -8,7 +8,6 @@ interface TenderRow {
   title: string;
   description: string | null;
   status: string;
-  budget: string | null;
   deadline: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -22,7 +21,6 @@ function mapRow(row: TenderRow) {
     title: row.title,
     description: row.description,
     status: row.status,
-    budget: row.budget,
     deadline: row.deadline,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -94,21 +92,19 @@ export async function create(
     title: string;
     description?: string;
     status?: string;
-    budget?: string;
     deadline?: Date;
   },
 ): Promise<TenderRecord> {
   const tdb = new TenantDb(companyId);
   const { rows } = await tdb.query<TenderRow>(
-    `INSERT INTO ${tdb.ref('tenders')} (project_id, title, description, status, budget, deadline)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO ${tdb.ref('tenders')} (project_id, title, description, status, deadline)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *, NULL::text AS project_name`,
     [
       data.projectId,
       data.title,
       data.description ?? null,
       data.status ?? 'draft',
-      data.budget ?? null,
       data.deadline ?? null,
     ],
   );
@@ -123,7 +119,6 @@ export async function update(
     title?: string;
     description?: string;
     status?: string;
-    budget?: string;
     deadline?: Date | null;
   },
 ): Promise<TenderRecord | null> {
@@ -135,7 +130,6 @@ export async function update(
   if (data.title !== undefined) { params.push(data.title); setClauses.push(`title = $${params.length}`); }
   if (data.description !== undefined) { params.push(data.description); setClauses.push(`description = $${params.length}`); }
   if (data.status !== undefined) { params.push(data.status); setClauses.push(`status = $${params.length}`); }
-  if (data.budget !== undefined) { params.push(data.budget); setClauses.push(`budget = $${params.length}`); }
   if (data.deadline !== undefined) { params.push(data.deadline); setClauses.push(`deadline = $${params.length}`); }
 
   params.push(id);

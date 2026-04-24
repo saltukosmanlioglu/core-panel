@@ -56,18 +56,11 @@ function TenderCard({ tender, onClick }: { tender: Tender; onClick: () => void }
             size="small"
             sx={{ backgroundColor: cfg.bg, color: cfg.color, fontWeight: 600, fontSize: '11px', height: 22 }}
           />
-          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-            {tender.budget && (
-              <Typography sx={{ fontSize: '11px', color: '#374151', fontWeight: 600 }}>
-                ${Number(tender.budget).toLocaleString()}
-              </Typography>
-            )}
-            {tender.deadline && (
-              <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>
-                {new Date(tender.deadline).toLocaleDateString()}
-              </Typography>
-            )}
-          </Box>
+          {tender.deadline && (
+            <Typography sx={{ fontSize: '11px', color: '#9CA3AF' }}>
+              {new Date(tender.deadline).toLocaleDateString()}
+            </Typography>
+          )}
         </Box>
       </Box>
     </Card>

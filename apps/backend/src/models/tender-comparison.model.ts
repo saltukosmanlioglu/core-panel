@@ -1,14 +1,18 @@
-export interface ComparisonItem {
+export interface ComparisonPriceCell {
+  price: number | null;
+  isCheapest: boolean;
+  isMostExpensive: boolean;
+}
+
+export interface ComparisonRow {
   description: string;
   unit: string;
-  prices: Record<string, number>;
-  cheapestTenantId: string;
-  mostExpensiveTenantId: string;
+  prices: Record<string, ComparisonPriceCell>;
 }
 
 export interface ComparisonResult {
-  items: ComparisonItem[];
+  rows: ComparisonRow[];
   totals: Record<string, number>;
-  cheapestTenantId: string;
+  cheapestTenantId: string | null;
   tenantNames: Record<string, string>;
 }

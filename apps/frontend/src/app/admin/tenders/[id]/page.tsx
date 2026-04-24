@@ -51,12 +51,17 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
   const [runningComparison, setRunningComparison] = useState(false);
   const [uploadingTenantId, setUploadingTenantId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TenderOfferFile | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
     severity: 'success' as 'success' | 'error',
   });
+
+  const loadOfferFiles = async () => {
+    const offerFileData = await getTenderOfferFiles(id);
+    setOfferFiles(offerFileData);
+  };
 
   const loadPage = async () => {
     try {
@@ -97,7 +102,7 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
     [offerFiles],
   );
 
-  const uploadedInvitedFileCount = invitedTenants.filter((tenant) => offerFileMap.has(tenant.id)).length;
+  const canRunComparison = offerFiles.length >= 2;
 
   const toggleTenant = (tenantId: string) => {
     setSelectedTenantIds((current) =>
@@ -112,11 +117,12 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
       setSavingInvitations(true);
       const response = await updateTenderInvitations(id, selectedTenantIds);
       setSelectedTenantIds(response.tenantIds);
-      setSnackbar({ open: true, message: 'Davetli firmalar güncellendi', severity: 'success' });
+      await loadOfferFiles();
+      setSnackbar({ open: true, message: 'Invitations saved', severity: 'success' });
     } catch (error) {
       setSnackbar({
         open: true,
-        message: getErrorMessage(error, 'Davetler güncellenemedi'),
+        message: getErrorMessage(error, 'Invitations could not be saved'),
         severity: 'error',
       });
     } finally {
@@ -131,16 +137,13 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
 
     try {
       setUploadingTenantId(tenantId);
-      const uploaded = await uploadTenderOfferFile(id, tenantId, file);
-      setOfferFiles((current) => {
-        const next = current.filter((offerFile) => offerFile.tenantId !== tenantId);
-        return [...next, uploaded].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-      });
-      setSnackbar({ open: true, message: 'Teklif dosyası yüklendi', severity: 'success' });
+      await uploadTenderOfferFile(id, tenantId, file);
+      await loadOfferFiles();
+      setSnackbar({ open: true, message: 'File uploaded successfully', severity: 'success' });
     } catch (error) {
       setSnackbar({
         open: true,
-        message: getErrorMessage(error, 'Teklif dosyası yüklenemedi'),
+        message: getErrorMessage(error, 'File upload failed'),
         severity: 'error',
       });
     } finally {
@@ -154,19 +157,19 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
     }
 
     try {
-      setDeleting(true);
+      setDeletingTenantId(deleteTarget.tenantId);
       await deleteTenderOfferFile(id, deleteTarget.tenantId);
-      setOfferFiles((current) => current.filter((offerFile) => offerFile.tenantId !== deleteTarget.tenantId));
-      setSnackbar({ open: true, message: 'Teklif dosyası silindi', severity: 'success' });
+      await loadOfferFiles();
+      setSnackbar({ open: true, message: 'File deleted', severity: 'success' });
       setDeleteTarget(null);
     } catch (error) {
       setSnackbar({
         open: true,
-        message: getErrorMessage(error, 'Teklif dosyası silinemedi'),
+        message: getErrorMessage(error, 'File deletion failed'),
         severity: 'error',
       });
     } finally {
-      setDeleting(false);
+      setDeletingTenantId(null);
     }
   };
 
@@ -178,7 +181,7 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
     } catch (error) {
       setSnackbar({
         open: true,
-        message: getErrorMessage(error, 'Karşılaştırma başlatılamadı'),
+        message: getErrorMessage(error, 'AI comparison could not be run'),
         severity: 'error',
       });
     } finally {
@@ -233,14 +236,14 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start', mb: 3 }}>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Davetli Firmalar
+              Invited Tenants
             </Typography>
             <Typography variant="body2" sx={{ color: '#6B7280' }}>
               Teklif yükleyebilecek firmaları seçin
             </Typography>
           </Box>
           <FormButton variant="primary" size="sm" onClick={handleSaveInvitations} loading={savingInvitations}>
-            Kaydet
+            Save Invitations
           </FormButton>
         </Box>
 
@@ -263,56 +266,39 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
         </Box>
       </Card>
 
-      <Card sx={{ p: 4, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start', mb: 3 }}>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Teklif Dosyaları
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#6B7280' }}>
-              Her davetli firma için tek dosya yükleyin
-            </Typography>
+      {invitedTenants.length > 0 && (
+        <Card sx={{ p: 4, mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start', mb: 3 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                Offer Files
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#6B7280' }}>
+                Upload one file per invited tenant
+              </Typography>
+            </Box>
           </Box>
-          <FormButton
-            variant="secondary"
-            size="sm"
-            startIcon={<AutoAwesomeIcon sx={{ fontSize: 16 }} />}
-            onClick={handleRunComparison}
-            loading={runningComparison}
-            disabled={uploadedInvitedFileCount < 2}
-          >
-            AI Karşılaştırmasını Çalıştır
-          </FormButton>
-        </Box>
 
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
-                <TableCell sx={{ fontWeight: 700 }}>Firma</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Dosya</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Yüklenme Tarihi</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 220 }}>İşlemler</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {invitedTenants.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
-                    <Typography variant="body2" sx={{ color: '#6B7280' }}>
-                      Önce davetli firma seçin.
-                    </Typography>
-                  </TableCell>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ backgroundColor: '#F9FAFB' }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Tenant Name</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>File</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Uploaded At</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 220 }}>Actions</TableCell>
                 </TableRow>
-              ) : (
-                invitedTenants.map((tenant) => {
+              </TableHead>
+              <TableBody>
+                {invitedTenants.map((tenant) => {
                   const offerFile = offerFileMap.get(tenant.id) ?? null;
                   const isUploading = uploadingTenantId === tenant.id;
+                  const isDeleting = deletingTenantId === tenant.id;
 
                   return (
                     <TableRow key={tenant.id}>
                       <TableCell>{tenant.name}</TableCell>
-                      <TableCell>{offerFile?.originalName ?? 'Dosya yok'}</TableCell>
+                      <TableCell>{offerFile?.originalName ?? 'No file'}</TableCell>
                       <TableCell>
                         {offerFile?.createdAt ? new Date(offerFile.createdAt).toLocaleString('tr-TR') : '—'}
                       </TableCell>
@@ -335,8 +321,9 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
                             startIcon={<UploadFileIcon sx={{ fontSize: 16 }} />}
                             onClick={() => document.getElementById(`offer-file-${tenant.id}`)?.click()}
                             loading={isUploading}
+                            disabled={isDeleting}
                           >
-                            {offerFile ? 'Değiştir' : 'Yükle'}
+                            {offerFile ? 'Replace' : 'Upload'}
                           </FormButton>
                           {offerFile && (
                             <FormButton
@@ -344,29 +331,44 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
                               size="sm"
                               startIcon={<DeleteIcon sx={{ fontSize: 16 }} />}
                               onClick={() => setDeleteTarget(offerFile)}
+                              loading={isDeleting}
+                              disabled={isUploading}
                             >
-                              Sil
+                              Delete
                             </FormButton>
                           )}
                         </Box>
                       </TableCell>
                     </TableRow>
                   );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Card>
+      )}
+
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4 }}>
+        <FormButton
+          variant="primary"
+          size="md"
+          startIcon={runningComparison ? undefined : <AutoAwesomeIcon sx={{ fontSize: 18 }} />}
+          onClick={handleRunComparison}
+          loading={runningComparison}
+          disabled={!canRunComparison}
+        >
+          Run AI Comparison
+        </FormButton>
+      </Box>
 
       <ConfirmationDialog
         open={!!deleteTarget}
-        title="Teklif Dosyasını Sil"
-        description={`"${deleteTarget?.tenantName ?? 'Firma'}" için yüklenen dosyayı silmek istediğinize emin misiniz?`}
+        title="Delete File"
+        description="Are you sure you want to delete this file?"
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
-        loading={deleting}
-        confirmLabel="Sil"
+        loading={deleteTarget ? deletingTenantId === deleteTarget.tenantId : false}
+        confirmLabel="Delete"
       />
       <Notification
         open={snackbar.open}

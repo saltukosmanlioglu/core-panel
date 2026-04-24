@@ -1,3 +1,4 @@
+import { Request } from 'express';
 import { pool } from '../db/connection';
 import { getTenantSchemaName, sanitizeCompanyId } from '../services/schemaService';
 
@@ -45,4 +46,12 @@ export class TenantDb {
     const result = await pool.query<T>(text, params);
     return { rows: result.rows, rowCount: result.rowCount ?? 0 };
   }
+}
+
+export function getTdb(req: Pick<Request, 'resolvedCompanyId'>): TenantDb {
+  if (!req.resolvedCompanyId) {
+    throw new Error('No resolved company context');
+  }
+
+  return new TenantDb(req.resolvedCompanyId);
 }

@@ -6,10 +6,7 @@ import * as controller from './tender-comparisons.controller';
 
 const router = Router({ mergeParams: true });
 
-router.use(resolveCompany);
-router.use(requireAdminAccess);
-
-router.get('/', validateUUID('tenderId'), controller.getLatest);
-router.post('/', validateUUID('tenderId'), controller.run);
+router.get('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.getLatest);
+router.post('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.run);
 
 export default router;

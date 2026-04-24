@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc && mkdir -p dist/migrations && cp -r src/migrations/tenant dist/migrations/tenant",
+    "build": "tsc && rm -rf dist/migrations/tenant && mkdir -p dist/migrations/tenant && cp -R src/migrations/tenant/. dist/migrations/tenant",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",

@@ -6,11 +6,8 @@ import * as controller from './tender-offer-files.controller';
 
 const router = Router({ mergeParams: true });
 
-router.use(resolveCompany);
-router.use(requireAdminAccess);
-
-router.get('/', validateUUID('tenderId'), controller.getAll);
-router.post('/', validateUUID('tenderId'), controller.offerFileUpload.single('file'), controller.upload);
-router.delete('/:tenantId', validateUUID('tenderId'), validateUUID('tenantId'), controller.remove);
+router.get('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.getAll);
+router.post('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.upload.single('file'), controller.uploadFile);
+router.delete('/:tenantId', requireAdminAccess, resolveCompany, validateUUID('tenderId'), validateUUID('tenantId'), controller.removeFile);
 
 export default router;
