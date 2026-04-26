@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getTdb } from '../../lib/tenantDb';
+import * as auditRepo from '../tender-audit-logs/tender-audit-logs.repo';
+import * as offerFilesRepo from '../tender-offer-files/tender-offer-files.repo';
 import * as tendersRepo from '../tenders/tenders.repo';
 import * as tenantsRepo from '../tenants/tenants.repo';
 import * as tenderComparisonsRepo from './tender-comparisons.repo';
@@ -27,6 +29,7 @@ export const run = async (req: Request, res: Response, next: NextFunction): Prom
   try {
     const companyId = req.resolvedCompanyId!;
     const tenderId = String(req.params.tenderId);
+    const tdb = getTdb(req);
     const tender = await tendersRepo.findById(companyId, tenderId);
 
     if (!tender) {
@@ -40,7 +43,20 @@ export const run = async (req: Request, res: Response, next: NextFunction): Prom
       tenantMap[tenant.id] = tenant.name;
     }
 
-    const result = await runComparison(getTdb(req), tenderId, req.userId!, tenantMap);
+    const offerFiles = await offerFilesRepo.findByTenderId(tdb, tenderId);
+    const result = await runComparison(tdb, tenderId, req.userId!, tenantMap);
+
+    await auditRepo.create(
+      tdb,
+      tenderId,
+      'comparison_run',
+      {
+        fileCount: offerFiles.length,
+        tenantCount: Object.keys(result.comparison.resultJson?.tenantNames ?? {}).length,
+      },
+      req.userId!,
+    );
+
     res.json(result);
   } catch (error) {
     next(error);

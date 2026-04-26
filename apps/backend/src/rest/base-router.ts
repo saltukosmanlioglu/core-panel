@@ -12,6 +12,9 @@ import tendersRouter from './tenders/tenders.route';
 import tenderInvitationsRouter from './tender-invitations/tender-invitations.route';
 import tenderOfferFilesRouter from './tender-offer-files/tender-offer-files.route';
 import tenderComparisonsRouter from './tender-comparisons/tender-comparisons.route';
+import tenderItemNotesRouter from './tender-item-notes/tender-item-notes.route';
+import tenderAwardsRouter from './tender-awards/tender-awards.route';
+import tenderAuditLogsRouter from './tender-audit-logs/tender-audit-logs.route';
 
 const baseRouter = Router();
 
@@ -26,5 +29,8 @@ baseRouter.use('/tenders', verifyToken, checkIsActive, tendersRouter);
 baseRouter.use('/tenders/:tenderId/invitations', verifyToken, checkIsActive, tenderInvitationsRouter);
 baseRouter.use('/tenders/:tenderId/offer-files', verifyToken, checkIsActive, tenderOfferFilesRouter);
 baseRouter.use('/tenders/:tenderId/comparison', verifyToken, checkIsActive, tenderComparisonsRouter);
+baseRouter.use('/tenders/:tenderId/item-notes', verifyToken, checkIsActive, tenderItemNotesRouter);
+baseRouter.use('/tenders/:tenderId/awards', verifyToken, checkIsActive, tenderAwardsRouter);
+baseRouter.use('/tenders/:tenderId/audit-log', verifyToken, checkIsActive, tenderAuditLogsRouter);
 
 export default baseRouter;

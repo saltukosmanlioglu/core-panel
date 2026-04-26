@@ -39,15 +39,30 @@ export interface TenderOfferFile {
 }
 
 export interface ComparisonPriceCell {
-  price: number | null;
+  malzemeBirimFiyat: number | null;
+  isciliikBirimFiyat: number | null;
+  hasMalzemeIscilikAyri: boolean;
+  tutar: number | null;
   isCheapest: boolean;
   isMostExpensive: boolean;
 }
 
 export interface ComparisonRow {
+  siraNo: number;
   description: string;
   unit: string;
   prices: Record<string, ComparisonPriceCell>;
+}
+
+export interface ComparisonSummary {
+  potentialSavings: number;
+  minimumPossibleTotal: number;
+  maximumPossibleTotal: number;
+  tenantStats: Record<string, {
+    cheapestCount: number;
+    mostExpensiveCount: number;
+    missingItems: number;
+  }>;
 }
 
 export interface ComparisonResult {
@@ -55,6 +70,50 @@ export interface ComparisonResult {
   totals: Record<string, number>;
   cheapestTenantId: string | null;
   tenantNames: Record<string, string>;
+  summary: ComparisonSummary;
+}
+
+export type AwardItemStatus = 'awarded' | 'pending_negotiation' | 'excluded';
+
+export interface TenderAwardItem {
+  id: string;
+  tenderId: string;
+  siraNo: number;
+  description: string | null;
+  awardedTenantId: string | null;
+  status: AwardItemStatus;
+  note: string | null;
+  awardedBy: string;
+  awardedAt: string;
+  updatedAt: string;
+}
+
+export type RecommendationType =
+  | 'strongly_recommended'
+  | 'recommended'
+  | 'close_price'
+  | 'negotiate'
+  | 'no_competition'
+  | 'missing';
+
+export interface ItemRecommendation {
+  siraNo: number;
+  description: string;
+  unit: string;
+  recommendedTenantId: string | null;
+  recommendationType: RecommendationType;
+  recommendationNote: string;
+  priceDiffPercent: number | null;
+}
+
+export interface TenderAuditLog {
+  id: string;
+  tenderId: string;
+  action: string;
+  details: Record<string, unknown> | null;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: string;
 }
 
 export interface TenderComparison {
