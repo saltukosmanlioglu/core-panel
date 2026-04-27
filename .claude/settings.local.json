@@ -119,7 +119,8 @@
       "Bash(curl -s -L \"http://localhost:3000/login\")",
       "Bash(curl -s -X DELETE http://localhost:4000/api/tenders/b9bfd8cf-ae44-4f16-b8cb-f78c549596b3 --cookie access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmJkYWYyOS03Y2EyLTRmNWUtODEwNS1kNzkzNGRiNTU3YjgiLCJlbWFpbCI6InNhbHR1ay50ZXN0QGdtYWlsLmNvbSIsInJvbGUiOiJjb21wYW55X2FkbWluIiwiY29tcGFueUlkIjoiOTQ0ZjMxNDgtMTM2Yi00NTA4LTgwMTUtNDJhMDg5MzE2MmExIiwidGVuYW50SWQiOiJjZmUwZjc1ZS1jNGE5LTQ2MzQtOWRlZi1iZjY1ZjkwYjYxMDQiLCJzdGFnZSI6ImZ1bGwiLCJqdGkiOiI5MTdkMDliZi1iZWFlLTQ0ZWYtYjgxMC0yYWU3NjMyNTMzNTciLCJpYXQiOjE3NzcwNTEzMTEsImV4cCI6MTc3NzA1NDkxMX0.N5gSzVWglvhMXSn5LRS-D8sC8o6nVDUeBwerE_FnC-c -w 'HTTP:%{http_code}')",
       "Bash(curl *)",
-      "Bash(echo \"PID: $!\")"
+      "Bash(echo \"PID: $!\")",
+      "Bash([ -d \"/Users/saltuk/Desktop/saltuk/claude/core-panel/$dir\" ])"
     ]
   }
 }

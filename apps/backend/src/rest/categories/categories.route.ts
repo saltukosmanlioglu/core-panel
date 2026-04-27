@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAdminAccess } from '../../middleware/requireAdminAccess';
+import { resolveCompany } from '../../middleware/resolveCompany';
 import { validateUUID } from '../../middleware/validateUUID';
 import * as controller from './categories.controller';
 
@@ -14,6 +15,6 @@ router.get('/:categoryId/tenants', requireAdminAccess, validateUUID('categoryId'
 router.get('/:id', requireAdminAccess, validateUUID(), controller.getById);
 router.post('/', requireAdminAccess, controller.create);
 router.put('/:id', requireAdminAccess, validateUUID(), controller.update);
-router.delete('/:id', requireAdminAccess, validateUUID(), controller.remove);
+router.delete('/:id', requireAdminAccess, resolveCompany, validateUUID(), controller.remove);
 
 export default router;

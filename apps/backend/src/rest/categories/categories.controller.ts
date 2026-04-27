@@ -7,6 +7,7 @@ import {
 import * as materialSuppliersRepo from '../material-suppliers/material-suppliers.repo';
 import * as tenantsRepo from '../tenants/tenants.repo';
 import * as repo from './categories.repo';
+import { getTdb } from '../../lib/tenantDb';
 
 async function ensureCategoryBelongsToCompany(categoryId: string, companyId: string): Promise<boolean> {
   const category = await repo.findById(categoryId);
@@ -85,12 +86,20 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
 export const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!(await ensureCategoryBelongsToCompany(String(req.params.id), req.userCompanyId!))) {
+    const categoryId = String(req.params.id);
+
+    if (!(await ensureCategoryBelongsToCompany(categoryId, req.userCompanyId!))) {
       res.status(404).json({ error: 'Kategori bulunamadı', code: 'NOT_FOUND' });
       return;
     }
 
-    await repo.remove(String(req.params.id));
+    const tdb = getTdb(req);
+    await tdb.query(
+      `UPDATE ${tdb.ref('tenders')} SET category_id = NULL WHERE category_id = $1`,
+      [categoryId],
+    );
+
+    await repo.remove(categoryId);
     res.json({ status: 'ok' });
   } catch (err) {
     next(err);

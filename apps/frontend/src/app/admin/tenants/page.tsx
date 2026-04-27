@@ -1,30 +1,57 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Box, Chip, Typography } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
-import { FormButton } from '@/components/form-elements';
+import { Box, Chip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Button, CircularProgress, Autocomplete, TextField } from '@mui/material';
+import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Construction as ConstructionIcon } from '@mui/icons-material';
+import { FormButton, FormInput } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
-import { getTenantsApi, deleteTenantApi } from '@/services/admin/api';
-import type { Tenant } from '@core-panel/shared';
+import { getTenantsApi, deleteTenantApi, createTenantApi, updateTenantApi } from '@/services/admin/api';
+import { getCategoriesApi, getTenantCategoriesApi, updateTenantCategoriesApi } from '@/services/categories/api';
+import type { Tenant, Category } from '@core-panel/shared';
 import axios from 'axios';
 
+interface TenantWithCategories extends Tenant {
+  categoryIds?: string[];
+}
+
+interface TenantFormData {
+  name: string;
+  contactName: string;
+  contactPhone: string;
+  categoryIds: string[];
+}
+
 export default function TenantsPage() {
-  const router = useRouter();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenants, setTenants] = useState<TenantWithCategories[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [formData, setFormData] = useState<TenantFormData>({ name: '', contactName: '', contactPhone: '', categoryIds: [] });
+  const [saving, setSaving] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const load = () => {
     setLoading(true);
+    Promise.all([getTenantsApi(), getCategoriesApi()])
+      .then(([tenantsRes, catsRes]) => {
+        setTenants(tenantsRes);
+        setCategories(catsRes);
+      })
+      .catch((err: unknown) => {
+        const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+      })
+      .finally(() => setLoading(false));
+  };
+
+  const refreshTenants = () => {
     getTenantsApi()
       .then(setTenants)
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
+      .catch(() => {
+        const msg = 'Liste güncellenemedi';
         setSnackbar({ open: true, message: msg, severity: 'error' });
       })
       .finally(() => setLoading(false));
@@ -32,19 +59,68 @@ export default function TenantsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
+  const openCreate = () => {
+    setEditingTenant(null);
+    setFormData({ name: '', contactName: '', contactPhone: '', categoryIds: [] });
+    setModalOpen(true);
+  };
+
+  const openEdit = async (tenant: Tenant) => {
+    setEditingTenant(tenant);
     try {
-      await deleteTenantApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.name}" başarıyla silindi`, severity: 'success' });
-      setDeleteTarget(null);
-      load();
-    } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
+      const catIds = await getTenantCategoriesApi(tenant.id);
+      setFormData({
+        name: tenant.name,
+        contactName: tenant.contactName ?? '',
+        contactPhone: tenant.contactPhone ?? '',
+        categoryIds: catIds,
+      });
+      setModalOpen(true);
+    } catch {
+      setSnackbar({ open: true, message: 'Kategori bilgileri alınamadı', severity: 'error' });
+    }
+  };
+
+  const handleClose = () => { if (!saving) setModalOpen(false); };
+
+  const handleSave = async () => {
+    if (!formData.name.trim()) return;
+    setSaving(true);
+    try {
+      let tenantId: string;
+      const payload = {
+        name: formData.name,
+        contactName: formData.contactName || undefined,
+        contactPhone: formData.contactPhone || undefined,
+      };
+      if (editingTenant) {
+        await updateTenantApi(editingTenant.id, payload);
+        tenantId = editingTenant.id;
+      } else {
+        const res = await createTenantApi(payload);
+        tenantId = res.id;
+      }
+      await updateTenantCategoriesApi(tenantId, formData.categoryIds);
+      handleClose();
+      refreshTenants();
+      setSnackbar({ open: true, message: editingTenant ? 'Taşeron güncellendi' : 'Taşeron eklendi', severity: 'success' });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? 'Bir hata oluştu';
       setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
-      setDeleting(false);
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteTenantApi(deleteId);
+      setSnackbar({ open: true, message: `Taşeron silindi`, severity: 'success' });
+      setDeleteId(null);
+      refreshTenants();
+    } catch {
+      setSnackbar({ open: true, message: 'Silme işlemi başarısız', severity: 'error' });
     }
   };
 
@@ -55,12 +131,12 @@ export default function TenantsPage() {
           <Typography variant="h5" fontWeight={700} color="#111827">Taşeronlar</Typography>
           <Typography variant="body2" color="text.secondary">{tenants.length} kayıt</Typography>
         </Box>
-        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/tenants/create')}>
+        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={openCreate}>
           Taşeron Ekle
         </FormButton>
       </Box>
 
-      <DataTable<Tenant>
+      <DataTable<TenantWithCategories>
         rows={tenants}
         loading={loading}
         getRowId={(row) => row.id}
@@ -84,6 +160,21 @@ export default function TenantsPage() {
                 ? <Chip label={row.companyName} size="small" sx={{ backgroundColor: 'rgba(31,41,55,0.08)', color: '#1F2937', fontWeight: 500, fontSize: '12px' }} />
                 : <Typography sx={{ color: '#9CA3AF', fontSize: '13px' }}>—</Typography>
             ),
+          },
+          {
+            field: 'categoryIds',
+            headerName: 'Kategoriler',
+            flex: 1,
+            renderCell: (row) => {
+              const visibleCats = categories.filter(c => (row.categoryIds ?? []).includes(c.id));
+              if (!visibleCats.length) return <Typography sx={{ color: '#9CA3AF', fontSize: '13px' }}>—</Typography>;
+              return (
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  {visibleCats.slice(0, 2).map(c => <Chip key={c.id} label={c.name} size="small" sx={{ fontSize: '11px' }} />)}
+                  {visibleCats.length > 2 && <Chip label={`+${visibleCats.length - 2}`} size="small" variant="outlined" sx={{ fontSize: '11px' }} />}
+                </Box>
+              );
+            },
           },
           {
             field: 'contactName',
@@ -123,29 +214,61 @@ export default function TenantsPage() {
           {
             label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,
-            onClick: (row) => router.push(`/admin/tenants/${row.id}`),
+            onClick: (row) => openEdit(row),
             color: 'primary',
           },
           {
             label: 'Sil',
             icon: <DeleteIcon fontSize="small" />,
-            onClick: (row) => setDeleteTarget(row),
+            onClick: (row) => setDeleteId(row.id),
             color: 'error',
           },
         ]}
         emptyMessage="Henüz taşeron yok"
       />
 
+      <Dialog open={modalOpen} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown={saving}>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
+          {editingTenant ? 'Taşeron Düzenle' : 'Yeni Taşeron Ekle'}
+        </DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <FormInput label="Taşeron Adı" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+          <FormInput label="İlgili Kişi Adı" value={formData.contactName} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
+          <FormInput label="Telefon Numarası" type="tel" value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} />
+          <Autocomplete
+            multiple
+            options={categories}
+            getOptionLabel={(o) => o.name}
+            value={categories.filter((c) => formData.categoryIds.includes(c.id))}
+            onChange={(_, v) => setFormData({ ...formData, categoryIds: v.map((c) => c.id) })}
+            renderInput={(params) => <TextField {...params} label="Kategoriler" placeholder="Kategori seçin..." />}
+            isOptionEqualToValue={(o, v) => o.id === v.id}
+          />
+        </DialogContent>
+        <Divider />
+        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+          <Button variant="outlined" onClick={handleClose} disabled={saving}>İptal</Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving || !formData.name.trim()}
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ConfirmationDialog
-        open={!!deleteTarget}
+        open={!!deleteId}
         title="Taşeron Sil"
-        description={`"${deleteTarget?.name}" taşeronunu silmek istediğinize emin misiniz?`}
+        description="Bu taşeronu silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
         onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-        loading={deleting}
+        onCancel={() => setDeleteId(null)}
         confirmLabel="Sil"
       />
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
+      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
     </Box>
   );
 }

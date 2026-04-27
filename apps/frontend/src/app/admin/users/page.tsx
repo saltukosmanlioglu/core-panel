@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Chip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Button, CircularProgress, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
-import { FormButton } from '@/components/form-elements';
+import { FormButton, FormInput } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
-import { getAdminUsersApi, deleteAdminUserApi } from '@/services/admin/api';
-import type { User } from '@core-panel/shared';
+import { getAdminUsersApi, deleteAdminUserApi, createAdminUserApi, updateAdminUserApi } from '@/services/admin/api';
+import { UserRole, type User } from '@core-panel/shared';
 import axios from 'axios';
 
 const roleColors: Record<string, { bg: string; color: string }> = {
@@ -16,40 +15,82 @@ const roleColors: Record<string, { bg: string; color: string }> = {
   user: { bg: 'rgba(31,41,55,0.08)', color: '#1F2937' },
 };
 
+interface UserFormData {
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+}
+
 export default function UsersPage() {
-  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState<UserFormData>({ name: '', email: '', password: '', role: UserRole.COMPANY_ADMIN });
+  const [saving, setSaving] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const load = () => {
     setLoading(true);
     getAdminUsersApi()
       .then(setUsers)
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
+      .catch(() => setSnackbar({ open: true, message: 'Yüklenemedi', severity: 'error' }))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
+  const openCreate = () => {
+    setEditingUser(null);
+    setFormData({ name: '', email: '', password: '', role: UserRole.COMPANY_ADMIN });
+    setModalOpen(true);
+  };
+
+  const openEdit = (user: User) => {
+    setEditingUser(user);
+    setFormData({ name: user.name || '', email: user.email, password: '', role: user.role });
+    setModalOpen(true);
+  };
+
+  const handleClose = () => { if (!saving) setModalOpen(false); };
+
+  const handleSave = async () => {
+    if (!formData.name.trim() || !formData.email.trim()) return;
+    if (!editingUser && !formData.password) {
+      setSnackbar({ open: true, message: 'Şifre zorunludur', severity: 'error' });
+      return;
+    }
+    setSaving(true);
     try {
-      await deleteAdminUserApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.email}" başarıyla silindi`, severity: 'success' });
-      setDeleteTarget(null);
+      const payload: any = { name: formData.name, email: formData.email, role: formData.role };
+      if (formData.password) payload.password = formData.password;
+
+      if (editingUser) {
+        await updateAdminUserApi(editingUser.id, payload);
+      } else {
+        await createAdminUserApi(payload);
+      }
+      handleClose();
       load();
-    } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      setSnackbar({ open: true, message: editingUser ? 'Kullanıcı güncellendi' : 'Kullanıcı eklendi', severity: 'success' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err?.response?.data?.error ?? 'İşlem başarısız', severity: 'error' });
     } finally {
-      setDeleting(false);
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteAdminUserApi(deleteId);
+      setSnackbar({ open: true, message: 'Kullanıcı silindi', severity: 'success' });
+      setDeleteId(null);
+      load();
+    } catch {
+      setSnackbar({ open: true, message: 'Silinemedi', severity: 'error' });
     }
   };
 
@@ -60,7 +101,7 @@ export default function UsersPage() {
           <Typography variant="h5" fontWeight={700} color="#111827">Kullanıcılar</Typography>
           <Typography variant="body2" color="text.secondary">{users.length} kayıt</Typography>
         </Box>
-        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/users/create')}>
+        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={openCreate}>
           Kullanıcı Ekle
         </FormButton>
       </Box>
@@ -137,29 +178,59 @@ export default function UsersPage() {
           {
             label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,
-            onClick: (row) => router.push(`/admin/users/${row.id}`),
+            onClick: (row) => openEdit(row),
             color: 'primary',
           },
           {
             label: 'Sil',
             icon: <DeleteIcon fontSize="small" />,
-            onClick: (row) => setDeleteTarget(row),
+            onClick: (row) => setDeleteId(row.id),
             color: 'error',
           },
         ]}
         emptyMessage="Henüz kullanıcı yok"
       />
 
+      <Dialog open={modalOpen} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown={saving}>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
+          {editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı Ekle'}
+        </DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <FormInput label="Ad Soyad" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+          <FormInput label="E-posta" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+          <FormInput
+            label={editingUser ? 'Şifre (Değiştirmek için girin)' : 'Şifre'}
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            required={!editingUser}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Rol</InputLabel>
+            <Select value={formData.role} label="Rol" onChange={(e) => setFormData({ ...formData, role: e.target.value })}>
+              <MenuItem value={UserRole.COMPANY_ADMIN}>Şirket Yöneticisi</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <Divider />
+        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+          <Button variant="outlined" onClick={handleClose} disabled={saving}>İptal</Button>
+          <Button variant="contained" onClick={handleSave} disabled={saving} startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}>
+            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ConfirmationDialog
-        open={!!deleteTarget}
+        open={!!deleteId}
         title="Kullanıcı Sil"
-        description={`"${deleteTarget?.email}" kullanıcısını silmek istediğinize emin misiniz? Kullanıcı Auth0'dan da kaldırılacaktır.`}
+        description="Bu kullanıcıyı silmek istediğinize emin misiniz?"
         onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-        loading={deleting}
+        onCancel={() => setDeleteId(null)}
         confirmLabel="Sil"
       />
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
+      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
     </Box>
   );
 }

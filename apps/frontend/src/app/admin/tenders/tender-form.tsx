@@ -19,7 +19,7 @@ const schema = z.object({
   categoryId: z.string().optional(),
   title: z.string().min(1, 'Başlık zorunludur').max(255),
   description: z.string().optional(),
-  status: z.enum(['draft', 'open', 'closed', 'awarded']),
+  status: z.enum(['draft', 'open', 'closed']),
   deadline: z.string().optional(),
 });
 
@@ -29,7 +29,6 @@ const statusOptions = [
   { label: 'Taslak', value: 'draft' },
   { label: 'Açık', value: 'open' },
   { label: 'Kapalı', value: 'closed' },
-  { label: 'Verildi', value: 'awarded' },
 ];
 
 export function TenderForm({ id }: { id?: string }) {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as tenantsRepo from './tenants.repo';
 import { createTenantSchema, updateTenantSchema } from '../../models/tenant.model';
+import { TenantDb } from '../../lib/tenantDb';
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -94,14 +95,29 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
 export const deleteById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (req.userCompanyId) {
-      const existing = await tenantsRepo.findById(String(req.params.id));
-      if (!existing || existing.companyId !== req.userCompanyId) {
-        res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
-        return;
-      }
+    const tenantId = String(req.params.id);
+
+    const existing = await tenantsRepo.findById(tenantId);
+    if (!existing) {
+      res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
+      return;
     }
-    const deleted = await tenantsRepo.deleteById(String(req.params.id));
+    if (req.userCompanyId && existing.companyId !== req.userCompanyId) {
+      res.status(403).json({ error: 'Access denied', code: 'FORBIDDEN' });
+      return;
+    }
+
+    const tdb = new TenantDb(existing.companyId);
+    await tdb.query(
+      `DELETE FROM ${tdb.ref('tender_invitations')} WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    await tdb.query(
+      `UPDATE ${tdb.ref('tender_award_items')} SET awarded_tenant_id = NULL WHERE awarded_tenant_id = $1`,
+      [tenantId],
+    );
+
+    const deleted = await tenantsRepo.deleteById(tenantId);
     if (!deleted) {
       res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;

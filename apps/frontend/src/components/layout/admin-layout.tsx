@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Avatar, Box, CircularProgress, Drawer, Paper } from '@mui/material';
+import { useEffect, useState, ReactNode } from 'react';
+import { Box, CircularProgress, Drawer, Paper } from '@mui/material';
 import {
   Apartment as ApartmentIcon,
   Badge as BadgeIcon,
@@ -23,7 +23,7 @@ import { UserRole } from '@core-panel/shared';
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 interface AdminLayoutProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
@@ -46,7 +46,30 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const sidebarWidth = sidebarCollapsed ? 56 : 240;
   const companyLogoUrl = companyLogoPath ? `${API_URL}${companyLogoPath}` : null;
   const companyProfileIcon = companyLogoUrl ? (
-    <Avatar src={companyLogoUrl} sx={{ width: 24, height: 24 }} />
+    <Box
+      sx={{
+        width: 24,
+        height: 24,
+        borderRadius: '50%',
+        overflow: 'hidden',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        backgroundColor: '#f1f5f9',
+      }}
+    >
+      <img
+        src={companyLogoUrl}
+        alt="logo"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          display: 'block',
+        }}
+      />
+    </Box>
   ) : (
     <BadgeIcon fontSize="small" />
   );
@@ -143,7 +166,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Content */}
         <Box sx={{ flex: 1, p: 4, backgroundColor: '#F8F9FA' }}>
           <Paper elevation={0} sx={{ borderRadius: '4px', backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', p: 3, minHeight: '100%' }}>
-            {children}
+            <>{children}</>
           </Paper>
         </Box>
       </Box>
