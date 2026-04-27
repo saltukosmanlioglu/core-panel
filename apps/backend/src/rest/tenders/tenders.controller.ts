@@ -1,12 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import * as tendersRepo from './tenders.repo';
+import * as categoriesRepo from '../categories/categories.repo';
 import { createTenderSchema, updateTenderSchema } from '../../models/tender.model';
+
+async function categoryBelongsToCompany(categoryId: string, companyId: string): Promise<boolean> {
+  const category = await categoriesRepo.findById(categoryId);
+  return !!category && category.companyId === companyId;
+}
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+    const limit = rawLimit && Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
+    const sortOrder = req.query.sortOrder === 'desc' ? 'desc' : 'asc';
+    const options = { limit, sortOrder } as const;
     const tenders = req.resolvedCompanyId
-      ? await tendersRepo.findAll(req.resolvedCompanyId)
-      : await tendersRepo.findAllAcrossCompanies();
+      ? await tendersRepo.findAll(req.resolvedCompanyId, options)
+      : await tendersRepo.findAllAcrossCompanies(options);
     res.json({ tenders });
   } catch (err) {
     next(err);
@@ -35,6 +45,13 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
       return;
     }
+    if (
+      parsed.data.categoryId &&
+      !(await categoryBelongsToCompany(parsed.data.categoryId, req.resolvedCompanyId!))
+    ) {
+      res.status(400).json({ error: 'Geçersiz kategori', code: 'VALIDATION_ERROR' });
+      return;
+    }
     const { deadline, ...rest } = parsed.data;
     const tender = await tendersRepo.create(req.resolvedCompanyId!, {
       ...rest,
@@ -51,6 +68,13 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     const parsed = updateTenderSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
+      return;
+    }
+    if (
+      parsed.data.categoryId &&
+      !(await categoryBelongsToCompany(parsed.data.categoryId, req.resolvedCompanyId!))
+    ) {
+      res.status(400).json({ error: 'Geçersiz kategori', code: 'VALIDATION_ERROR' });
       return;
     }
     const { deadline, ...rest } = parsed.data;

@@ -46,7 +46,12 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       res.status(400).json({ error: 'Şirket zorunludur', code: 'VALIDATION_ERROR' });
       return;
     }
-    const tenant = await tenantsRepo.create({ name: parsed.data.name, companyId });
+    const tenant = await tenantsRepo.create({
+      name: parsed.data.name,
+      companyId,
+      contactName: parsed.data.contactName,
+      contactPhone: parsed.data.contactPhone,
+    });
     res.status(201).json({ tenant });
   } catch (err) {
     next(err);
@@ -72,6 +77,8 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
     }
     const tenant = await tenantsRepo.update(String(req.params.id), {
       name: parsed.data.name,
+      contactName: parsed.data.contactName,
+      contactPhone: parsed.data.contactPhone,
       // COMPANY_ADMIN cannot move tenants to a different company
       companyId: req.userCompanyId ? undefined : parsed.data.companyId,
     });

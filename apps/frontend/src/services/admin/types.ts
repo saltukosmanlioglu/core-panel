@@ -1,6 +1,9 @@
 export interface AdminStats {
   companies?: number;
   tenants: number;
+  materialSupplierCount: number;
+  projectCount: number;
+  tenderCount: number;
   users: number;
 }
 
@@ -39,6 +42,8 @@ export interface FileQueryParams {
 
 export interface TenantPayload {
   name: string;
+  contactName?: string;
+  contactPhone?: string;
   companyId?: string;
 }
 

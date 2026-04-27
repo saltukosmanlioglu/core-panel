@@ -1,6 +1,6 @@
 import type { Project, Tender } from '@core-panel/shared';
 import { apiClient } from '../api-client';
-import type { ProjectPayload, TenderPayload } from './types';
+import type { ProjectPayload, TenderPayload, TenderQueryParams } from './types';
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
@@ -30,8 +30,8 @@ export async function deleteProjectApi(id: string): Promise<void> {
 
 // ─── Tenders ──────────────────────────────────────────────────────────────────
 
-export async function getTendersApi(): Promise<Tender[]> {
-  const res = await apiClient.get('/api/tenders');
+export async function getTendersApi(params?: TenderQueryParams): Promise<Tender[]> {
+  const res = await apiClient.get('/api/tenders', { params });
   return (res.data as { tenders: Tender[] }).tenders;
 }
 

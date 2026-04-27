@@ -7,6 +7,8 @@ const router = Router();
 
 router.get('/', requireAdminAccess, companiesController.getAll);
 router.get('/:id', requireAdminAccess, validateUUID(), companiesController.getById);
+router.put('/:id', requireAdminAccess, validateUUID(), companiesController.update);
+router.post('/:id/logo', requireAdminAccess, validateUUID(), companiesController.logoUpload.single('logo'), companiesController.uploadLogo);
 router.post('/:id/reprovision', requireAdminAccess, validateUUID(), companiesController.reprovision);
 
 export default router;

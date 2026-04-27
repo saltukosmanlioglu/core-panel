@@ -14,8 +14,14 @@ export interface BoqItemPayload {
 
 export interface TenderPayload {
   projectId: string;
+  categoryId?: string | null;
   title: string;
   description?: string;
   status: string;
   deadline?: string;
+}
+
+export interface TenderQueryParams {
+  limit?: number;
+  sortOrder?: 'asc' | 'desc';
 }

@@ -33,10 +33,12 @@ import {
   TableChartOutlined as TableChartOutlinedIcon,
   UploadFile as UploadFileIcon,
   BusinessOutlined as BusinessOutlinedIcon,
+  Category as CategoryIcon,
 } from '@mui/icons-material';
 import { ConfirmationDialog, Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
 import { getTenantsApi } from '@/services/admin/api';
+import { getTenantsByCategoryApi } from '@/services/categories/api';
 import { getTenderInvitations, updateTenderInvitations } from '@/services/tender-invitations/api';
 import { getTenderOfferFiles, uploadTenderOfferFile, deleteTenderOfferFile } from '@/services/tender-offer-files/api';
 import { runTenderComparison } from '@/services/tender-comparisons/api';
@@ -196,6 +198,7 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
   const [tender, setTender] = useState<Tender | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
+  const [categoryTenantIds, setCategoryTenantIds] = useState<string[]>([]);
   const [offerFiles, setOfferFiles] = useState<TenderOfferFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingInvitations, setSavingInvitations] = useState(false);
@@ -223,10 +226,14 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
         getTenderInvitations(id),
         getTenderOfferFiles(id),
       ]);
+      const categoryTenantData = tenderData.categoryId
+        ? await getTenantsByCategoryApi(tenderData.categoryId)
+        : [];
 
       setTender(tenderData);
       setTenants(tenantData);
-      setSelectedTenantIds(invitationData.tenantIds);
+      setSelectedTenantIds(Array.from(new Set([...invitationData.tenantIds, ...categoryTenantData])));
+      setCategoryTenantIds(categoryTenantData);
       setOfferFiles(offerFileData);
     } catch (error) {
       setSnackbar({
@@ -500,6 +507,11 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
                       value={tender?.projectName ?? '—'}
                     />
                     <DetailRow
+                      icon={<CategoryIcon sx={{ fontSize: 18 }} />}
+                      label="Kategori"
+                      value={tender?.categoryName ?? '—'}
+                    />
+                    <DetailRow
                       icon={<CalendarMonthIcon sx={{ fontSize: 18 }} />}
                       label="Son Tarih"
                       value={formatDate(tender?.deadline)}
@@ -556,6 +568,25 @@ export default function AdminTenderDetailPage({ params }: { params: Promise<{ id
                   </Typography>
                 ) : (
                   <Stack spacing={2}>
+                    {tender?.categoryId ? (
+                      <Paper
+                        variant="outlined"
+                        sx={{
+                          borderRadius: 2,
+                          borderColor: '#bfdbfe',
+                          backgroundColor: '#eff6ff',
+                          px: 1.5,
+                          py: 1,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ color: COLORS.accentBlue, fontWeight: 700 }}>
+                          Bu kategoriye ait taşeronlar otomatik listelendi
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: COLORS.textSecondary }}>
+                          {categoryTenantIds.length} taşeron kategori eşleşmesinden geldi.
+                        </Typography>
+                      </Paper>
+                    ) : null}
                     <Box sx={{ display: 'grid', gap: 0.75 }}>
                       {invitedTenants.map((tenant) => (
                         <Paper

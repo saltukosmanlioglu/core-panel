@@ -13,23 +13,27 @@ import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import type { Category } from '@core-panel/shared';
 import { FormInput, FormButton } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
-import { getTenantApi, createTenantApi, updateTenantApi } from '@/services/admin/api';
 import {
   getCategoriesApi,
-  getTenantCategoriesApi,
-  updateTenantCategoriesApi,
+  getSupplierCategoriesApi,
+  updateSupplierCategoriesApi,
 } from '@/services/categories/api';
+import {
+  createMaterialSupplierApi,
+  getMaterialSupplierApi,
+  updateMaterialSupplierApi,
+} from '@/services/material-suppliers/api';
 import axios from 'axios';
 
 const schema = z.object({
-  name: z.string().min(1, 'Ad zorunludur').max(255),
+  name: z.string().min(1, 'Firma adı zorunludur').max(255),
   contactName: z.string().max(255).optional(),
   contactPhone: z.string().max(50).optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
-export function TenantForm({ id }: { id?: string }) {
+export function MaterialSupplierForm({ id }: { id?: string }) {
   const router = useRouter();
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
@@ -49,17 +53,17 @@ export function TenantForm({ id }: { id?: string }) {
 
     if (id) {
       loads.push(
-        getTenantApi(id).then((t) => reset({
-          name: t.name,
-          contactName: t.contactName ?? '',
-          contactPhone: t.contactPhone ?? '',
+        getMaterialSupplierApi(id).then((supplier) => reset({
+          name: supplier.name,
+          contactName: supplier.contactName ?? '',
+          contactPhone: supplier.contactPhone ?? '',
         })),
-        getTenantCategoriesApi(id).then(setSelectedCategoryIds),
+        getSupplierCategoriesApi(id).then(setSelectedCategoryIds),
       );
     }
 
     Promise.all(loads)
-      .catch(() => router.replace('/admin/tenants'))
+      .catch(() => router.replace('/admin/material-suppliers'))
       .finally(() => setFetchLoading(false));
   }, [id, reset, router]);
 
@@ -69,18 +73,18 @@ export function TenantForm({ id }: { id?: string }) {
     if (!pendingData) return;
     setLoading(true);
     try {
-      let tenantId = id;
+      let supplierId = id;
       if (isEdit && id) {
-        await updateTenantApi(id, pendingData);
+        await updateMaterialSupplierApi(id, pendingData);
       } else {
-        const tenant = await createTenantApi(pendingData);
-        tenantId = tenant.id;
+        const supplier = await createMaterialSupplierApi(pendingData);
+        supplierId = supplier.id;
       }
-      if (tenantId) {
-        await updateTenantCategoriesApi(tenantId, selectedCategoryIds);
+      if (supplierId) {
+        await updateSupplierCategoriesApi(supplierId, selectedCategoryIds);
       }
       router.refresh();
-      router.push('/admin/tenants');
+      router.push('/admin/material-suppliers');
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'İşlem başarısız') : 'İşlem başarısız';
       setSnackbar({ open: true, message: msg, severity: 'error' });
@@ -92,10 +96,10 @@ export function TenantForm({ id }: { id?: string }) {
   return (
     <Box>
       <Box className="flex items-center gap-2 mb-4">
-        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/tenants')}>Geri</FormButton>
+        <FormButton variant="ghost" size="sm" startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />} onClick={() => router.push('/admin/material-suppliers')}>Geri</FormButton>
       </Box>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Taşeron Düzenle' : 'Yeni Taşeron'}</Typography>
-      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Taşeron bilgilerini güncelle' : 'Yeni taşeron oluştur'}</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>{isEdit ? 'Malzemeci Düzenle' : 'Yeni Malzemeci'}</Typography>
+      <Typography variant="body2" sx={{ color: '#6B7280', mb: 4 }}>{isEdit ? 'Malzemeci bilgilerini güncelle' : 'Yeni malzemeci oluştur'}</Typography>
 
       <Card sx={{ p: 4, maxWidth: 520 }}>
         {fetchLoading ? (
@@ -103,7 +107,7 @@ export function TenantForm({ id }: { id?: string }) {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Box className="flex flex-col gap-4">
-              <FormInput label="Taşeron Adı" error={!!errors.name} errorMessage={errors.name?.message} {...register('name')} />
+              <FormInput label="Firma Adı" error={!!errors.name} errorMessage={errors.name?.message} {...register('name')} />
               <FormInput label="İlgili Kişi Adı" error={!!errors.contactName} errorMessage={errors.contactName?.message} {...register('contactName')} />
               <FormInput label="Telefon Numarası" type="tel" error={!!errors.contactPhone} errorMessage={errors.contactPhone?.message} {...register('contactPhone')} />
               <Autocomplete
@@ -124,8 +128,8 @@ export function TenantForm({ id }: { id?: string }) {
               />
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">
-                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/tenants')} type="button">İptal</FormButton>
-                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Değişiklikleri Kaydet' : 'Taşeron Oluştur'}</FormButton>
+                <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/material-suppliers')} type="button">İptal</FormButton>
+                <FormButton variant="primary" size="md" type="submit">{isEdit ? 'Değişiklikleri Kaydet' : 'Malzemeci Oluştur'}</FormButton>
               </Box>
             </Box>
           </form>
@@ -134,8 +138,8 @@ export function TenantForm({ id }: { id?: string }) {
 
       <ConfirmationDialog
         open={confirmOpen}
-        title={isEdit ? 'Değişiklikleri Kaydet' : 'Taşeron Oluştur'}
-        description={isEdit ? `"${pendingData?.name}" taşeronundaki değişiklikleri kaydetmek istiyor musunuz?` : `"${pendingData?.name}" taşeronunu oluşturmak istiyor musunuz?`}
+        title={isEdit ? 'Değişiklikleri Kaydet' : 'Malzemeci Oluştur'}
+        description={isEdit ? `"${pendingData?.name}" malzemecisindeki değişiklikleri kaydetmek istiyor musunuz?` : `"${pendingData?.name}" malzemecisini oluşturmak istiyor musunuz?`}
         onConfirm={handleConfirm}
         onCancel={() => { setConfirmOpen(false); setPendingData(null); }}
         loading={loading}

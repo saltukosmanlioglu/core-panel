@@ -5,6 +5,7 @@ import { UserRole } from '@core-panel/shared';
 import {
   Avatar,
   Box,
+  Collapse,
   Divider,
   IconButton,
   List,
@@ -18,6 +19,8 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  ExpandLess,
+  ExpandMore,
   MoreVert as MoreVertIcon,
   Logout as LogoutIcon,
   ManageAccounts as ManageAccountsIcon,
@@ -25,12 +28,24 @@ import {
   AdminPanelSettings as AdminPanelSettingsIcon,
 } from '@mui/icons-material';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+
+export interface SidebarNavSubItem {
+  label: string;
+  icon: React.ReactNode;
+  href: string;
+  color?: string;
+  exact?: boolean;
+}
 
 export interface SidebarNavItem {
   label: string;
   icon: React.ReactNode;
   href: string;
   exact?: boolean;
+  children?: SidebarNavSubItem[];
+  defaultOpen?: boolean;
+  toggleOnly?: boolean;
 }
 
 export interface SidebarGroup {
@@ -63,8 +78,16 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
   const router = useRouter();
   const pathname = usePathname();
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>(() => {
+    const entries = groups.flatMap((group) =>
+      group.items
+        .filter((item) => item.children)
+        .map((item) => [item.href, item.defaultOpen ?? false] as const)
+    );
+    return Object.fromEntries(entries);
+  });
 
-  const isActive = (item: SidebarNavItem) => {
+  const isActive = (item: SidebarNavItem | SidebarNavSubItem) => {
     if (item.exact) return pathname === item.href;
     return pathname === item.href || pathname.startsWith(item.href + '/');
   };
@@ -124,50 +147,111 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
             {collapsed && <Box sx={{ pt: 2 }} />}
             <List disablePadding sx={{ px: collapsed ? 0.5 : 1 }}>
               {group.items.map((item) => {
-                const active = isActive(item);
+                const hasChildren = !!item.children?.length;
+                const childActive = item.children?.some((child) => isActive(child)) ?? false;
+                const active = isActive(item) || childActive;
+                const open = openItems[item.href] ?? item.defaultOpen ?? false;
                 return (
-                  <ListItem key={item.href + item.label} disablePadding sx={{ mb: '2px' }}>
-                    <Tooltip title={collapsed ? item.label : ''} placement="right" arrow>
-                      <ListItemButton
-                        onClick={() => router.push(item.href)}
-                        sx={{
-                          borderRadius: '8px',
-                          px: collapsed ? 1 : 2,
-                          py: '10px',
-                          justifyContent: collapsed ? 'center' : 'flex-start',
-                          backgroundColor: active ? '#EEF2FF' : 'transparent',
-                          '&:hover': {
-                            backgroundColor: active ? '#EEF2FF' : '#F3F4F6',
-                            '& .nav-icon': { color: active ? '#0A2463' : '#111827' },
-                            '& .nav-text': { color: active ? '#0A2463' : '#111827' },
-                          },
-                        }}
-                      >
-                        <ListItemIcon
-                          className="nav-icon"
+                  <Box key={item.href + item.label}>
+                    <ListItem disablePadding sx={{ mb: '2px' }}>
+                      <Tooltip title={collapsed ? item.label : ''} placement="right" arrow>
+                        <ListItemButton
+                          onClick={() => {
+                            if (hasChildren) {
+                              setOpenItems((current) => ({ ...current, [item.href]: !open }));
+                            }
+                            if (!item.toggleOnly) {
+                              router.push(item.href);
+                            }
+                          }}
                           sx={{
-                            color: active ? '#0A2463' : '#6B7280',
-                            minWidth: collapsed ? 'unset' : 36,
-                            transition: 'color 0.15s',
+                            borderRadius: '8px',
+                            px: collapsed ? 1 : 2,
+                            py: '10px',
+                            justifyContent: collapsed ? 'center' : 'flex-start',
+                            backgroundColor: active ? '#EEF2FF' : 'transparent',
+                            '&:hover': {
+                              backgroundColor: active ? '#EEF2FF' : '#F3F4F6',
+                              '& .nav-icon': { color: active ? '#0A2463' : '#111827' },
+                              '& .nav-text': { color: active ? '#0A2463' : '#111827' },
+                            },
                           }}
                         >
-                          {item.icon}
-                        </ListItemIcon>
-                        {!collapsed && (
-                          <ListItemText
-                            primary={item.label}
-                            className="nav-text"
-                            primaryTypographyProps={{
-                              fontSize: '14px',
-                              fontWeight: active ? 600 : 500,
-                              color: active ? '#0A2463' : '#374151',
-                              sx: { transition: 'color 0.15s' },
+                          <ListItemIcon
+                            className="nav-icon"
+                            sx={{
+                              color: active ? '#0A2463' : '#6B7280',
+                              minWidth: collapsed ? 'unset' : 36,
+                              transition: 'color 0.15s',
                             }}
-                          />
-                        )}
-                      </ListItemButton>
-                    </Tooltip>
-                  </ListItem>
+                          >
+                            {item.icon}
+                          </ListItemIcon>
+                          {!collapsed && (
+                            <>
+                              <ListItemText
+                                primary={item.label}
+                                className="nav-text"
+                                primaryTypographyProps={{
+                                  fontSize: '14px',
+                                  fontWeight: active ? 600 : 500,
+                                  color: active ? '#0A2463' : '#374151',
+                                  sx: { transition: 'color 0.15s' },
+                                }}
+                              />
+                              {hasChildren ? (open ? <ExpandLess sx={{ fontSize: 20 }} /> : <ExpandMore sx={{ fontSize: 20 }} />) : null}
+                            </>
+                          )}
+                        </ListItemButton>
+                      </Tooltip>
+                    </ListItem>
+                    {hasChildren && !collapsed ? (
+                      <Collapse in={open} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding>
+                          {item.children?.map((child) => {
+                            const subActive = isActive(child);
+                            const color = child.color ?? (subActive ? '#0A2463' : '#6B7280');
+                            return (
+                              <ListItemButton
+                                key={child.href}
+                                component={Link}
+                                href={child.href}
+                                selected={subActive}
+                                sx={{
+                                  pl: 3,
+                                  borderLeft: child.color ? `3px solid ${child.color}` : '3px solid transparent',
+                                  ml: 2,
+                                  mb: 0.5,
+                                  borderRadius: '0 8px 8px 0',
+                                  '&.Mui-selected': {
+                                    backgroundColor: child.color ? `${child.color}15` : '#EEF2FF',
+                                  },
+                                  '&.Mui-selected:hover': {
+                                    backgroundColor: child.color ? `${child.color}15` : '#EEF2FF',
+                                  },
+                                  '&:hover': {
+                                    backgroundColor: child.color ? `${child.color}10` : '#F3F4F6',
+                                  },
+                                }}
+                              >
+                                <ListItemIcon sx={{ color, minWidth: 36 }}>
+                                  {child.icon}
+                                </ListItemIcon>
+                                <ListItemText
+                                  primary={child.label}
+                                  primaryTypographyProps={{
+                                    fontSize: 14,
+                                    fontWeight: subActive ? 600 : 500,
+                                    color: subActive ? '#111827' : '#374151',
+                                  }}
+                                />
+                              </ListItemButton>
+                            );
+                          })}
+                        </List>
+                      </Collapse>
+                    ) : null}
+                  </Box>
                 );
               })}
             </List>

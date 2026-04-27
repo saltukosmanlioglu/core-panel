@@ -15,6 +15,7 @@ import type {
 const companySchema = z.object({
   id: z.string(),
   name: z.string(),
+  logoPath: z.string().nullable().optional(),
   schemaProvisioned: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -25,6 +26,8 @@ const tenantSchema = z.object({
   companyId: z.string(),
   companyName: z.string().nullable().optional(),
   name: z.string(),
+  contactName: z.string().nullable().optional(),
+  contactPhone: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -72,9 +75,18 @@ export async function createCompanyApi(data: CompanyPayload): Promise<Company> {
 
 export async function updateCompanyApi(
   id: string,
-  data: CompanyPayload,
+  data: { name: string },
 ): Promise<Company> {
   const res = await apiClient.put(`/api/companies/${id}`, data);
+  return (res.data as { company: Company }).company;
+}
+
+export async function uploadCompanyLogoApi(id: string, file: File): Promise<Company> {
+  const formData = new FormData();
+  formData.append('logo', file);
+  const res = await apiClient.post(`/api/companies/${id}/logo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return (res.data as { company: Company }).company;
 }
 

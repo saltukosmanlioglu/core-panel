@@ -1,10 +1,20 @@
-import { pgTable, uuid, varchar, boolean, timestamp } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  boolean,
+  timestamp,
+  index,
+  primaryKey,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 // ─── companies ───────────────────────────────────────────────────────────────
 
 export const companies = pgTable('companies', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
+  logoPath: varchar('logo_path', { length: 500 }),
   schemaProvisioned: boolean('schema_provisioned').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -20,11 +30,72 @@ export const tenants = pgTable('tenants', {
     .notNull()
     .references(() => companies.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
+  contactName: varchar('contact_name', { length: 255 }),
+  contactPhone: varchar('contact_phone', { length: 50 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export type Tenant = typeof tenants.$inferSelect;
+
+// ─── material suppliers ──────────────────────────────────────────────────────
+
+export const materialSuppliers = pgTable('material_suppliers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  companyId: uuid('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  contactName: varchar('contact_name', { length: 255 }),
+  contactPhone: varchar('contact_phone', { length: 50 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type MaterialSupplier = typeof materialSuppliers.$inferSelect;
+
+// ─── categories ──────────────────────────────────────────────────────────────
+
+export const categories = pgTable('categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  companyId: uuid('company_id')
+    .notNull()
+    .references(() => companies.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('categories_company_id_name_unique').on(table.companyId, table.name),
+  index('idx_categories_company_id').on(table.companyId),
+]);
+
+export const tenantCategories = pgTable('tenant_categories', {
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  categoryId: uuid('category_id')
+    .notNull()
+    .references(() => categories.id, { onDelete: 'cascade' }),
+}, (table) => [
+  primaryKey({ columns: [table.tenantId, table.categoryId] }),
+  index('idx_tenant_categories_tenant_id').on(table.tenantId),
+  index('idx_tenant_categories_category_id').on(table.categoryId),
+]);
+
+export const materialSupplierCategories = pgTable('material_supplier_categories', {
+  supplierId: uuid('supplier_id')
+    .notNull()
+    .references(() => materialSuppliers.id, { onDelete: 'cascade' }),
+  categoryId: uuid('category_id')
+    .notNull()
+    .references(() => categories.id, { onDelete: 'cascade' }),
+}, (table) => [
+  primaryKey({ columns: [table.supplierId, table.categoryId] }),
+  index('idx_material_supplier_categories_supplier_id').on(table.supplierId),
+  index('idx_material_supplier_categories_category_id').on(table.categoryId),
+]);
+
+export type Category = typeof categories.$inferSelect;
 
 // ─── users ───────────────────────────────────────────────────────────────────
 

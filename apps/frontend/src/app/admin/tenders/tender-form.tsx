@@ -9,12 +9,14 @@ import { Box, Card, Typography, Divider } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
+import { getCategoriesApi } from '@/services/categories/api';
 import { getTenderApi, createTenderApi, updateTenderApi, getProjectsApi } from '@/services/workspace/api';
-import type { Project } from '@core-panel/shared';
+import type { Category, Project } from '@core-panel/shared';
 import axios from 'axios';
 
 const schema = z.object({
   projectId: z.string().uuid('İnşaat zorunludur'),
+  categoryId: z.string().optional(),
   title: z.string().min(1, 'Başlık zorunludur').max(255),
   description: z.string().optional(),
   status: z.enum(['draft', 'open', 'closed', 'awarded']),
@@ -36,6 +38,7 @@ export function TenderForm({ id }: { id?: string }) {
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
@@ -46,13 +49,17 @@ export function TenderForm({ id }: { id?: string }) {
   });
 
   useEffect(() => {
-    const loads: Promise<unknown>[] = [getProjectsApi().then(setProjects)];
+    const loads: Promise<unknown>[] = [
+      getProjectsApi().then(setProjects),
+      getCategoriesApi().then(setCategories),
+    ];
 
     if (id) {
       loads.push(
         getTenderApi(id).then((tender) => {
           reset({
             projectId: tender.projectId,
+            categoryId: tender.categoryId ?? '',
             title: tender.title,
             description: tender.description ?? '',
             status: tender.status as FormData['status'],
@@ -82,6 +89,7 @@ export function TenderForm({ id }: { id?: string }) {
     try {
       const payload = {
         ...pendingData,
+        categoryId: pendingData.categoryId || null,
         deadline: pendingData.deadline ? new Date(pendingData.deadline).toISOString() : undefined,
       };
 
@@ -109,6 +117,14 @@ export function TenderForm({ id }: { id?: string }) {
     label: project.name,
     value: project.id,
   }));
+
+  const categoryOptions = [
+    { label: 'Kategori seç', value: '' },
+    ...categories.map((category) => ({
+      label: category.name,
+      value: category.id,
+    })),
+  ];
 
   return (
     <Box>
@@ -144,6 +160,20 @@ export function TenderForm({ id }: { id?: string }) {
                     options={projectOptions}
                     error={!!errors.projectId}
                     errorMessage={errors.projectId?.message}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              <Controller
+                name="categoryId"
+                control={control}
+                render={({ field }) => (
+                  <FormSelect
+                    label="Kategori"
+                    options={categoryOptions}
+                    error={!!errors.categoryId}
+                    errorMessage={errors.categoryId?.message}
                     value={field.value ?? ''}
                     onChange={field.onChange}
                   />

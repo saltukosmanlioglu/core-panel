@@ -11,11 +11,15 @@ export interface TenantWithCompanyResponse extends Tenant {
 // Request validation schemas
 export const createTenantSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
+  contactName: z.string().max(255).optional(),
+  contactPhone: z.string().max(50).optional(),
   companyId: z.string().uuid('Invalid company ID').optional(),
 });
 
 export const updateTenantSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255).optional(),
+  contactName: z.string().max(255).optional(),
+  contactPhone: z.string().max(50).optional(),
   companyId: z.string().uuid('Invalid company ID').optional(),
 });
 

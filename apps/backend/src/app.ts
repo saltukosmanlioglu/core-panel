@@ -37,8 +37,11 @@ app.use(cookieParser(env.COOKIE_SECRET));
 // Rate limiting
 app.use('/api', apiLimiter);
 
-// Local uploads
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Local uploads — allow cross-origin image loading (frontend is on a different port)
+app.use('/uploads', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(UPLOADS_DIR));
 
 // Routes
 app.use('/api', baseRouter);

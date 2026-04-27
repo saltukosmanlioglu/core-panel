@@ -11,6 +11,8 @@ export interface Tender {
   id: string;
   projectId: string;
   projectName?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
   title: string;
   description: string | null;
   status: string;

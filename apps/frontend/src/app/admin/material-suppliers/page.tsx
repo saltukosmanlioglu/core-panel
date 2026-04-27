@@ -2,27 +2,30 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { FormButton } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
-import { getTenantsApi, deleteTenantApi } from '@/services/admin/api';
-import type { Tenant } from '@core-panel/shared';
+import {
+  deleteMaterialSupplierApi,
+  getMaterialSuppliersApi,
+  type MaterialSupplier,
+} from '@/services/material-suppliers/api';
 import axios from 'axios';
 
-export default function TenantsPage() {
+export default function MaterialSuppliersPage() {
   const router = useRouter();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [suppliers, setSuppliers] = useState<MaterialSupplier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MaterialSupplier | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const load = () => {
     setLoading(true);
-    getTenantsApi()
-      .then(setTenants)
+    getMaterialSuppliersApi()
+      .then(setSuppliers)
       .catch((err: unknown) => {
         const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
         setSnackbar({ open: true, message: msg, severity: 'error' });
@@ -36,7 +39,7 @@ export default function TenantsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteTenantApi(deleteTarget.id);
+      await deleteMaterialSupplierApi(deleteTarget.id);
       setSnackbar({ open: true, message: `"${deleteTarget.name}" başarıyla silindi`, severity: 'success' });
       setDeleteTarget(null);
       load();
@@ -52,37 +55,26 @@ export default function TenantsPage() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Taşeronlar</Typography>
-          <Typography variant="body2" color="text.secondary">{tenants.length} kayıt</Typography>
+          <Typography variant="h5" fontWeight={700} color="#111827">Malzemeciler</Typography>
+          <Typography variant="body2" color="text.secondary">{suppliers.length} kayıt</Typography>
         </Box>
-        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/tenants/create')}>
-          Taşeron Ekle
+        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={() => router.push('/admin/material-suppliers/create')}>
+          Yeni Malzemeci
         </FormButton>
       </Box>
 
-      <DataTable<Tenant>
-        rows={tenants}
+      <DataTable<MaterialSupplier>
+        rows={suppliers}
         loading={loading}
         getRowId={(row) => row.id}
         columns={[
           {
             field: 'name',
-            headerName: 'Ad',
+            headerName: 'Firma Adı',
             flex: 1,
             sortable: true,
             renderCell: (row) => (
               <Typography sx={{ fontWeight: 500, color: '#1F2937', fontSize: '14px' }}>{row.name}</Typography>
-            ),
-          },
-          {
-            field: 'companyName',
-            headerName: 'Şirket',
-            flex: 1,
-            sortable: true,
-            renderCell: (row) => (
-              row.companyName
-                ? <Chip label={row.companyName} size="small" sx={{ backgroundColor: 'rgba(31,41,55,0.08)', color: '#1F2937', fontWeight: 500, fontSize: '12px' }} />
-                : <Typography sx={{ color: '#9CA3AF', fontSize: '13px' }}>—</Typography>
             ),
           },
           {
@@ -107,23 +99,12 @@ export default function TenantsPage() {
               </Typography>
             ),
           },
-          {
-            field: 'createdAt',
-            headerName: 'Oluşturulma Tarihi',
-            width: 160,
-            sortable: true,
-            renderCell: (row) => (
-              <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>
-                {new Date(row.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-              </Typography>
-            ),
-          },
         ]}
         actions={[
           {
             label: 'Düzenle',
             icon: <EditIcon fontSize="small" />,
-            onClick: (row) => router.push(`/admin/tenants/${row.id}`),
+            onClick: (row) => router.push(`/admin/material-suppliers/${row.id}`),
             color: 'primary',
           },
           {
@@ -133,13 +114,13 @@ export default function TenantsPage() {
             color: 'error',
           },
         ]}
-        emptyMessage="Henüz taşeron yok"
+        emptyMessage="Henüz malzemeci yok"
       />
 
       <ConfirmationDialog
         open={!!deleteTarget}
-        title="Taşeron Sil"
-        description={`"${deleteTarget?.name}" taşeronunu silmek istediğinize emin misiniz?`}
+        title="Malzemeci Sil"
+        description={`"${deleteTarget?.name}" malzemecisini silmek istediğinize emin misiniz?`}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
