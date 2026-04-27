@@ -93,7 +93,7 @@ export default function AdminTendersPage() {
             },
           ]}
           actions={[
-            { label: 'Yönet', icon: <EditIcon fontSize="small" />, onClick: (r) => router.push(`/admin/tenders/${r.id}`), color: 'primary' },
+            { label: 'Düzenle', icon: <EditIcon fontSize="small" />, onClick: (r) => router.push(`/admin/tenders/${r.id}/edit`), color: 'primary' },
             { label: 'Sil', icon: <DeleteIcon fontSize="small" />, onClick: (r) => setDeleteTarget(r), color: 'error' },
           ]}
           emptyMessage="Henüz ihale yok"

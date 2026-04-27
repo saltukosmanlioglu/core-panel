@@ -106,7 +106,13 @@ export default function DashboardTendersPage() {
                 <Typography sx={{ color: '#6B7280', fontWeight: 500 }}>Henüz ihale yok</Typography>
               </Box>
             )
-            : tenders.map((t) => <TenderCard key={t.id} tender={t} onClick={() => router.push(`/admin/tenders/${t.id}`)} />)
+            : tenders.map((t) => (
+              <TenderCard
+                key={t.id}
+                tender={t}
+                onClick={() => router.push(`/workspace/projects/${t.projectId}/tenders/${t.id}`)}
+              />
+            ))
           }
         </Box>
       </Box>

@@ -23,5 +23,6 @@ export interface TenderPayload {
 
 export interface TenderQueryParams {
   limit?: number;
+  projectId?: string;
   sortOrder?: 'asc' | 'desc';
 }

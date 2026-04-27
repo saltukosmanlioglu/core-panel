@@ -12,8 +12,9 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
   try {
     const rawLimit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
     const limit = rawLimit && Number.isInteger(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
+    const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : undefined;
     const sortOrder = req.query.sortOrder === 'desc' ? 'desc' : 'asc';
-    const options = { limit, sortOrder } as const;
+    const options = { limit, projectId, sortOrder } as const;
     const tenders = req.resolvedCompanyId
       ? await tendersRepo.findAll(req.resolvedCompanyId, options)
       : await tendersRepo.findAllAcrossCompanies(options);

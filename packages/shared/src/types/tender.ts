@@ -21,6 +21,19 @@ export interface Tender {
   updatedAt: string;
 }
 
+export interface TenderItem {
+  id: string;
+  tenderId: string;
+  rowNo: number;
+  posNo: string | null;
+  description: string;
+  unit: string;
+  quantity: number;
+  location: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TenderInvitationResponse {
   tenantIds: string[];
 }

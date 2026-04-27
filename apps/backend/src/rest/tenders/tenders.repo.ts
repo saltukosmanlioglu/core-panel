@@ -35,6 +35,7 @@ export type TenderRecord = ReturnType<typeof mapRow>;
 
 interface FindAllOptions {
   limit?: number;
+  projectId?: string;
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -44,6 +45,14 @@ export async function findAll(companyId: string, options: FindAllOptions = {}): 
   const p = tdb.ref('projects');
   const sortOrder = options.sortOrder === 'desc' ? 'DESC' : 'ASC';
   const params: unknown[] = [companyId];
+  const whereClauses: string[] = [];
+
+  if (options.projectId) {
+    params.push(options.projectId);
+    whereClauses.push(`t.project_id = $${params.length}`);
+  }
+
+  const whereClause = whereClauses.length > 0 ? ` WHERE ${whereClauses.join(' AND ')}` : '';
   const limitClause = options.limit ? ` LIMIT $${params.length + 1}` : '';
   if (options.limit) params.push(options.limit);
   const { rows } = await tdb.query<TenderRow>(
@@ -51,6 +60,7 @@ export async function findAll(companyId: string, options: FindAllOptions = {}): 
      FROM ${t} t
      LEFT JOIN ${p} p ON t.project_id = p.id
      LEFT JOIN public.categories c ON t.category_id = c.id AND c.company_id = $1
+     ${whereClause}
      ORDER BY t.created_at ${sortOrder}${limitClause}`,
     params,
   );

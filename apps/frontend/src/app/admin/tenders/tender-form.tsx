@@ -1,22 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Box, Card, Typography, Divider } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import {
+  Box,
+  Card,
+  Divider,
+  IconButton,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { Add as AddIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { getCategoriesApi } from '@/services/categories/api';
+import { getTenderItemsApi, replaceTenderItemsApi, type TenderItemPayload } from '@/services/tender-items/api';
 import { getTenderApi, createTenderApi, updateTenderApi, getProjectsApi } from '@/services/workspace/api';
 import type { Category, Project } from '@core-panel/shared';
 import axios from 'axios';
 
 const schema = z.object({
   projectId: z.string().uuid('İnşaat zorunludur'),
-  categoryId: z.string().optional(),
+  categoryId: z.string().uuid('Kategori zorunludur'),
   title: z.string().min(1, 'Başlık zorunludur').max(255),
   description: z.string().optional(),
   status: z.enum(['draft', 'open', 'closed']),
@@ -24,6 +39,15 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+
+interface ItemRow {
+  tempId: string;
+  posNo: string;
+  description: string;
+  unit: string;
+  quantity: string;
+  location: string;
+}
 
 const statusOptions = [
   { label: 'Taslak', value: 'draft' },
@@ -38,9 +62,12 @@ export function TenderForm({ id }: { id?: string }) {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [items, setItems] = useState<ItemRow[]>([]);
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const descriptionRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
@@ -65,6 +92,18 @@ export function TenderForm({ id }: { id?: string }) {
             deadline: tender.deadline ? new Date(tender.deadline).toISOString().slice(0, 16) : '',
           });
         }),
+        getTenderItemsApi(id).then((loadedItems) => {
+          setItems(
+            loadedItems.map((item) => ({
+              tempId: item.id,
+              posNo: item.posNo ?? '',
+              description: item.description,
+              unit: item.unit,
+              quantity: String(item.quantity),
+              location: item.location ?? '',
+            })),
+          );
+        }),
       );
     }
 
@@ -73,7 +112,79 @@ export function TenderForm({ id }: { id?: string }) {
       .finally(() => setFetchLoading(false));
   }, [id, reset, router]);
 
+  useEffect(() => {
+    if (!focusItemId) {
+      return;
+    }
+
+    descriptionRefs.current[focusItemId]?.focus();
+    setFocusItemId(null);
+  }, [focusItemId, items.length]);
+
+  const addItem = () => {
+    const tempId = Math.random().toString(36).slice(2);
+    setItems((prev) => [
+      ...prev,
+      {
+        tempId,
+        posNo: '',
+        description: '',
+        unit: '',
+        quantity: '',
+        location: '',
+      },
+    ]);
+    setFocusItemId(tempId);
+  };
+
+  const removeItem = (tempId: string) => {
+    setItems((prev) => prev.filter((item) => item.tempId !== tempId));
+    delete descriptionRefs.current[tempId];
+  };
+
+  const updateItem = (tempId: string, field: keyof ItemRow, value: string) => {
+    setItems((prev) => prev.map((item) => (item.tempId === tempId ? { ...item, [field]: value } : item)));
+  };
+
+  const getItemValidationMessage = () => {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index]!;
+      const rowNumber = index + 1;
+      const quantity = Number(item.quantity);
+
+      if (!item.description.trim()) {
+        return `${rowNumber}. kalemde açıklama zorunludur`;
+      }
+
+      if (!item.unit.trim()) {
+        return `${rowNumber}. kalemde birim zorunludur`;
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return `${rowNumber}. kalemde miktar pozitif olmalıdır`;
+      }
+    }
+
+    return null;
+  };
+
+  const buildItemPayload = (): TenderItemPayload[] =>
+    items.map((item) => ({
+      posNo: item.posNo.trim() || undefined,
+      description: item.description.trim(),
+      unit: item.unit.trim(),
+      quantity: Number(item.quantity),
+      location: item.location.trim() || undefined,
+    }));
+
   const onSubmit = (data: FormData) => {
+    const itemError = getItemValidationMessage();
+
+    if (itemError) {
+      setSnackbar({ open: true, message: itemError, severity: 'error' });
+      return;
+    }
+
     setPendingData(data);
     setConfirmOpen(true);
   };
@@ -88,17 +199,19 @@ export function TenderForm({ id }: { id?: string }) {
     try {
       const payload = {
         ...pendingData,
-        categoryId: pendingData.categoryId || null,
         deadline: pendingData.deadline ? new Date(pendingData.deadline).toISOString() : undefined,
       };
 
       if (isEdit && id) {
-        await updateTenderApi(id, payload);
+        const tender = await updateTenderApi(id, payload);
+        await replaceTenderItemsApi(tender.id, buildItemPayload());
         setSnackbar({ open: true, message: 'İhale başarıyla güncellendi', severity: 'success' });
+        setTimeout(() => router.push('/admin/tenders'), 800);
       } else {
         const tender = await createTenderApi(payload);
+        await replaceTenderItemsApi(tender.id, buildItemPayload());
         setSnackbar({ open: true, message: 'İhale başarıyla oluşturuldu', severity: 'success' });
-        setTimeout(() => router.push(`/admin/tenders/${tender.id}`), 1200);
+        setTimeout(() => router.push('/admin/tenders'), 800);
       }
     } catch (error: unknown) {
       const message = axios.isAxiosError(error)
@@ -144,7 +257,7 @@ export function TenderForm({ id }: { id?: string }) {
         {isEdit ? 'İhale bilgilerini güncelle' : 'Yeni ihale oluştur ve projeye bağla'}
       </Typography>
 
-      <Card sx={{ p: 4, maxWidth: 640 }}>
+      <Card sx={{ p: 4, maxWidth: 1100 }}>
         {fetchLoading ? (
           <Box className="flex justify-center py-8">Loading...</Box>
         ) : (
@@ -202,6 +315,121 @@ export function TenderForm({ id }: { id?: string }) {
                   errorMessage={errors.deadline?.message}
                   {...register('deadline')}
                 />
+              </Box>
+              <Divider sx={{ my: 1 }} />
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                  İş Kalemleri
+                </Typography>
+                <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ width: 48, fontWeight: 700 }}>#</TableCell>
+                        <TableCell sx={{ minWidth: 120, fontWeight: 700 }}>Pos No</TableCell>
+                        <TableCell sx={{ minWidth: 220, fontWeight: 700 }}>Description</TableCell>
+                        <TableCell sx={{ minWidth: 100, fontWeight: 700 }}>Unit</TableCell>
+                        <TableCell sx={{ minWidth: 120, fontWeight: 700 }}>Quantity</TableCell>
+                        <TableCell sx={{ minWidth: 160, fontWeight: 700 }}>Location</TableCell>
+                        <TableCell sx={{ width: 56 }} />
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {items.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7}>
+                            <Typography variant="body2" sx={{ color: '#6B7280', py: 1 }}>
+                              Henüz iş kalemi eklenmedi.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        items.map((item, index) => (
+                          <TableRow key={item.tempId}>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ color: '#6B7280', fontWeight: 600 }}>
+                                {index + 1}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                variant="standard"
+                                fullWidth
+                                value={item.posNo}
+                                onChange={(event) => updateItem(item.tempId, 'posNo', event.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                variant="standard"
+                                fullWidth
+                                required
+                                value={item.description}
+                                inputRef={(element) => {
+                                  descriptionRefs.current[item.tempId] = element;
+                                }}
+                                onChange={(event) => updateItem(item.tempId, 'description', event.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                variant="standard"
+                                fullWidth
+                                required
+                                value={item.unit}
+                                onChange={(event) => updateItem(item.tempId, 'unit', event.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                variant="standard"
+                                fullWidth
+                                required
+                                type="number"
+                                inputProps={{ min: 0.001, step: 0.001 }}
+                                value={item.quantity}
+                                onChange={(event) => updateItem(item.tempId, 'quantity', event.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                variant="standard"
+                                fullWidth
+                                value={item.location}
+                                onChange={(event) => updateItem(item.tempId, 'location', event.target.value)}
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              <IconButton
+                                color="error"
+                                size="small"
+                                aria-label="remove item"
+                                onClick={() => removeItem(item.tempId)}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <FormButton
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                  onClick={addItem}
+                  sx={{ mt: 2 }}
+                >
+                  Add Item
+                </FormButton>
               </Box>
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">

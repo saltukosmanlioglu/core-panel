@@ -318,7 +318,7 @@ export default function CompaniesPage() {
                         <TableRow
                           key={tender.id}
                           hover
-                          onClick={() => router.push(`/admin/tenders/${tender.id}`)}
+                          onClick={() => router.push(`/admin/tenders/${tender.id}/edit`)}
                           sx={{ cursor: 'pointer' }}
                         >
                           <TableCell>
