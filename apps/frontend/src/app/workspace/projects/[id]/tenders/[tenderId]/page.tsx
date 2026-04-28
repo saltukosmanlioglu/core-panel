@@ -5,8 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import {
   Box,
-  Card,
-  CardContent,
+  Button,
   Checkbox,
   Chip,
   CircularProgress,
@@ -29,14 +28,33 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
   AutoAwesome as AutoAwesomeIcon,
+  CalendarToday as CalendarTodayIcon,
+  Category as CategoryIcon,
+  CompareArrows as CompareArrowsIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
+  EmojiEvents as EmojiEventsIcon,
+  Flag as FlagIcon,
+  Folder as FolderIcon,
+  FormatListNumbered as FormatListNumberedIcon,
+  Gavel as GavelIcon,
+  History as HistoryIcon,
+  InsertDriveFile as InsertDriveFileIcon,
+  People as PeopleIcon,
+  Save as SaveIcon,
+  Savings as SavingsIcon,
+  SwapHoriz as SwapHorizIcon,
+  Title as TitleIcon,
+  TrendingDown as TrendingDownIcon,
+  TrendingUp as TrendingUpIcon,
   UploadFile as UploadFileIcon,
 } from '@mui/icons-material';
 import { ConfirmationDialog, Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
-import { getTenantsApi } from '@/services/admin/api';
+import { getCompaniesApi, getTenantsApi } from '@/services/admin/api';
+import { exportTenderForm } from '@/utils/exportTenderForm';
 import { getTenantsByCategoryApi } from '@/services/categories/api';
 import {
   bulkUpsertAwardItems,
@@ -75,6 +93,8 @@ import type {
   Tenant,
 } from '@core-panel/shared';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const statusColors: Record<string, { backgroundColor: string; color: string; label: string }> = {
   draft: { backgroundColor: '#F3F4F6', color: '#6B7280', label: 'Taslak' },
   open: { backgroundColor: '#DCFCE7', color: '#15803D', label: 'Açık' },
@@ -82,11 +102,20 @@ const statusColors: Record<string, { backgroundColor: string; color: string; lab
   awarded: { backgroundColor: '#DBEAFE', color: '#1D4ED8', label: 'Atandı' },
 };
 
+const statusChipColors: Record<string, 'default' | 'success' | 'warning' | 'primary'> = {
+  draft: 'default',
+  open: 'success',
+  closed: 'warning',
+  awarded: 'primary',
+};
+
 const awardStatusOptions: Array<{ value: AwardItemStatus; label: string }> = [
   { value: 'awarded', label: 'Atandı' },
   { value: 'pending_negotiation', label: 'Müzakerede' },
   { value: 'excluded', label: 'Hariç tutuldu' },
 ];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type PriceCellCompat = ComparisonPriceCell & {
   price?: number | null;
@@ -103,6 +132,8 @@ interface AwardDraftRow {
   status: AwardItemStatus | '';
   note: string;
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getErrorMessage(error: unknown, fallback: string): string {
   return axios.isAxiosError(error)
@@ -258,6 +289,35 @@ function getComparisonSummary(
   };
 }
 
+function getFileColor(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return '#10b981';
+  if (lower.endsWith('.pdf')) return '#ef4444';
+  if (lower.endsWith('.docx') || lower.endsWith('.doc')) return '#3b82f6';
+  return '#64748b';
+}
+
+function auditActionLabel(action: string): string {
+  return ({
+    comparison_run: 'AI Karşılaştırması Çalıştırıldı',
+    items_awarded: 'Kalemler Güncellendi',
+    tender_finalized: 'İhale Sonlandırıldı',
+  } as Record<string, string>)[action] ?? action;
+}
+
+function formatLogDetails(details: Record<string, unknown> | null): string {
+  if (!details) return '';
+  const parts: string[] = [];
+  if (typeof details.itemCount === 'number') parts.push(`${details.itemCount} kalem`);
+  if (typeof details.awardedCount === 'number') parts.push(`${details.awardedCount} atandı`);
+  if (typeof details.pendingCount === 'number') parts.push(`${details.pendingCount} müzakerede`);
+  if (typeof details.excludedCount === 'number') parts.push(`${details.excludedCount} hariç`);
+  if (typeof details.tenantCount === 'number') parts.push(`${details.tenantCount} firma`);
+  return parts.join(', ');
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function WorkspaceTenderWorkflowPage() {
   const { id: projectId, tenderId } = useParams<{ id: string; tenderId: string }>();
   const router = useRouter();
@@ -273,6 +333,7 @@ export default function WorkspaceTenderWorkflowPage() {
   const [awardRows, setAwardRows] = useState<AwardDraftRow[]>([]);
   const [auditLogs, setAuditLogs] = useState<TenderAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [companyName, setCompanyName] = useState('');
   const [savingInvitations, setSavingInvitations] = useState(false);
   const [uploadingTenantId, setUploadingTenantId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TenderOfferFile | null>(null);
@@ -394,6 +455,35 @@ export default function WorkspaceTenderWorkflowPage() {
   useEffect(() => {
     void loadPage();
   }, [loadPage]);
+
+  useEffect(() => {
+    getCompaniesApi().then(companies => {
+      setCompanyName(companies[0]?.name ?? '');
+    }).catch(() => undefined);
+  }, []);
+
+  const handleExportTender = async () => {
+    if (!tender) return;
+    try {
+      await exportTenderForm({
+        tenderTitle: tender.title,
+        projectName: tender.projectName ?? '',
+        categoryName: tender.categoryName ?? '',
+        deadline: tender.deadline ?? null,
+        companyName,
+        items: items.map(item => ({
+          rowNo: item.rowNo,
+          posNo: item.posNo ?? null,
+          description: item.description,
+          unit: item.unit,
+          quantity: Number(item.quantity),
+          location: item.location ?? null,
+        })),
+      });
+    } catch {
+      setSnackbar({ open: true, message: 'Excel indirilemedi', severity: 'error' });
+    }
+  };
 
   const toggleTenant = (tenantId: string) => {
     setSelectedTenantIds((current) =>
@@ -638,6 +728,8 @@ export default function WorkspaceTenderWorkflowPage() {
     URL.revokeObjectURL(url);
   };
 
+  // ─── Loading ────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 12 }}>
@@ -646,98 +738,157 @@ export default function WorkspaceTenderWorkflowPage() {
     );
   }
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <Box sx={{ display: 'grid', gap: 3 }}>
+
+      {/* ── Page header ───────────────────────────────────────────────────────── */}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 800, color: '#111827', mb: 0.5 }}>
-            {tender?.title ?? 'İhale'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {tender?.projectName ?? '—'} · {tender?.categoryName ?? '—'} · Son Tarih: {formatDate(tender?.deadline)}
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{
+            width: 44, height: 44, borderRadius: 2,
+            backgroundColor: '#1E3A5F', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            <GavelIcon sx={{ color: 'white', fontSize: 22 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" fontWeight={700}>{tender?.title ?? 'İhale'}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {tender?.projectName ?? '—'} · {tender?.categoryName ?? '—'} · Son Tarih: {formatDate(tender?.deadline)}
+            </Typography>
+          </Box>
         </Box>
-        <Chip
-          label={statusMeta.label}
-          sx={{ backgroundColor: statusMeta.backgroundColor, color: statusMeta.color, fontWeight: 700 }}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={() => { void handleExportTender(); }}
+          >
+            Teklif Formu İndir
+          </Button>
+          <Chip
+            label={statusMeta.label}
+            color={statusChipColors[tender?.status ?? 'draft'] ?? 'default'}
+            size="small"
+            sx={{ fontWeight: 700 }}
+          />
+        </Box>
       </Box>
 
-      <Card>
+      {/* ── Main card ─────────────────────────────────────────────────────────── */}
+      <Paper elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
         <Tabs
           value={activeTab}
-          onChange={(_, nextValue) => setActiveTab(nextValue)}
+          onChange={(_, v) => setActiveTab(v)}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ borderBottom: '1px solid #E5E7EB' }}
+          sx={{ borderBottom: '1px solid #e2e8f0', px: 1 }}
         >
-          <Tab label="Genel Bilgiler" />
-          <Tab label="Davet & Teklifler" />
-          <Tab label="Karşılaştırma" />
-          <Tab label="Değerlendirme" />
+          <Tab label="GENEL BİLGİLER" />
+          <Tab label="TEKLİFLER" />
+          <Tab label="KARŞILAŞTIRMA" />
+          <Tab label="DEĞERLENDİRME" />
+          <Tab label="AUDİT LOG" />
         </Tabs>
 
-        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Box sx={{ p: { xs: 2, md: 3 } }}>
+
+          {/* ── Tab 0: GENEL BİLGİLER ─────────────────────────────────────────── */}
           {activeTab === 0 ? (
             <Stack spacing={3}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+              {/* Info cards */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                 {[
-                  ['Başlık', tender?.title ?? '—'],
-                  ['Kategori', tender?.categoryName ?? '—'],
-                  ['Durum', statusMeta.label],
-                  ['Son Tarih', formatDate(tender?.deadline)],
-                ].map(([label, value]) => (
-                  <Paper key={label} variant="outlined" sx={{ p: 2, borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary">{label}</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.5 }}>{value}</Typography>
+                  { icon: <TitleIcon fontSize="small" />, label: 'Başlık', value: tender?.title ?? '—', color: '#1E3A5F' },
+                  { icon: <CategoryIcon fontSize="small" />, label: 'Kategori', value: tender?.categoryName ?? '—', color: '#0ea5e9' },
+                  { icon: <FlagIcon fontSize="small" />, label: 'Durum', value: statusMeta.label, color: '#10b981' },
+                  { icon: <CalendarTodayIcon fontSize="small" />, label: 'Son Tarih', value: formatDate(tender?.deadline), color: '#f59e0b' },
+                ].map(card => (
+                  <Paper
+                    key={card.label}
+                    elevation={0}
+                    sx={{ p: 2, borderRadius: 2, border: '1px solid #e2e8f0', borderLeft: `4px solid ${card.color}` }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Box sx={{ color: card.color, display: 'flex' }}>{card.icon}</Box>
+                      <Typography variant="caption" color="text.secondary">{card.label}</Typography>
+                    </Box>
+                    <Typography variant="body1" fontWeight={600}>{card.value}</Typography>
                   </Paper>
                 ))}
               </Box>
-              <Paper variant="outlined" sx={{ p: 2, borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">Açıklama</Typography>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>{tender?.description ?? '—'}</Typography>
-              </Paper>
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>#</TableCell>
-                      <TableCell>Pos No</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Unit</TableCell>
-                      <TableCell>Quantity</TableCell>
-                      <TableCell>Location</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {items.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6}>İş kalemi yok.</TableCell>
+
+              {/* Description */}
+              {tender?.description && (
+                <Paper elevation={0} sx={{ p: 2, borderRadius: 2, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                  <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>Açıklama</Typography>
+                  <Typography variant="body2">{tender.description}</Typography>
+                </Paper>
+              )}
+
+              {/* Items table */}
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <FormatListNumberedIcon sx={{ color: '#1E3A5F' }} />
+                  <Typography variant="h6" fontWeight={600}>İş Kalemleri</Typography>
+                  <Chip label={items.length} size="small" sx={{ ml: 1 }} />
+                </Box>
+                <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+                        <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Pos No</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Tanım</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Birim</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Miktar</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Konum</TableCell>
                       </TableRow>
-                    ) : (
-                      items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.rowNo}</TableCell>
-                          <TableCell>{item.posNo ?? '—'}</TableCell>
-                          <TableCell>{item.description}</TableCell>
-                          <TableCell>{item.unit}</TableCell>
-                          <TableCell>{formatAmount(item.quantity)}</TableCell>
-                          <TableCell>{item.location ?? '—'}</TableCell>
+                    </TableHead>
+                    <TableBody>
+                      {items.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                            İş kalemi yok.
+                          </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                      ) : (
+                        items.map((item, idx) => (
+                          <TableRow
+                            key={item.id}
+                            sx={{ backgroundColor: idx % 2 !== 0 ? '#fafafa' : 'transparent' }}
+                          >
+                            <TableCell>{item.rowNo}</TableCell>
+                            <TableCell>{item.posNo ?? '—'}</TableCell>
+                            <TableCell>{item.description}</TableCell>
+                            <TableCell>{item.unit}</TableCell>
+                            <TableCell>{formatAmount(item.quantity)}</TableCell>
+                            <TableCell>{item.location ?? '—'}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
             </Stack>
           ) : null}
 
+          {/* ── Tab 1: TEKLİFLER ──────────────────────────────────────────────── */}
           {activeTab === 1 ? (
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '0.9fr 1.1fr' }, gap: 3 }}>
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Davet Edilen Taşeronlar</Typography>
-                  <Chip size="small" label={selectedTenantIds.length} />
+
+              {/* Left: Davet Edilen Taşeronlar */}
+              <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PeopleIcon sx={{ color: '#f59e0b' }} />
+                    <Typography fontWeight={600}>Davet Edilen Taşeronlar</Typography>
+                  </Box>
+                  <Chip label={selectedTenantIds.length} size="small" color="warning" />
                 </Box>
                 {availableTenants.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">
@@ -745,114 +896,173 @@ export default function WorkspaceTenderWorkflowPage() {
                   </Typography>
                 ) : (
                   <Stack spacing={1}>
-                    {availableTenants.map((tenant) => (
-                      <Paper key={tenant.id} variant="outlined" sx={{ px: 1.25, py: 0.5 }}>
+                    {availableTenants.map(tenant => (
+                      <Paper key={tenant.id} variant="outlined" sx={{ px: 1.25, py: 0.5, borderRadius: 1.5 }}>
                         <FormControlLabel
-                          control={(
+                          control={
                             <Checkbox
                               checked={selectedTenantIds.includes(tenant.id)}
                               onChange={() => toggleTenant(tenant.id)}
+                              size="small"
                             />
-                          )}
-                          label={tenant.name}
+                          }
+                          label={<Typography variant="body2">{tenant.name}</Typography>}
                         />
                       </Paper>
                     ))}
-                    <FormButton variant="primary" size="md" onClick={handleSaveInvitations} loading={savingInvitations}>
-                      Davetleri Kaydet
-                    </FormButton>
+                    <Box sx={{ pt: 1 }}>
+                      <FormButton
+                        variant="primary"
+                        size="md"
+                        startIcon={<SaveIcon />}
+                        onClick={handleSaveInvitations}
+                        loading={savingInvitations}
+                      >
+                        Davetleri Kaydet
+                      </FormButton>
+                    </Box>
                   </Stack>
                 )}
               </Paper>
 
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Teklif Dosyaları</Typography>
-                  <Chip size="small" label={`${offerFiles.length}/${invitedTenants.length}`} />
+              {/* Right: Teklif Dosyaları */}
+              <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FolderIcon sx={{ color: '#f59e0b' }} />
+                    <Typography fontWeight={600}>Teklif Dosyaları</Typography>
+                  </Box>
+                  <Chip label={`${offerFiles.length}/${invitedTenants.length}`} size="small" />
                 </Box>
-                <Stack spacing={1.5}>
-                  {invitedTenants.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      Dosya yüklemek için en az bir taşeron davet edin.
-                    </Typography>
-                  ) : (
-                    invitedTenants.map((tenant) => {
+                {invitedTenants.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Dosya yüklemek için en az bir taşeron davet edin.
+                  </Typography>
+                ) : (
+                  <Stack spacing={1}>
+                    {invitedTenants.map(tenant => {
                       const offerFile = offerFileMap.get(tenant.id) ?? null;
                       const fileInputId = `offer-file-${tenant.id}`;
                       const isUploading = uploadingTenantId === tenant.id;
                       const isDeleting = deletingTenantId === tenant.id;
 
                       return (
-                        <Paper key={tenant.id} variant="outlined" sx={{ p: 1.5, borderRadius: 1 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{tenant.name}</Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {offerFile?.originalName ?? 'Dosya yüklenmedi'} · {formatDateTime(offerFile?.createdAt)}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              <input
-                                id={fileInputId}
-                                type="file"
-                                accept=".xlsx,.xls,.pdf,.doc,.docx"
-                                hidden
-                                onChange={(event) => {
-                                  const file = event.target.files?.[0] ?? null;
-                                  void handleUpload(tenant.id, file);
-                                  event.target.value = '';
-                                }}
-                              />
+                        <Box key={tenant.id}>
+                          <input
+                            id={fileInputId}
+                            type="file"
+                            accept=".xlsx,.xls,.pdf,.doc,.docx"
+                            hidden
+                            onChange={event => {
+                              const file = event.target.files?.[0] ?? null;
+                              void handleUpload(tenant.id, file);
+                              event.target.value = '';
+                            }}
+                          />
+                          {offerFile ? (
+                            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                  <Box sx={{
+                                    width: 36, height: 36, borderRadius: 1,
+                                    backgroundColor: getFileColor(offerFile.originalName),
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}>
+                                    <InsertDriveFileIcon sx={{ color: 'white', fontSize: 18 }} />
+                                  </Box>
+                                  <Box>
+                                    <Typography variant="body2" fontWeight={600}>{tenant.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {offerFile.originalName} · {formatDateTime(offerFile.createdAt)}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                                <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                                  <FormButton
+                                    variant="secondary"
+                                    size="sm"
+                                    startIcon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
+                                    onClick={() => document.getElementById(fileInputId)?.click()}
+                                    loading={isUploading}
+                                    disabled={isDeleting}
+                                  >
+                                    Değiştir
+                                  </FormButton>
+                                  <IconButton
+                                    color="error"
+                                    size="small"
+                                    onClick={() => setDeleteTarget(offerFile)}
+                                    disabled={isUploading || isDeleting}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                              </Box>
+                            </Paper>
+                          ) : (
+                            <Box sx={{
+                              border: '1.5px dashed #cbd5e1',
+                              borderRadius: 1.5,
+                              p: 1.5,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                <Box sx={{
+                                  width: 36, height: 36, borderRadius: 1,
+                                  backgroundColor: '#f1f5f9',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}>
+                                  <InsertDriveFileIcon sx={{ color: '#94a3b8', fontSize: 18 }} />
+                                </Box>
+                                <Box>
+                                  <Typography variant="body2" fontWeight={600} color="text.secondary">
+                                    {tenant.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">Dosya yüklenmedi</Typography>
+                                </Box>
+                              </Box>
                               <FormButton
                                 variant="secondary"
                                 size="sm"
                                 startIcon={<UploadFileIcon sx={{ fontSize: 16 }} />}
                                 onClick={() => document.getElementById(fileInputId)?.click()}
                                 loading={isUploading}
-                                disabled={isDeleting}
                               >
-                                {offerFile ? 'Değiştir' : 'Yükle'}
+                                Yükle
                               </FormButton>
-                              {offerFile ? (
-                                <IconButton
-                                  color="error"
-                                  size="small"
-                                  onClick={() => setDeleteTarget(offerFile)}
-                                  disabled={isUploading || isDeleting}
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              ) : null}
                             </Box>
-                          </Box>
-                        </Paper>
+                          )}
+                        </Box>
                       );
-                    })
-                  )}
-                </Stack>
+                    })}
+                  </Stack>
+                )}
               </Paper>
             </Box>
           ) : null}
 
+          {/* ── Tab 2: KARŞILAŞTIRMA ──────────────────────────────────────────── */}
           {activeTab === 2 ? (
             <Stack spacing={3}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Karşılaştırma</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Karşılaştırma için en az 2 teklif dosyası gereklidir.
-                  </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CompareArrowsIcon sx={{ color: '#1E3A5F' }} />
+                  <Typography variant="h6" fontWeight={600}>Karşılaştırma</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <FormButton
-                    variant="secondary"
-                    size="sm"
-                    startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
                     onClick={handleExportComparison}
                     disabled={!comparisonResult}
                   >
                     Excel Export
-                  </FormButton>
+                  </Button>
                   <Tooltip title={canRunComparison ? '' : 'En az 2 dosya yükleyin'}>
                     <Box component="span">
                       <FormButton
@@ -871,25 +1081,24 @@ export default function WorkspaceTenderWorkflowPage() {
               </Box>
 
               {!comparison ? (
-                <Paper variant="outlined" sx={{ p: 3, borderRadius: 1 }}>
+                <Paper elevation={0} sx={{ p: 4, borderRadius: 2, border: '1px solid #e2e8f0', textAlign: 'center' }}>
                   <Typography variant="body2" color="text.secondary">
-                    Henüz karşılaştırma çalıştırılmadı.
+                    Henüz karşılaştırma çalıştırılmadı. En az 2 teklif dosyası yükleyerek başlayın.
                   </Typography>
                 </Paper>
               ) : comparison.status === 'failed' ? (
-                <Paper variant="outlined" sx={{ p: 3, borderRadius: 1, backgroundColor: '#FFF7ED' }}>
+                <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #fca5a5', backgroundColor: '#FFF7ED' }}>
                   <Typography variant="body2" sx={{ color: '#C2410C', fontWeight: 700 }}>
                     {comparison.errorMessage ?? 'Karşılaştırma tamamlanamadı.'}
                   </Typography>
                 </Paper>
               ) : !comparisonResult ? (
-                <Paper variant="outlined" sx={{ p: 3, borderRadius: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Karşılaştırma sonucu boş.
-                  </Typography>
+                <Paper elevation={0} sx={{ p: 4, borderRadius: 2, border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">Karşılaştırma sonucu boş.</Typography>
                 </Paper>
               ) : (
                 <Stack spacing={2}>
+                  {/* Firm filter chips */}
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     {allComparisonTenantEntries.map(([tenantId, tenantName]) => {
                       const selected = selectedComparisonTenantIds.includes(tenantId);
@@ -900,41 +1109,71 @@ export default function WorkspaceTenderWorkflowPage() {
                           clickable
                           onClick={() => toggleComparisonTenant(tenantId)}
                           variant={selected ? 'filled' : 'outlined'}
-                          sx={{
-                            backgroundColor: selected ? '#1F2937' : '#FFFFFF',
-                            color: selected ? '#FFFFFF' : '#1F2937',
-                            borderColor: '#D1D5DB',
-                          }}
+                          color={selected ? 'primary' : 'default'}
+                          size="small"
                         />
                       );
                     })}
                   </Box>
 
+                  {/* Summary cards */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
                     {[
-                      ['Potansiyel Tasarruf', formatCurrency(comparisonSummary.potentialSavings)],
-                      ['Minimum Toplam', formatCurrency(comparisonSummary.minimumTotal)],
-                      ['Maksimum Toplam', formatCurrency(comparisonSummary.maximumTotal)],
-                      ['En Avantajlı Firma', comparisonSummary.cheapestTenantId ? tenantNames[comparisonSummary.cheapestTenantId] ?? '—' : '—'],
-                    ].map(([label, value]) => (
-                      <Paper key={label} variant="outlined" sx={{ p: 2, borderRadius: 1 }}>
-                        <Typography variant="caption" color="text.secondary">{label}</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 800, mt: 0.5 }}>{value}</Typography>
+                      {
+                        icon: <SavingsIcon fontSize="small" />,
+                        label: 'Potansiyel Tasarruf',
+                        value: formatCurrency(comparisonSummary.potentialSavings),
+                        color: '#10b981',
+                      },
+                      {
+                        icon: <TrendingDownIcon fontSize="small" />,
+                        label: 'Minimum Toplam',
+                        value: formatCurrency(comparisonSummary.minimumTotal),
+                        color: '#3b82f6',
+                      },
+                      {
+                        icon: <TrendingUpIcon fontSize="small" />,
+                        label: 'Maksimum Toplam',
+                        value: formatCurrency(comparisonSummary.maximumTotal),
+                        color: '#ef4444',
+                      },
+                      {
+                        icon: <EmojiEventsIcon fontSize="small" />,
+                        label: 'En Avantajlı Firma',
+                        value: comparisonSummary.cheapestTenantId
+                          ? (tenantNames[comparisonSummary.cheapestTenantId] ?? '—')
+                          : '—',
+                        color: '#f59e0b',
+                      },
+                    ].map(card => (
+                      <Paper
+                        key={card.label}
+                        elevation={0}
+                        sx={{ p: 2, borderRadius: 2, border: '1px solid #e2e8f0', borderLeft: `4px solid ${card.color}` }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Box sx={{ color: card.color, display: 'flex' }}>{card.icon}</Box>
+                          <Typography variant="caption" color="text.secondary">{card.label}</Typography>
+                        </Box>
+                        <Typography variant="body1" fontWeight={700}>{card.value}</Typography>
                       </Paper>
                     ))}
                   </Box>
 
-                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 620 }}>
+                  {/* Comparison table */}
+                  <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: 2, maxHeight: 620 }}>
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
-                          <TableCell>#</TableCell>
-                          <TableCell>Description</TableCell>
-                          <TableCell>Unit</TableCell>
+                          <TableCell sx={{ fontWeight: 600, backgroundColor: '#f8fafc' }}>#</TableCell>
+                          <TableCell sx={{ fontWeight: 600, backgroundColor: '#f8fafc' }}>Tanım</TableCell>
+                          <TableCell sx={{ fontWeight: 600, backgroundColor: '#f8fafc' }}>Birim</TableCell>
                           {comparisonTenantEntries.map(([tenantId, tenantName]) => (
-                            <TableCell key={tenantId}>{tenantName}</TableCell>
+                            <TableCell key={tenantId} sx={{ fontWeight: 600, backgroundColor: '#f8fafc' }}>
+                              {tenantName}
+                            </TableCell>
                           ))}
-                          <TableCell sx={{ minWidth: 260 }}>Not</TableCell>
+                          <TableCell sx={{ minWidth: 260, fontWeight: 600, backgroundColor: '#f8fafc' }}>Not</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -947,7 +1186,7 @@ export default function WorkspaceTenderWorkflowPage() {
                           const maxPrice = rowPrices.length > 0 ? Math.max(...rowPrices) : null;
 
                           return (
-                            <TableRow key={rowNumber}>
+                            <TableRow key={rowNumber} sx={{ '&:nth-of-type(odd)': { backgroundColor: '#fafafa' } }}>
                               <TableCell>{rowNumber}</TableCell>
                               <TableCell>{row.description}</TableCell>
                               <TableCell>{row.unit}</TableCell>
@@ -978,6 +1217,7 @@ export default function WorkspaceTenderWorkflowPage() {
                                       setNotes((current) => ({ ...current, [rowNumber]: event.target.value }))
                                     }
                                     placeholder="Not"
+                                    sx={{ minWidth: 160 }}
                                   />
                                   <FormButton
                                     variant="secondary"
@@ -1000,51 +1240,66 @@ export default function WorkspaceTenderWorkflowPage() {
             </Stack>
           ) : null}
 
+          {/* ── Tab 3: DEĞERLENDİRME ──────────────────────────────────────────── */}
           {activeTab === 3 ? (
             <Stack spacing={3}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Değerlendirme</Typography>
-                  <Typography variant="body2" color="text.secondary">
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <AssignmentTurnedInIcon sx={{ color: '#1E3A5F' }} />
+                  <Typography variant="h6" fontWeight={600}>Değerlendirme</Typography>
+                  <Typography variant="caption" color="text.secondary">
                     Sistem önerilerini inceleyin ve kalemleri firmalara atayın.
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <FormButton variant="secondary" size="sm" onClick={handleApplyRecommendations} disabled={awardRows.length === 0}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleApplyRecommendations}
+                    disabled={awardRows.length === 0}
+                  >
                     Tümünü Öneriye Göre Ata
-                  </FormButton>
-                  <FormButton variant="primary" size="sm" onClick={handleSaveAwards} loading={savingAwards} disabled={awardRows.length === 0}>
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="success"
+                    startIcon={<SaveIcon />}
+                    onClick={() => { void handleSaveAwards(); }}
+                    disabled={savingAwards || awardRows.length === 0}
+                  >
                     Kaydet
-                  </FormButton>
-                  <FormButton
-                    variant="danger"
-                    size="sm"
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    startIcon={<GavelIcon />}
                     onClick={() => setConfirmFinalizeOpen(true)}
-                    loading={finalizing}
-                    disabled={!hasAllAwardStatuses || tender?.status === 'awarded'}
+                    disabled={finalizing || !hasAllAwardStatuses || tender?.status === 'awarded'}
                   >
                     İhaleyi Sonlandır
-                  </FormButton>
+                  </Button>
                 </Box>
               </Box>
 
               {awardRows.length === 0 ? (
-                <Paper variant="outlined" sx={{ p: 3, borderRadius: 1 }}>
+                <Paper elevation={0} sx={{ p: 4, borderRadius: 2, border: '1px solid #e2e8f0', textAlign: 'center' }}>
                   <Typography variant="body2" color="text.secondary">
                     Değerlendirme için önce karşılaştırma çalıştırın.
                   </Typography>
                 </Paper>
               ) : (
-                <TableContainer component={Paper} variant="outlined">
+                <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid #e2e8f0', borderRadius: 2 }}>
                   <Table size="small">
                     <TableHead>
-                      <TableRow>
-                        <TableCell>#</TableCell>
-                        <TableCell>Description</TableCell>
-                        <TableCell>System Recommendation</TableCell>
-                        <TableCell>Assigned Firm</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Note</TableCell>
+                      <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+                        <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Tanım</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Sistem Önerisi</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Atanan Firma</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Durum</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Not</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1065,6 +1320,7 @@ export default function WorkspaceTenderWorkflowPage() {
                                     backgroundColor: recommendationMeta.backgroundColor,
                                     color: recommendationMeta.color,
                                     fontWeight: 700,
+                                    fontSize: '11px',
                                   }}
                                 />
                                 <Typography variant="caption" color="text.secondary">
@@ -1086,9 +1342,7 @@ export default function WorkspaceTenderWorkflowPage() {
                               >
                                 <MenuItem value="">—</MenuItem>
                                 {Object.entries(tenantNames).map(([tenantId, tenantName]) => (
-                                  <MenuItem key={tenantId} value={tenantId}>
-                                    {tenantName}
-                                  </MenuItem>
+                                  <MenuItem key={tenantId} value={tenantId}>{tenantName}</MenuItem>
                                 ))}
                               </Select>
                             </TableCell>
@@ -1107,9 +1361,7 @@ export default function WorkspaceTenderWorkflowPage() {
                               >
                                 <MenuItem value="">Durum seçin</MenuItem>
                                 {awardStatusOptions.map((option) => (
-                                  <MenuItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </MenuItem>
+                                  <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                                 ))}
                               </Select>
                             </TableCell>
@@ -1133,33 +1385,56 @@ export default function WorkspaceTenderWorkflowPage() {
                   </Table>
                 </TableContainer>
               )}
+            </Stack>
+          ) : null}
 
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>Audit Log</Typography>
-                {auditLogs.length === 0 ? (
+          {/* ── Tab 4: AUDİT LOG ──────────────────────────────────────────────── */}
+          {activeTab === 4 ? (
+            <Stack spacing={0}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                <HistoryIcon sx={{ color: '#1E3A5F' }} />
+                <Typography variant="h6" fontWeight={600}>Aktivite Geçmişi</Typography>
+              </Box>
+              {auditLogs.length === 0 ? (
+                <Paper elevation={0} sx={{ p: 4, borderRadius: 2, border: '1px solid #e2e8f0', textAlign: 'center' }}>
                   <Typography variant="body2" color="text.secondary">
                     Henüz aktivite kaydı bulunmuyor.
                   </Typography>
-                ) : (
-                  <Stack spacing={1.5}>
-                    {auditLogs.map((log) => (
-                      <Box key={log.id} sx={{ borderBottom: '1px solid #E5E7EB', pb: 1.5, '&:last-child': { borderBottom: 'none', pb: 0 } }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {new Date(log.createdAt).toLocaleString('tr-TR')} · {log.createdByName ?? log.createdBy}
+                </Paper>
+              ) : (
+                auditLogs.map((log) => (
+                  <Box
+                    key={log.id}
+                    sx={{ display: 'flex', gap: 2, pb: 2, mb: 1, borderBottom: '1px solid #f1f5f9' }}
+                  >
+                    <Box sx={{
+                      width: 36, height: 36, borderRadius: '50%',
+                      backgroundColor: '#e8f0f7', display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <HistoryIcon sx={{ color: '#1E3A5F', fontSize: 18 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>{auditActionLabel(log.action)}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(log.createdAt).toLocaleString('tr-TR')} · {log.createdByName ?? log.createdBy}
+                      </Typography>
+                      {log.details && formatLogDetails(log.details) && (
+                        <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {formatLogDetails(log.details)}
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {translateAuditLog(log)}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-                )}
-              </Paper>
+                      )}
+                    </Box>
+                  </Box>
+                ))
+              )}
             </Stack>
           ) : null}
-        </CardContent>
-      </Card>
 
+        </Box>
+      </Paper>
+
+      {/* ── Dialogs ───────────────────────────────────────────────────────────── */}
       <ConfirmationDialog
         open={!!deleteTarget}
         title="Dosya Sil"

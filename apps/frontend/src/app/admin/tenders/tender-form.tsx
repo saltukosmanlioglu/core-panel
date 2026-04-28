@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,6 +8,10 @@ import { z } from 'zod';
 import {
   Box,
   Card,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   Paper,
@@ -17,10 +21,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
-import { Add as AddIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import Grid from '@mui/material/GridLegacy';
+import { Add as AddIcon, ArrowBack as ArrowBackIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { FormInput, FormButton, FormSelect } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { getCategoriesApi } from '@/services/categories/api';
@@ -49,11 +53,31 @@ interface ItemRow {
   location: string;
 }
 
+const UNIT_OPTIONS = [
+  { value: 'm2', label: 'm² (Metrekare)' },
+  { value: 'm3', label: 'm³ (Metreküp)' },
+  { value: 'mt', label: 'Metretül' },
+  { value: 'adet', label: 'Adet' },
+  { value: 'kg', label: 'Kilogram (kg)' },
+  { value: 'ton', label: 'Ton' },
+  { value: 'm', label: 'Metre (m)' },
+  { value: 'lt', label: 'Litre (lt)' },
+];
+
 const statusOptions = [
   { label: 'Taslak', value: 'draft' },
   { label: 'Açık', value: 'open' },
   { label: 'Kapalı', value: 'closed' },
 ];
+
+const emptyItemDraft: ItemRow = {
+  tempId: '',
+  posNo: '',
+  description: '',
+  unit: '',
+  quantity: '',
+  location: '',
+};
 
 export function TenderForm({ id }: { id?: string }) {
   const router = useRouter();
@@ -63,11 +87,13 @@ export function TenderForm({ id }: { id?: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
-  const [focusItemId, setFocusItemId] = useState<string | null>(null);
+  const [itemDialogOpen, setItemDialogOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [itemDraft, setItemDraft] = useState<ItemRow>(emptyItemDraft);
+  const [itemDialogError, setItemDialogError] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const descriptionRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
@@ -112,38 +138,77 @@ export function TenderForm({ id }: { id?: string }) {
       .finally(() => setFetchLoading(false));
   }, [id, reset, router]);
 
-  useEffect(() => {
-    if (!focusItemId) {
+  const removeItem = (tempId: string) => {
+    setItems((prev) => prev.filter((item) => item.tempId !== tempId));
+  };
+
+  const updateItemDraft = (field: keyof ItemRow, value: string) => {
+    setItemDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const openAddItemDialog = () => {
+    setEditingItemId(null);
+    setItemDraft({ ...emptyItemDraft, tempId: Math.random().toString(36).slice(2) });
+    setItemDialogError('');
+    setItemDialogOpen(true);
+  };
+
+  const openEditItemDialog = (item: ItemRow) => {
+    setEditingItemId(item.tempId);
+    setItemDraft({ ...item });
+    setItemDialogError('');
+    setItemDialogOpen(true);
+  };
+
+  const closeItemDialog = () => {
+    setItemDialogOpen(false);
+    setEditingItemId(null);
+    setItemDraft(emptyItemDraft);
+    setItemDialogError('');
+  };
+
+  const getSingleItemValidationMessage = (item: ItemRow) => {
+    const quantity = Number(item.quantity);
+
+    if (!item.description.trim()) {
+      return 'Açıklama zorunludur';
+    }
+
+    if (!item.unit.trim()) {
+      return 'Birim zorunludur';
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return 'Miktar pozitif olmalıdır';
+    }
+
+    return null;
+  };
+
+  const saveItemDraft = () => {
+    const itemError = getSingleItemValidationMessage(itemDraft);
+
+    if (itemError) {
+      setItemDialogError(itemError);
       return;
     }
 
-    descriptionRefs.current[focusItemId]?.focus();
-    setFocusItemId(null);
-  }, [focusItemId, items.length]);
+    const nextItem = {
+      ...itemDraft,
+      posNo: itemDraft.posNo.trim(),
+      description: itemDraft.description.trim(),
+      unit: itemDraft.unit.trim(),
+      quantity: itemDraft.quantity.trim(),
+      location: itemDraft.location.trim(),
+    };
 
-  const addItem = () => {
-    const tempId = Math.random().toString(36).slice(2);
-    setItems((prev) => [
-      ...prev,
-      {
-        tempId,
-        posNo: '',
-        description: '',
-        unit: '',
-        quantity: '',
-        location: '',
-      },
-    ]);
-    setFocusItemId(tempId);
-  };
+    if (editingItemId) {
+      setItems((prev) => prev.map((item) => (item.tempId === editingItemId ? nextItem : item)));
+    } else {
+      setItems((prev) => [...prev, nextItem]);
+    }
 
-  const removeItem = (tempId: string) => {
-    setItems((prev) => prev.filter((item) => item.tempId !== tempId));
-    delete descriptionRefs.current[tempId];
-  };
-
-  const updateItem = (tempId: string, field: keyof ItemRow, value: string) => {
-    setItems((prev) => prev.map((item) => (item.tempId === tempId ? { ...item, [field]: value } : item)));
+    closeItemDialog();
   };
 
   const getItemValidationMessage = () => {
@@ -263,64 +328,106 @@ export function TenderForm({ id }: { id?: string }) {
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Box className="flex flex-col gap-4">
-              <Controller
-                name="projectId"
-                control={control}
-                render={({ field }) => (
-                  <FormSelect
-                    label="İnşaat"
-                    options={projectOptions}
-                    error={!!errors.projectId}
-                    errorMessage={errors.projectId?.message}
-                    value={field.value ?? ''}
-                    onChange={field.onChange}
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="projectId"
+                    control={control}
+                    render={({ field }) => (
+                      <FormSelect
+                        label="İnşaat"
+                        options={projectOptions}
+                        error={!!errors.projectId}
+                        errorMessage={errors.projectId?.message}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
-                )}
-              />
-              <Controller
-                name="categoryId"
-                control={control}
-                render={({ field }) => (
-                  <FormSelect
-                    label="Kategori"
-                    options={categoryOptions}
-                    error={!!errors.categoryId}
-                    errorMessage={errors.categoryId?.message}
-                    value={field.value ?? ''}
-                    onChange={field.onChange}
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="categoryId"
+                    control={control}
+                    render={({ field }) => (
+                      <FormSelect
+                        label="Kategori"
+                        options={categoryOptions}
+                        error={!!errors.categoryId}
+                        errorMessage={errors.categoryId?.message}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
-                )}
-              />
-              <FormInput label="Başlık" error={!!errors.title} errorMessage={errors.title?.message} {...register('title')} />
-              <FormInput label="Açıklama" error={!!errors.description} errorMessage={errors.description?.message} {...register('description')} />
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-                <Controller
-                  name="status"
-                  control={control}
-                  render={({ field }) => (
-                    <FormSelect
-                      label="Durum"
-                      options={statusOptions}
-                      error={!!errors.status}
-                      errorMessage={errors.status?.message}
-                      value={field.value ?? ''}
-                      onChange={field.onChange}
-                    />
-                  )}
-                />
-                <FormInput
-                  label="Son Tarih"
-                  type="datetime-local"
-                  error={!!errors.deadline}
-                  errorMessage={errors.deadline?.message}
-                  {...register('deadline')}
-                />
-              </Box>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormInput
+                    label="Başlık"
+                    error={!!errors.title}
+                    errorMessage={errors.title?.message}
+                    {...register('title')}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="status"
+                    control={control}
+                    render={({ field }) => (
+                      <FormSelect
+                        label="Durum"
+                        options={statusOptions}
+                        error={!!errors.status}
+                        errorMessage={errors.status?.message}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <FormInput
+                    label="Son Tarih"
+                    type="datetime-local"
+                    error={!!errors.deadline}
+                    errorMessage={errors.deadline?.message}
+                    {...register('deadline')}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6} />
+                <Grid item xs={12}>
+                  <FormInput
+                    label="Açıklama"
+                    multiline
+                    rows={3}
+                    fullWidth
+                    error={!!errors.description}
+                    errorMessage={errors.description?.message}
+                    {...register('description')}
+                  />
+                </Grid>
+              </Grid>
               <Divider sx={{ my: 1 }} />
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                  İş Kalemleri
-                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      İş Kalemleri
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#6B7280' }}>
+                      {items.length} kalem
+                    </Typography>
+                  </Box>
+                  <FormButton
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                    onClick={openAddItemDialog}
+                  >
+                    Kalem Ekle
+                  </FormButton>
+                </Box>
                 <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
                   <Table size="small">
                     <TableHead>
@@ -331,7 +438,7 @@ export function TenderForm({ id }: { id?: string }) {
                         <TableCell sx={{ minWidth: 100, fontWeight: 700 }}>Unit</TableCell>
                         <TableCell sx={{ minWidth: 120, fontWeight: 700 }}>Quantity</TableCell>
                         <TableCell sx={{ minWidth: 160, fontWeight: 700 }}>Location</TableCell>
-                        <TableCell sx={{ width: 56 }} />
+                        <TableCell align="right" sx={{ width: 96, fontWeight: 700 }}>Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -351,60 +458,20 @@ export function TenderForm({ id }: { id?: string }) {
                                 {index + 1}
                               </Typography>
                             </TableCell>
-                            <TableCell>
-                              <TextField
+                            <TableCell>{item.posNo || '—'}</TableCell>
+                            <TableCell>{item.description}</TableCell>
+                            <TableCell>{UNIT_OPTIONS.find((option) => option.value === item.unit)?.label ?? item.unit}</TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell>{item.location || '—'}</TableCell>
+                            <TableCell align="right">
+                              <IconButton
+                                color="primary"
                                 size="small"
-                                variant="standard"
-                                fullWidth
-                                value={item.posNo}
-                                onChange={(event) => updateItem(item.tempId, 'posNo', event.target.value)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                variant="standard"
-                                fullWidth
-                                required
-                                value={item.description}
-                                inputRef={(element) => {
-                                  descriptionRefs.current[item.tempId] = element;
-                                }}
-                                onChange={(event) => updateItem(item.tempId, 'description', event.target.value)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                variant="standard"
-                                fullWidth
-                                required
-                                value={item.unit}
-                                onChange={(event) => updateItem(item.tempId, 'unit', event.target.value)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                variant="standard"
-                                fullWidth
-                                required
-                                type="number"
-                                inputProps={{ min: 0.001, step: 0.001 }}
-                                value={item.quantity}
-                                onChange={(event) => updateItem(item.tempId, 'quantity', event.target.value)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                variant="standard"
-                                fullWidth
-                                value={item.location}
-                                onChange={(event) => updateItem(item.tempId, 'location', event.target.value)}
-                              />
-                            </TableCell>
-                            <TableCell align="center">
+                                aria-label="edit item"
+                                onClick={() => openEditItemDialog(item)}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
                               <IconButton
                                 color="error"
                                 size="small"
@@ -420,16 +487,6 @@ export function TenderForm({ id }: { id?: string }) {
                     </TableBody>
                   </Table>
                 </TableContainer>
-                <FormButton
-                  variant="secondary"
-                  size="sm"
-                  type="button"
-                  startIcon={<AddIcon sx={{ fontSize: 16 }} />}
-                  onClick={addItem}
-                  sx={{ mt: 2 }}
-                >
-                  Add Item
-                </FormButton>
               </Box>
               <Divider sx={{ my: 1 }} />
               <Box className="flex justify-end gap-2">
@@ -444,6 +501,58 @@ export function TenderForm({ id }: { id?: string }) {
           </form>
         )}
       </Card>
+
+      <Dialog open={itemDialogOpen} onClose={closeItemDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
+          {editingItemId ? 'Kalem Düzenle' : 'Yeni Kalem'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <FormInput
+            label="Pos No"
+            value={itemDraft.posNo}
+            onChange={(event) => updateItemDraft('posNo', event.target.value)}
+          />
+          <FormInput
+            label="Description"
+            multiline
+            rows={3}
+            value={itemDraft.description}
+            onChange={(event) => updateItemDraft('description', event.target.value)}
+          />
+          <FormSelect
+            label="Unit"
+            options={UNIT_OPTIONS}
+            placeholder="Birim seç"
+            value={itemDraft.unit}
+            onChange={(event) => updateItemDraft('unit', String(event.target.value))}
+          />
+          <FormInput
+            label="Quantity"
+            type="number"
+            value={itemDraft.quantity}
+            inputProps={{ min: 0.001, step: 0.001 }}
+            onChange={(event) => updateItemDraft('quantity', event.target.value)}
+          />
+          <FormInput
+            label="Location"
+            value={itemDraft.location}
+            onChange={(event) => updateItemDraft('location', event.target.value)}
+          />
+          {itemDialogError ? (
+            <Typography variant="body2" sx={{ color: '#EF4444' }}>
+              {itemDialogError}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+          <FormButton variant="secondary" size="sm" type="button" onClick={closeItemDialog}>
+            İptal
+          </FormButton>
+          <FormButton variant="primary" size="sm" type="button" onClick={saveItemDraft}>
+            Kaydet
+          </FormButton>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmationDialog
         open={confirmOpen}

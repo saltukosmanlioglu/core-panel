@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Chip, Typography } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { Add as AddIcon, Delete as DeleteIcon, Download as DownloadIcon, Edit as EditIcon } from '@mui/icons-material';
 import { FormButton } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
+import { getCompaniesApi } from '@/services/admin/api';
 import { getTendersApi, deleteTenderApi } from '@/services/workspace/api';
+import { getTenderItemsApi } from '@/services/tender-items/api';
+import { exportTenderForm } from '@/utils/exportTenderForm';
 import type { Tender } from '@core-panel/shared';
 import axios from 'axios';
 
@@ -24,6 +27,7 @@ export default function AdminTendersPage() {
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Tender | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [companyName, setCompanyName] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   const load = () => {
@@ -38,6 +42,35 @@ export default function AdminTendersPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    getCompaniesApi().then(companies => {
+      setCompanyName(companies[0]?.name ?? '');
+    }).catch(() => undefined);
+  }, []);
+
+  const handleExportTender = async (tender: Tender) => {
+    try {
+      const items = await getTenderItemsApi(tender.id);
+      await exportTenderForm({
+        tenderTitle: tender.title,
+        projectName: tender.projectName ?? '',
+        categoryName: tender.categoryName ?? '',
+        deadline: tender.deadline ?? null,
+        companyName,
+        items: items.map(item => ({
+          rowNo: item.rowNo,
+          posNo: item.posNo ?? null,
+          description: item.description,
+          unit: item.unit,
+          quantity: Number(item.quantity),
+          location: item.location ?? null,
+        })),
+      });
+    } catch {
+      setSnackbar({ open: true, message: 'Excel indirilemedi', severity: 'error' });
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -93,6 +126,7 @@ export default function AdminTendersPage() {
             },
           ]}
           actions={[
+            { label: 'Teklif Formu İndir', icon: <DownloadIcon fontSize="small" />, onClick: (r) => { void handleExportTender(r); } },
             { label: 'Düzenle', icon: <EditIcon fontSize="small" />, onClick: (r) => router.push(`/admin/tenders/${r.id}/edit`), color: 'primary' },
             { label: 'Sil', icon: <DeleteIcon fontSize="small" />, onClick: (r) => setDeleteTarget(r), color: 'error' },
           ]}
