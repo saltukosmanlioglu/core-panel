@@ -3,7 +3,6 @@ import type { Company, Tenant, User, FileInfo, FileListResponse } from '@core-pa
 import { apiClient } from '../api-client';
 import type {
   AdminStats,
-  CompanyPayload,
   CreateAdminUserPayload,
   CreateFilePayload,
   FileQueryParams,
@@ -63,16 +62,6 @@ export async function getCompaniesApi(): Promise<Company[]> {
   return result.data;
 }
 
-export async function getCompanyApi(id: string): Promise<Company> {
-  const res = await apiClient.get(`/api/companies/${id}`);
-  return (res.data as { company: Company }).company;
-}
-
-export async function createCompanyApi(data: CompanyPayload): Promise<Company> {
-  const res = await apiClient.post('/api/companies', data);
-  return (res.data as { company: Company }).company;
-}
-
 export async function updateCompanyApi(
   id: string,
   data: { name: string },
@@ -88,10 +77,6 @@ export async function uploadCompanyLogoApi(id: string, file: File): Promise<Comp
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return (res.data as { company: Company }).company;
-}
-
-export async function deleteCompanyApi(id: string): Promise<void> {
-  await apiClient.delete(`/api/companies/${id}`);
 }
 
 export async function getTenantsApi(): Promise<Tenant[]> {

@@ -13,9 +13,10 @@ import {
   updateMaterialSupplierApi,
   type MaterialSupplier,
 } from '@/services/material-suppliers/api';
-import { getCategoriesApi, getSupplierCategoriesApi, updateSupplierCategoriesApi } from '@/services/categories/api';
+import { getCategoriesApi, getSupplierCategoriesApi, getSupplierCategoriesBatchApi, updateSupplierCategoriesApi } from '@/services/categories/api';
 import type { Category } from '@core-panel/shared';
-import axios from 'axios';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 
 interface SupplierFormData {
   name: string;
@@ -34,21 +35,11 @@ export default function MaterialSuppliersPage() {
   const [formData, setFormData] = useState<SupplierFormData>({ name: '', contactName: '', contactPhone: '', categoryIds: [] });
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const loadSupplierCategoryMap = async (supplierList: MaterialSupplier[]): Promise<Record<string, string[]>> => {
-    const entries = await Promise.all(
-      supplierList.map(async (supplier) => {
-        try {
-          const categoryIds = await getSupplierCategoriesApi(supplier.id);
-          return [supplier.id, categoryIds] as const;
-        } catch {
-          return [supplier.id, []] as const;
-        }
-      }),
-    );
-
-    return Object.fromEntries(entries);
+    if (supplierList.length === 0) return {};
+    return getSupplierCategoriesBatchApi(supplierList.map((s) => s.id));
   };
 
   const load = async () => {
@@ -60,8 +51,7 @@ export default function MaterialSuppliersPage() {
       setCategories(catsRes);
       setSupplierCategoryMap(categoryMap);
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      showError(getErrorMessage(err, 'Yüklenemedi'));
     } finally {
       setLoading(false);
     }
@@ -87,7 +77,7 @@ export default function MaterialSuppliersPage() {
       });
       setModalOpen(true);
     } catch {
-      setSnackbar({ open: true, message: 'Kategori bilgileri alınamadı', severity: 'error' });
+      showError('Kategori bilgileri alınamadı');
     }
   };
 
@@ -113,10 +103,9 @@ export default function MaterialSuppliersPage() {
       await updateSupplierCategoriesApi(supplierId, formData.categoryIds);
       handleClose();
       void load();
-      setSnackbar({ open: true, message: editingSupplier ? 'Malzemeci güncellendi' : 'Malzemeci eklendi', severity: 'success' });
+      showSuccess(editingSupplier ? 'Malzemeci güncellendi' : 'Malzemeci eklendi');
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Bir hata oluştu';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      showError(err?.response?.data?.message ?? 'Bir hata oluştu');
     } finally {
       setSaving(false);
     }
@@ -126,11 +115,11 @@ export default function MaterialSuppliersPage() {
     if (!deleteId) return;
     try {
       await deleteMaterialSupplierApi(deleteId);
-      setSnackbar({ open: true, message: 'Malzemeci silindi', severity: 'success' });
+      showSuccess('Malzemeci silindi');
       setDeleteId(null);
       void load();
     } catch {
-      setSnackbar({ open: true, message: 'Silme işlemi başarısız', severity: 'error' });
+      showError('Silme işlemi başarısız');
     }
   };
 
@@ -257,7 +246,7 @@ export default function MaterialSuppliersPage() {
         onCancel={() => setDeleteId(null)}
         confirmLabel="Sil"
       />
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
+      <Notification {...notificationProps} />
     </Box>
   );
 }

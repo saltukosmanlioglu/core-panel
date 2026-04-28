@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
-  Chip,
   CircularProgress,
   Paper,
   Table,
@@ -15,17 +14,14 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
+import { Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
+import { TenderStatusChip } from '@/components/tender-status-chip';
 import { getTenderItemsApi } from '@/services/tender-items/api';
 import { getTendersApi } from '@/services/workspace/api';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 import type { Tender } from '@core-panel/shared';
-
-const statusColors: Record<string, { backgroundColor: string; color: string }> = {
-  draft: { backgroundColor: '#F3F4F6', color: '#6B7280' },
-  open: { backgroundColor: '#DCFCE7', color: '#15803D' },
-  closed: { backgroundColor: '#FEF3C7', color: '#92400E' },
-  awarded: { backgroundColor: '#DBEAFE', color: '#1D4ED8' },
-};
 
 export default function ProjectTendersPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +29,7 @@ export default function ProjectTendersPage() {
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const { showError, notificationProps } = useSnackbar();
 
   useEffect(() => {
     let active = true;
@@ -54,6 +51,8 @@ export default function ProjectTendersPage() {
 
         setTenders(projectTenders);
         setItemCounts(Object.fromEntries(countEntries));
+      } catch (err: unknown) {
+        showError(getErrorMessage(err, 'İhaleler yüklenemedi'));
       } finally {
         if (active) {
           setLoading(false);
@@ -85,12 +84,12 @@ export default function ProjectTendersPage() {
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>Title</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Deadline</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Items</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Başlık</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Kategori</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Durum</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Son Tarih</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Kalem</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700 }}>İşlemler</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -109,10 +108,7 @@ export default function ProjectTendersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              tenders.map((tender) => {
-                const colors = statusColors[tender.status] ?? statusColors.draft;
-
-                return (
+              tenders.map((tender) => (
                   <TableRow key={tender.id} hover>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -121,13 +117,10 @@ export default function ProjectTendersPage() {
                     </TableCell>
                     <TableCell>{tender.categoryName ?? '—'}</TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={tender.status}
-                        sx={{ ...colors, fontWeight: 700 }}
-                      />
+                      <TenderStatusChip status={tender.status} />
                     </TableCell>
                     <TableCell>{tender.deadline ? new Date(tender.deadline).toLocaleDateString('tr-TR') : '—'}</TableCell>
+
                     <TableCell>{itemCounts[tender.id] ?? 0}</TableCell>
                     <TableCell align="right">
                       <FormButton
@@ -139,12 +132,12 @@ export default function ProjectTendersPage() {
                       </FormButton>
                     </TableCell>
                   </TableRow>
-                );
-              })
+              ))
             )}
           </TableBody>
         </Table>
       </TableContainer>
+      <Notification {...notificationProps} />
     </Box>
   );
 }

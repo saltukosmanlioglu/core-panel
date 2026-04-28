@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { Box, Skeleton, Typography } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
@@ -9,6 +10,7 @@ import {
   ChevronRight as ChevronRightIcon,
   HomeWork as HomeWorkIcon,
 } from '@mui/icons-material';
+import { Notification } from '@/components';
 import { WorkspaceLayout } from '@/components/layout/workspace-layout';
 import { getTenantsApi } from '@/services/admin/api';
 import { getProjectsApi, getTendersApi } from '@/services/workspace/api';
@@ -157,10 +159,17 @@ export default function DashboardProjectsPage() {
   const [projectTenderCounts, setProjectTenderCounts] = useState<Record<string, number>>({});
   const [tenantCount, setTenantCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as const });
 
   useEffect(() => {
     getProjectsApi()
       .then(setProjects)
+      .catch((err: unknown) => {
+        const msg = axios.isAxiosError(err)
+          ? ((err.response?.data as { error?: string })?.error ?? 'İnşaatlar yüklenemedi')
+          : 'İnşaatlar yüklenemedi';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -236,6 +245,7 @@ export default function DashboardProjectsPage() {
           }
         </Box>
       </Box>
+      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </WorkspaceLayout>
   );
 }

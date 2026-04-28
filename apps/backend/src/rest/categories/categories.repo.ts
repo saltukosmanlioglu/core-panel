@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../../db/connection';
 import { categories, tenantCategories, materialSupplierCategories } from '../../db/schema';
 import type { Category } from '../../db/schema';
@@ -77,6 +77,34 @@ export const findCategoriesBySupplierId = async (supplierId: string): Promise<st
     .from(materialSupplierCategories)
     .where(eq(materialSupplierCategories.supplierId, supplierId));
   return result.map((row) => row.categoryId);
+};
+
+export const findCategoriesByTenantIds = async (tenantIds: string[]): Promise<Record<string, string[]>> => {
+  if (tenantIds.length === 0) return {};
+  const result = await db
+    .select({ tenantId: tenantCategories.tenantId, categoryId: tenantCategories.categoryId })
+    .from(tenantCategories)
+    .where(inArray(tenantCategories.tenantId, tenantIds));
+  const map: Record<string, string[]> = {};
+  for (const row of result) {
+    if (!map[row.tenantId]) map[row.tenantId] = [];
+    map[row.tenantId]!.push(row.categoryId);
+  }
+  return map;
+};
+
+export const findCategoriesBySupplierIds = async (supplierIds: string[]): Promise<Record<string, string[]>> => {
+  if (supplierIds.length === 0) return {};
+  const result = await db
+    .select({ supplierId: materialSupplierCategories.supplierId, categoryId: materialSupplierCategories.categoryId })
+    .from(materialSupplierCategories)
+    .where(inArray(materialSupplierCategories.supplierId, supplierIds));
+  const map: Record<string, string[]> = {};
+  for (const row of result) {
+    if (!map[row.supplierId]) map[row.supplierId] = [];
+    map[row.supplierId]!.push(row.categoryId);
+  }
+  return map;
 };
 
 export const replaceSupplierCategories = async (

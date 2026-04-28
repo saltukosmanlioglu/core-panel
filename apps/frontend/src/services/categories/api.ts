@@ -50,3 +50,17 @@ export const getTenantsByCategoryApi = async (categoryId: string): Promise<strin
   const res = await apiClient.get(`/api/categories/${categoryId}/tenants`);
   return (res.data as { tenantIds: string[] }).tenantIds;
 };
+
+export const getTenantCategoriesBatchApi = async (tenantIds: string[]): Promise<Record<string, string[]>> => {
+  const res = await apiClient.get<Record<string, string[]>>('/api/categories/tenants/batch', {
+    params: { tenantIds: tenantIds.join(',') },
+  });
+  return res.data;
+};
+
+export const getSupplierCategoriesBatchApi = async (supplierIds: string[]): Promise<Record<string, string[]>> => {
+  const res = await apiClient.get<Record<string, string[]>>('/api/categories/suppliers/batch', {
+    params: { supplierIds: supplierIds.join(',') },
+  });
+  return res.data;
+};

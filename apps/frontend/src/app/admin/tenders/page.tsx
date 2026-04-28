@@ -2,24 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon, Download as DownloadIcon, Edit as EditIcon } from '@mui/icons-material';
 import { FormButton } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
+import { TenderStatusChip } from '@/components/tender-status-chip';
 import { getCompaniesApi } from '@/services/admin/api';
 import { getTendersApi, deleteTenderApi } from '@/services/workspace/api';
 import { getTenderItemsApi } from '@/services/tender-items/api';
 import { exportTenderForm } from '@/utils/exportTenderForm';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 import type { Tender } from '@core-panel/shared';
-import axios from 'axios';
-
-const statusColors: Record<string, { bg: string; color: string }> = {
-  draft: { bg: '#F3F4F6', color: '#6B7280' },
-  open: { bg: '#DCFCE7', color: '#15803D' },
-  closed: { bg: '#FEF3C7', color: '#92400E' },
-  awarded: { bg: '#DBEAFE', color: '#1D4ED8' },
-};
 
 export default function AdminTendersPage() {
   const router = useRouter();
@@ -28,16 +23,13 @@ export default function AdminTendersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Tender | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [companyName, setCompanyName] = useState('');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const load = () => {
     setLoading(true);
     getTendersApi()
       .then(setTenders)
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
+      .catch((err: unknown) => showError(getErrorMessage(err, 'Yüklenemedi')))
       .finally(() => setLoading(false));
   };
 
@@ -68,7 +60,7 @@ export default function AdminTendersPage() {
         })),
       });
     } catch {
-      setSnackbar({ open: true, message: 'Excel indirilemedi', severity: 'error' });
+      showError('Excel indirilemedi');
     }
   };
 
@@ -77,12 +69,11 @@ export default function AdminTendersPage() {
     setDeleting(true);
     try {
       await deleteTenderApi(deleteTarget.id);
-      setSnackbar({ open: true, message: `"${deleteTarget.title}" silindi`, severity: 'success' });
+      showSuccess(`"${deleteTarget.title}" silindi`);
       setDeleteTarget(null);
       load();
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Silinemedi') : 'Silinemedi';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      showError(getErrorMessage(err, 'Silinemedi'));
     } finally {
       setDeleting(false);
     }
@@ -115,14 +106,11 @@ export default function AdminTendersPage() {
             },
             {
               field: 'status', headerName: 'Durum', width: 120, sortable: true,
-              renderCell: (r) => (
-                <Chip label={r.status.charAt(0).toUpperCase() + r.status.slice(1)} size="small"
-                  sx={{ ...(statusColors[r.status] ?? statusColors.draft), fontWeight: 600, fontSize: '11px' }} />
-              ),
+              renderCell: (r) => <TenderStatusChip status={r.status} />,
             },
             {
               field: 'deadline', headerName: 'Son Tarih', width: 120, sortable: true,
-              renderCell: (r) => <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>{r.deadline ? new Date(r.deadline).toLocaleDateString() : '—'}</Typography>,
+              renderCell: (r) => <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>{r.deadline ? new Date(r.deadline).toLocaleDateString('tr-TR') : '—'}</Typography>,
             },
           ]}
           actions={[
@@ -142,7 +130,7 @@ export default function AdminTendersPage() {
           loading={deleting}
           confirmLabel="Sil"
         />
-        <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
+        <Notification {...notificationProps} />
     </Box>
   );
 }

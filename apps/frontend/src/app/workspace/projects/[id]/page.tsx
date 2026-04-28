@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import axios from 'axios';
 import { Box, Card, CircularProgress, Typography } from '@mui/material';
 import { Gavel as GavelIcon, CheckCircle as CheckIcon, HourglassEmpty as PendingIcon } from '@mui/icons-material';
+import { Notification } from '@/components';
 import { getTendersApi } from '@/services/workspace/api';
 import type { Tender } from '@core-panel/shared';
 
@@ -29,10 +31,17 @@ export default function ProjectOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as const });
 
   useEffect(() => {
-    getTendersApi()
-      .then((all) => setTenders(all.filter((t) => t.projectId === id)))
+    getTendersApi({ projectId: id })
+      .then(setTenders)
+      .catch((err: unknown) => {
+        const msg = axios.isAxiosError(err)
+          ? ((err.response?.data as { error?: string })?.error ?? 'Proje verileri yüklenemedi')
+          : 'Proje verileri yüklenemedi';
+        setSnackbar({ open: true, message: msg, severity: 'error' });
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -48,10 +57,13 @@ export default function ProjectOverviewPage() {
   }
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
-      <StatCard icon={<GavelIcon sx={{ fontSize: 24 }} />}   label="Toplam İhale"   value={tenders.length}                  color="#1F2937" />
-      <StatCard icon={<PendingIcon sx={{ fontSize: 24 }} />} label="Açık İhale"     value={openCount}                       color="#3B82F6" />
-      <StatCard icon={<CheckIcon sx={{ fontSize: 24 }} />}   label="Verilmiş İhale" value={awardedCount}                    color="#10B981" />
-    </Box>
+    <>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
+        <StatCard icon={<GavelIcon sx={{ fontSize: 24 }} />}   label="Toplam İhale"   value={tenders.length}                  color="#1F2937" />
+        <StatCard icon={<PendingIcon sx={{ fontSize: 24 }} />} label="Açık İhale"     value={openCount}                       color="#3B82F6" />
+        <StatCard icon={<CheckIcon sx={{ fontSize: 24 }} />}   label="Verilmiş İhale" value={awardedCount}                    color="#10B981" />
+      </Box>
+      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
+    </>
   );
 }

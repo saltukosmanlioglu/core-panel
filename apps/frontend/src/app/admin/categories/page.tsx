@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import {
   Box,
   Button,
@@ -28,12 +27,8 @@ import {
   getCategoriesApi,
   updateCategoryApi,
 } from '@/services/categories/api';
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return axios.isAxiosError(error)
-    ? ((error.response?.data as { error?: string })?.error ?? fallback)
-    : fallback;
-}
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -43,17 +38,14 @@ export default function CategoriesPage() {
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-
-  const showSnackbar = (message: string, severity: 'success' | 'error' = 'success') =>
-    setSnackbar({ open: true, message, severity });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const fetchCategories = () => {
     setLoading(true);
     getCategoriesApi()
       .then(setCategories)
       .catch((error) => {
-        showSnackbar(getErrorMessage(error, 'Kategoriler yüklenemedi'), 'error');
+        showError(getErrorMessage(error, 'Kategoriler yüklenemedi'));
       })
       .finally(() => setLoading(false));
   };
@@ -70,15 +62,15 @@ export default function CategoriesPage() {
     try {
       if (editingCategory) {
         await updateCategoryApi(editingCategory.id, { name });
-        showSnackbar('Kategori güncellendi');
+        showSuccess('Kategori güncellendi');
       } else {
         await createCategoryApi({ name });
-        showSnackbar('Kategori eklendi');
+        showSuccess('Kategori eklendi');
       }
       handleClose();
       fetchCategories();
     } catch (error: any) {
-      showSnackbar(getErrorMessage(error, 'Bir hata oluştu'), 'error');
+      showError(getErrorMessage(error, 'Bir hata oluştu'));
     } finally {
       setSaving(false);
     }
@@ -90,9 +82,9 @@ export default function CategoriesPage() {
       await deleteCategoryApi(deleteId);
       setDeleteId(null);
       fetchCategories();
-      showSnackbar('Kategori silindi');
+      showSuccess('Kategori silindi');
     } catch {
-      showSnackbar('Silinemedi', 'error');
+      showError('Silinemedi');
     }
   };
 
@@ -190,7 +182,7 @@ export default function CategoriesPage() {
         onCancel={() => setDeleteId(null)}
         confirmLabel="Sil"
       />
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
+      <Notification {...notificationProps} />
     </Box>
   );
 }

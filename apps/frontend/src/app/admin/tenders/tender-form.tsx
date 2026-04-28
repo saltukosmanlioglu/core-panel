@@ -38,7 +38,7 @@ const schema = z.object({
   categoryId: z.string().uuid('Kategori zorunludur'),
   title: z.string().min(1, 'Başlık zorunludur').max(255),
   description: z.string().optional(),
-  status: z.enum(['draft', 'open', 'closed']),
+  status: z.enum(['draft', 'open', 'closed', 'awarded']),
   deadline: z.string().optional(),
 });
 
@@ -305,7 +305,7 @@ export function TenderForm({ id }: { id?: string }) {
 
   return (
     <Box>
-      <Box className="flex items-center gap-2 mb-4">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <FormButton
           variant="ghost"
           size="sm"
@@ -324,10 +324,10 @@ export function TenderForm({ id }: { id?: string }) {
 
       <Card sx={{ p: 4, maxWidth: 1100 }}>
         {fetchLoading ? (
-          <Box className="flex justify-center py-8">Loading...</Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>Yükleniyor...</Box>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
-            <Box className="flex flex-col gap-4">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <Controller
@@ -434,11 +434,11 @@ export function TenderForm({ id }: { id?: string }) {
                       <TableRow>
                         <TableCell sx={{ width: 48, fontWeight: 700 }}>#</TableCell>
                         <TableCell sx={{ minWidth: 120, fontWeight: 700 }}>Pos No</TableCell>
-                        <TableCell sx={{ minWidth: 220, fontWeight: 700 }}>Description</TableCell>
-                        <TableCell sx={{ minWidth: 100, fontWeight: 700 }}>Unit</TableCell>
-                        <TableCell sx={{ minWidth: 120, fontWeight: 700 }}>Quantity</TableCell>
-                        <TableCell sx={{ minWidth: 160, fontWeight: 700 }}>Location</TableCell>
-                        <TableCell align="right" sx={{ width: 96, fontWeight: 700 }}>Actions</TableCell>
+                        <TableCell sx={{ minWidth: 220, fontWeight: 700 }}>Tanım</TableCell>
+                        <TableCell sx={{ minWidth: 100, fontWeight: 700 }}>Birim</TableCell>
+                        <TableCell sx={{ minWidth: 120, fontWeight: 700 }}>Miktar</TableCell>
+                        <TableCell sx={{ minWidth: 160, fontWeight: 700 }}>Konum</TableCell>
+                        <TableCell align="right" sx={{ width: 96, fontWeight: 700 }}>İşlemler</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -489,7 +489,7 @@ export function TenderForm({ id }: { id?: string }) {
                 </TableContainer>
               </Box>
               <Divider sx={{ my: 1 }} />
-              <Box className="flex justify-end gap-2">
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
                 <FormButton variant="secondary" size="md" onClick={() => router.push('/admin/tenders')} type="button">
                   İptal
                 </FormButton>
@@ -513,28 +513,28 @@ export function TenderForm({ id }: { id?: string }) {
             onChange={(event) => updateItemDraft('posNo', event.target.value)}
           />
           <FormInput
-            label="Description"
+            label="Tanım"
             multiline
             rows={3}
             value={itemDraft.description}
             onChange={(event) => updateItemDraft('description', event.target.value)}
           />
           <FormSelect
-            label="Unit"
+            label="Birim"
             options={UNIT_OPTIONS}
             placeholder="Birim seç"
             value={itemDraft.unit}
             onChange={(event) => updateItemDraft('unit', String(event.target.value))}
           />
           <FormInput
-            label="Quantity"
+            label="Miktar"
             type="number"
             value={itemDraft.quantity}
             inputProps={{ min: 0.001, step: 0.001 }}
             onChange={(event) => updateItemDraft('quantity', event.target.value)}
           />
           <FormInput
-            label="Location"
+            label="Konum"
             value={itemDraft.location}
             onChange={(event) => updateItemDraft('location', event.target.value)}
           />

@@ -8,11 +8,17 @@ import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
 import { getAdminUsersApi, deleteAdminUserApi, createAdminUserApi, updateAdminUserApi } from '@/services/admin/api';
 import { UserRole, type User } from '@core-panel/shared';
-import axios from 'axios';
+import { useSnackbar } from '@/hooks/useSnackbar';
 
 const roleColors: Record<string, { bg: string; color: string }> = {
   company_admin: { bg: '#EDE9FE', color: '#5B21B6' },
   user: { bg: 'rgba(31,41,55,0.08)', color: '#1F2937' },
+};
+
+const roleLabels: Record<string, string> = {
+  company_admin: 'Şirket Yöneticisi',
+  super_admin: 'Süper Admin',
+  user: 'Kullanıcı',
 };
 
 interface UserFormData {
@@ -30,13 +36,13 @@ export default function UsersPage() {
   const [formData, setFormData] = useState<UserFormData>({ name: '', email: '', password: '', role: UserRole.COMPANY_ADMIN });
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const load = () => {
     setLoading(true);
     getAdminUsersApi()
       .then(setUsers)
-      .catch(() => setSnackbar({ open: true, message: 'Yüklenemedi', severity: 'error' }))
+      .catch(() => showError('Yüklenemedi'))
       .finally(() => setLoading(false));
   };
 
@@ -59,7 +65,7 @@ export default function UsersPage() {
   const handleSave = async () => {
     if (!formData.name.trim() || !formData.email.trim()) return;
     if (!editingUser && !formData.password) {
-      setSnackbar({ open: true, message: 'Şifre zorunludur', severity: 'error' });
+      showError('Şifre zorunludur');
       return;
     }
     setSaving(true);
@@ -74,9 +80,9 @@ export default function UsersPage() {
       }
       handleClose();
       load();
-      setSnackbar({ open: true, message: editingUser ? 'Kullanıcı güncellendi' : 'Kullanıcı eklendi', severity: 'success' });
+      showSuccess(editingUser ? 'Kullanıcı güncellendi' : 'Kullanıcı eklendi');
     } catch (err: any) {
-      setSnackbar({ open: true, message: err?.response?.data?.error ?? 'İşlem başarısız', severity: 'error' });
+      showError(err?.response?.data?.error ?? 'İşlem başarısız');
     } finally {
       setSaving(false);
     }
@@ -86,11 +92,11 @@ export default function UsersPage() {
     if (!deleteId) return;
     try {
       await deleteAdminUserApi(deleteId);
-      setSnackbar({ open: true, message: 'Kullanıcı silindi', severity: 'success' });
+      showSuccess('Kullanıcı silindi');
       setDeleteId(null);
       load();
     } catch {
-      setSnackbar({ open: true, message: 'Silinemedi', severity: 'error' });
+      showError('Silinemedi');
     }
   };
 
@@ -130,9 +136,9 @@ export default function UsersPage() {
             sortable: true,
             renderCell: (row) => (
               <Chip
-                label={row.role.replace(/_/g, ' ')}
+                label={roleLabels[row.role] ?? row.role}
                 size="small"
-                sx={{ ...(roleColors[row.role] ?? roleColors.user), fontWeight: 600, fontSize: '11px', textTransform: 'capitalize' }}
+                sx={{ ...(roleColors[row.role] ?? roleColors.user), fontWeight: 600, fontSize: '11px' }}
               />
             ),
           },
@@ -169,7 +175,7 @@ export default function UsersPage() {
             sortable: true,
             renderCell: (row) => (
               <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>
-                {new Date(row.createdAt).toLocaleDateString()}
+                {new Date(row.createdAt).toLocaleDateString('tr-TR')}
               </Typography>
             ),
           },
@@ -230,7 +236,7 @@ export default function UsersPage() {
         onCancel={() => setDeleteId(null)}
         confirmLabel="Sil"
       />
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
+      <Notification {...notificationProps} />
     </Box>
   );
 }

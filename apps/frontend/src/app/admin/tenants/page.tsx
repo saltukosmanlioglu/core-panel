@@ -7,9 +7,10 @@ import { FormButton, FormInput } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
 import { getTenantsApi, deleteTenantApi, createTenantApi, updateTenantApi } from '@/services/admin/api';
-import { getCategoriesApi, getTenantCategoriesApi, updateTenantCategoriesApi } from '@/services/categories/api';
+import { getCategoriesApi, getTenantCategoriesApi, getTenantCategoriesBatchApi, updateTenantCategoriesApi } from '@/services/categories/api';
 import type { Tenant, Category } from '@core-panel/shared';
-import axios from 'axios';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 
 interface TenantFormData {
   name: string;
@@ -28,21 +29,11 @@ export default function TenantsPage() {
   const [formData, setFormData] = useState<TenantFormData>({ name: '', contactName: '', contactPhone: '', categoryIds: [] });
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const loadTenantCategoryMap = async (tenantList: Tenant[]): Promise<Record<string, string[]>> => {
-    const entries = await Promise.all(
-      tenantList.map(async (tenant) => {
-        try {
-          const categoryIds = await getTenantCategoriesApi(tenant.id);
-          return [tenant.id, categoryIds] as const;
-        } catch {
-          return [tenant.id, []] as const;
-        }
-      }),
-    );
-
-    return Object.fromEntries(entries);
+    if (tenantList.length === 0) return {};
+    return getTenantCategoriesBatchApi(tenantList.map((t) => t.id));
   };
 
   const load = async () => {
@@ -54,8 +45,7 @@ export default function TenantsPage() {
       setCategories(catsRes);
       setTenantCategoryMap(categoryMap);
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      showError(getErrorMessage(err, 'Yüklenemedi'));
     } finally {
       setLoading(false);
     }
@@ -69,8 +59,7 @@ export default function TenantsPage() {
       setTenants(tenantsRes);
       setTenantCategoryMap(categoryMap);
     } catch {
-      const msg = 'Liste güncellenemedi';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      showError('Liste güncellenemedi');
     } finally {
       setLoading(false);
     }
@@ -96,7 +85,7 @@ export default function TenantsPage() {
       });
       setModalOpen(true);
     } catch {
-      setSnackbar({ open: true, message: 'Kategori bilgileri alınamadı', severity: 'error' });
+      showError('Kategori bilgileri alınamadı');
     }
   };
 
@@ -122,10 +111,9 @@ export default function TenantsPage() {
       await updateTenantCategoriesApi(tenantId, formData.categoryIds);
       handleClose();
       void refreshTenants();
-      setSnackbar({ open: true, message: editingTenant ? 'Taşeron güncellendi' : 'Taşeron eklendi', severity: 'success' });
+      showSuccess(editingTenant ? 'Taşeron güncellendi' : 'Taşeron eklendi');
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Bir hata oluştu';
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      showError(err?.response?.data?.message ?? 'Bir hata oluştu');
     } finally {
       setSaving(false);
     }
@@ -135,11 +123,11 @@ export default function TenantsPage() {
     if (!deleteId) return;
     try {
       await deleteTenantApi(deleteId);
-      setSnackbar({ open: true, message: `Taşeron silindi`, severity: 'success' });
+      showSuccess('Taşeron silindi');
       setDeleteId(null);
       void refreshTenants();
     } catch {
-      setSnackbar({ open: true, message: 'Silme işlemi başarısız', severity: 'error' });
+      showError('Silme işlemi başarısız');
     }
   };
 
@@ -225,7 +213,7 @@ export default function TenantsPage() {
             sortable: true,
             renderCell: (row) => (
               <Typography sx={{ color: '#6B7280', fontSize: '13px' }}>
-                {new Date(row.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                {new Date(row.createdAt).toLocaleDateString('tr-TR')}
               </Typography>
             ),
           },
@@ -288,7 +276,7 @@ export default function TenantsPage() {
         onCancel={() => setDeleteId(null)}
         confirmLabel="Sil"
       />
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
+      <Notification {...notificationProps} />
     </Box>
   );
 }

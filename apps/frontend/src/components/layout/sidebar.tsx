@@ -49,7 +49,7 @@ export interface SidebarNavItem {
 }
 
 export interface SidebarGroup {
-  label: string;
+  label?: string;
   items: SidebarNavItem[];
 }
 
@@ -63,6 +63,7 @@ export interface SidebarProps {
   };
   onLogout: () => void;
   collapsed?: boolean;
+  showGroupDividers?: boolean;
 }
 
 function getInitials(name?: string | null, email?: string): string {
@@ -74,7 +75,7 @@ function getInitials(name?: string | null, email?: string): string {
   return (email ?? 'A').slice(0, 2).toUpperCase();
 }
 
-export function Sidebar({ title, groups, user, onLogout, collapsed = false }: SidebarProps) {
+export function Sidebar({ title, groups, user, onLogout, collapsed = false, showGroupDividers = false }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -126,25 +127,28 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false }: Si
 
       {/* Nav groups */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
-        {groups.map((group) => (
-          <Box key={group.label}>
-            {!collapsed && (
+        {groups.map((group, groupIndex) => (
+          <Box key={group.label ?? group.items[0]?.href ?? `group-${groupIndex}`}>
+            {showGroupDividers && groupIndex > 0 ? (
+              <Divider sx={{ mx: collapsed ? 1 : 2, my: 1.25 }} />
+            ) : null}
+            {!collapsed && group.label ? (
               <Typography
                 sx={{
-                  fontSize: '11px',
+                  fontSize: '10px',
                   fontWeight: 600,
-                  color: '#9CA3AF',
+                  color: '#94a3b8',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   px: 2,
-                  pt: 3,
-                  pb: 1,
+                  mb: 0.5,
+                  pt: groupIndex === 0 ? 2 : 1,
                 }}
               >
                 {group.label}
               </Typography>
-            )}
-            {collapsed && <Box sx={{ pt: 2 }} />}
+            ) : null}
+            {collapsed && group.label ? <Box sx={{ pt: 2 }} /> : null}
             <List disablePadding sx={{ px: collapsed ? 0.5 : 1 }}>
               {group.items.map((item) => {
                 const hasChildren = !!item.children?.length;

@@ -7,6 +7,8 @@ import * as controller from './categories.controller';
 const router = Router();
 
 router.get('/', requireAdminAccess, controller.getAll);
+router.get('/tenants/batch', requireAdminAccess, controller.getTenantCategoriesBatch);
+router.get('/suppliers/batch', requireAdminAccess, controller.getSupplierCategoriesBatch);
 router.get('/tenants/:tenantId/categories', requireAdminAccess, validateUUID('tenantId'), controller.getTenantCategories);
 router.put('/tenants/:tenantId/categories', requireAdminAccess, validateUUID('tenantId'), controller.updateTenantCategories);
 router.get('/suppliers/:supplierId/categories', requireAdminAccess, validateUUID('supplierId'), controller.getSupplierCategories);

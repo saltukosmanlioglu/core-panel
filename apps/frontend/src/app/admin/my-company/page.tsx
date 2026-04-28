@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
 import {
   Box,
   Card,
@@ -33,25 +32,15 @@ import {
 } from '@mui/icons-material';
 import { Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
+import { TenderStatusChip } from '@/components/tender-status-chip';
 import { getCompaniesApi, getStatsApi, reprovisionCompanySchemaApi } from '@/services/admin/api';
 import { getTendersApi } from '@/services/workspace/api';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 import type { AdminStats } from '@/services/admin/types';
 import type { Company, Tender } from '@core-panel/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
-
-const statusConfig: Record<string, { label: string; bg: string; color: string }> = {
-  draft: { label: 'Taslak', bg: '#F3F4F6', color: '#4B5563' },
-  open: { label: 'Açık', bg: '#DBEAFE', color: '#1D4ED8' },
-  closed: { label: 'Kapalı', bg: '#FFEDD5', color: '#C2410C' },
-  awarded: { label: 'Verildi', bg: '#DCFCE7', color: '#15803D' },
-};
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return axios.isAxiosError(error)
-    ? ((error.response?.data as { error?: string })?.error ?? fallback)
-    : fallback;
-}
 
 function formatLongDate(value?: string | null): string {
   return value
@@ -123,7 +112,7 @@ export default function CompaniesPage() {
   const [recentTenders, setRecentTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
   const [reprovisioning, setReprovisioning] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
   const logoUrl = company?.logoPath ? `${API_URL}${company.logoPath}` : null;
 
   useEffect(() => {
@@ -138,9 +127,7 @@ export default function CompaniesPage() {
         setStats(statsData);
         setRecentTenders(tenderData);
       })
-      .catch((error: unknown) => {
-        setSnackbar({ open: true, message: getErrorMessage(error, 'Şirket bilgileri yüklenemedi'), severity: 'error' });
-      })
+      .catch((error: unknown) => showError(getErrorMessage(error, 'Şirket bilgileri yüklenemedi')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -150,9 +137,9 @@ export default function CompaniesPage() {
     try {
       const updated = await reprovisionCompanySchemaApi(company.id);
       setCompany(updated);
-      setSnackbar({ open: true, message: `"${company.name}" için şema yeniden oluşturuldu`, severity: 'success' });
+      showSuccess(`"${company.name}" için şema yeniden oluşturuldu`);
     } catch (error: unknown) {
-      setSnackbar({ open: true, message: getErrorMessage(error, 'Şema oluşturulamadı'), severity: 'error' });
+      showError(getErrorMessage(error, 'Şema oluşturulamadı'));
     } finally {
       setReprovisioning(false);
     }
@@ -312,30 +299,23 @@ export default function CompaniesPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {recentTenders.map((tender) => {
-                      const config = statusConfig[tender.status] ?? statusConfig.draft;
-                      return (
-                        <TableRow
-                          key={tender.id}
-                          hover
-                          onClick={() => router.push(`/admin/tenders/${tender.id}/edit`)}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          <TableCell>
-                            <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: 14 }}>{tender.title}</Typography>
-                          </TableCell>
-                          <TableCell sx={{ color: '#6B7280', fontSize: 13 }}>{tender.projectName ?? '—'}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={config.label}
-                              size="small"
-                              sx={{ backgroundColor: config.bg, color: config.color, fontWeight: 700, fontSize: 11 }}
-                            />
-                          </TableCell>
-                          <TableCell sx={{ color: '#6B7280', fontSize: 13 }}>{formatShortDate(tender.deadline)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {recentTenders.map((tender) => (
+                      <TableRow
+                        key={tender.id}
+                        hover
+                        onClick={() => router.push(`/admin/tenders/${tender.id}/edit`)}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell>
+                          <Typography sx={{ fontWeight: 600, color: '#1F2937', fontSize: 14 }}>{tender.title}</Typography>
+                        </TableCell>
+                        <TableCell sx={{ color: '#6B7280', fontSize: 13 }}>{tender.projectName ?? '—'}</TableCell>
+                        <TableCell>
+                          <TenderStatusChip status={tender.status} />
+                        </TableCell>
+                        <TableCell sx={{ color: '#6B7280', fontSize: 13 }}>{formatShortDate(tender.deadline)}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               )}
@@ -350,7 +330,7 @@ export default function CompaniesPage() {
         </Card>
       )}
 
-      <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} />
+      <Notification {...notificationProps} />
     </Box>
   );
 }

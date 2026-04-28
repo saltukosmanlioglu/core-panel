@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import axios from 'axios';
 import {
   Box,
   Button,
@@ -53,6 +52,7 @@ import {
 } from '@mui/icons-material';
 import { ConfirmationDialog, Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
+import { TenderStatusChip } from '@/components/tender-status-chip';
 import { getCompaniesApi, getTenantsApi } from '@/services/admin/api';
 import { exportComparison } from '@/utils/exportComparison';
 import { exportTenderForm } from '@/utils/exportTenderForm';
@@ -79,6 +79,9 @@ import {
   uploadTenderOfferFile,
 } from '@/services/tender-offer-files/api';
 import { getTenderApi } from '@/services/workspace/api';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { getTenderStatusConfig } from '@/utils/tenderStatus';
+import { useSnackbar } from '@/hooks/useSnackbar';
 import type {
   AwardItemStatus,
   ComparisonPriceCell,
@@ -95,20 +98,6 @@ import type {
 } from '@core-panel/shared';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const statusColors: Record<string, { backgroundColor: string; color: string; label: string }> = {
-  draft: { backgroundColor: '#F3F4F6', color: '#6B7280', label: 'Taslak' },
-  open: { backgroundColor: '#DCFCE7', color: '#15803D', label: 'Açık' },
-  closed: { backgroundColor: '#FEF3C7', color: '#92400E', label: 'Kapalı' },
-  awarded: { backgroundColor: '#DBEAFE', color: '#1D4ED8', label: 'Atandı' },
-};
-
-const statusChipColors: Record<string, 'default' | 'success' | 'warning' | 'primary'> = {
-  draft: 'default',
-  open: 'success',
-  closed: 'warning',
-  awarded: 'primary',
-};
 
 const awardStatusOptions: Array<{ value: AwardItemStatus; label: string }> = [
   { value: 'awarded', label: 'Atandı' },
@@ -135,12 +124,6 @@ interface AwardDraftRow {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  return axios.isAxiosError(error)
-    ? ((error.response?.data as { error?: string })?.error ?? fallback)
-    : fallback;
-}
 
 function formatDate(value?: string | null): string {
   return value ? new Date(value).toLocaleDateString('tr-TR') : '—';
@@ -344,14 +327,10 @@ export default function WorkspaceTenderWorkflowPage() {
   const [savingAwards, setSavingAwards] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [confirmFinalizeOpen, setConfirmFinalizeOpen] = useState(false);
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success' as 'success' | 'error',
-  });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const comparisonResult = comparison?.resultJson as ComparisonResult | null;
-  const statusMeta = statusColors[tender?.status ?? 'draft'] ?? statusColors.draft;
+  const statusMeta = getTenderStatusConfig(tender?.status ?? 'draft');
   const offerFileMap = useMemo(
     () => new Map(offerFiles.map((offerFile) => [offerFile.tenantId, offerFile])),
     [offerFiles],
@@ -443,11 +422,7 @@ export default function WorkspaceTenderWorkflowPage() {
       setAwardRows(buildAwardRows(comparisonData, awardItemData, recommendationData));
       setAuditLogs(auditLogData);
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'İhale iş akışı yüklenemedi'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'İhale iş akışı yüklenemedi'));
     } finally {
       setLoading(false);
     }
@@ -482,7 +457,7 @@ export default function WorkspaceTenderWorkflowPage() {
         })),
       });
     } catch {
-      setSnackbar({ open: true, message: 'Excel indirilemedi', severity: 'error' });
+      showError('Excel indirilemedi');
     }
   };
 
@@ -508,13 +483,9 @@ export default function WorkspaceTenderWorkflowPage() {
       const response = await updateTenderInvitations(tenderId, selectedTenantIds);
       setSelectedTenantIds(response.tenantIds);
       await loadOfferFiles();
-      setSnackbar({ open: true, message: 'Davetler kaydedildi', severity: 'success' });
+      showSuccess('Davetler kaydedildi');
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'Davetler kaydedilemedi'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'Davetler kaydedilemedi'));
     } finally {
       setSavingInvitations(false);
     }
@@ -529,13 +500,9 @@ export default function WorkspaceTenderWorkflowPage() {
       setUploadingTenantId(tenantId);
       await uploadTenderOfferFile(tenderId, tenantId, file);
       await loadOfferFiles();
-      setSnackbar({ open: true, message: 'Dosya yüklendi', severity: 'success' });
+      showSuccess('Dosya yüklendi');
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'Dosya yüklenemedi'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'Dosya yüklenemedi'));
     } finally {
       setUploadingTenantId(null);
     }
@@ -551,13 +518,9 @@ export default function WorkspaceTenderWorkflowPage() {
       await deleteTenderOfferFile(tenderId, deleteTarget.tenantId);
       await loadOfferFiles();
       setDeleteTarget(null);
-      setSnackbar({ open: true, message: 'Dosya silindi', severity: 'success' });
+      showSuccess('Dosya silindi');
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'Dosya silinemedi'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'Dosya silinemedi'));
     } finally {
       setDeletingTenantId(null);
     }
@@ -580,13 +543,9 @@ export default function WorkspaceTenderWorkflowPage() {
       ]);
       setAwardRows(buildAwardRows(nextComparison, awardItemData, recommendationData));
       setAuditLogs(auditLogData);
-      setSnackbar({ open: true, message: 'Karşılaştırma tamamlandı', severity: 'success' });
+      showSuccess('Karşılaştırma tamamlandı');
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'Karşılaştırma çalıştırılamadı'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'Karşılaştırma çalıştırılamadı'));
     } finally {
       setRunningComparison(false);
     }
@@ -603,13 +562,9 @@ export default function WorkspaceTenderWorkflowPage() {
         await deleteTenderItemNote(tenderId, rowNumber);
       }
       await loadNotes();
-      setSnackbar({ open: true, message: 'Not kaydedildi', severity: 'success' });
+      showSuccess('Not kaydedildi');
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'Not kaydedilemedi'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'Not kaydedilemedi'));
     } finally {
       setSavingNoteRow(null);
     }
@@ -647,7 +602,7 @@ export default function WorkspaceTenderWorkflowPage() {
     const payload = buildAwardPayload();
 
     if (payload.length === 0) {
-      setSnackbar({ open: true, message: 'Kaydedilecek en az bir kalem seçin', severity: 'error' });
+      showError('Kaydedilecek en az bir kalem seçin');
       return;
     }
 
@@ -661,13 +616,9 @@ export default function WorkspaceTenderWorkflowPage() {
       ]);
       setAwardRows(buildAwardRows(comparison, awardItemData, recommendationData));
       setAuditLogs(auditLogData);
-      setSnackbar({ open: true, message: 'Kalem atamaları kaydedildi', severity: 'success' });
+      showSuccess('Kalem atamaları kaydedildi');
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'Kalem atamaları kaydedilemedi'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'Kalem atamaları kaydedilemedi'));
     } finally {
       setSavingAwards(false);
     }
@@ -675,7 +626,7 @@ export default function WorkspaceTenderWorkflowPage() {
 
   const handleFinalize = async () => {
     if (!hasAllAwardStatuses) {
-      setSnackbar({ open: true, message: 'Tüm kalemlere durum verin', severity: 'error' });
+      showError('Tüm kalemlere durum verin');
       return;
     }
 
@@ -683,14 +634,10 @@ export default function WorkspaceTenderWorkflowPage() {
       setFinalizing(true);
       await bulkUpsertAwardItems(tenderId, buildAwardPayload());
       await finalizeTenderApi(tenderId);
-      setSnackbar({ open: true, message: 'İhale sonlandırıldı', severity: 'success' });
+      showSuccess('İhale sonlandırıldı');
       setTimeout(() => router.push(`/workspace/projects/${projectId}/tenders`), 800);
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: getErrorMessage(error, 'İhale sonlandırılamadı'),
-        severity: 'error',
-      });
+      showError(getErrorMessage(error, 'İhale sonlandırılamadı'));
     } finally {
       setFinalizing(false);
       setConfirmFinalizeOpen(false);
@@ -711,7 +658,7 @@ export default function WorkspaceTenderWorkflowPage() {
         result: comparisonResult,
       });
     } catch {
-      setSnackbar({ open: true, message: 'Excel indirilemedi', severity: 'error' });
+      showError('Excel indirilemedi');
     }
   };
 
@@ -756,12 +703,7 @@ export default function WorkspaceTenderWorkflowPage() {
           >
             Teklif Formu İndir
           </Button>
-          <Chip
-            label={statusMeta.label}
-            color={statusChipColors[tender?.status ?? 'draft'] ?? 'default'}
-            size="small"
-            sx={{ fontWeight: 700 }}
-          />
+          <TenderStatusChip status={tender?.status ?? 'draft'} />
         </Box>
       </Box>
 
@@ -1440,12 +1382,7 @@ export default function WorkspaceTenderWorkflowPage() {
         loading={finalizing}
         confirmLabel="Sonlandır"
       />
-      <Notification
-        open={snackbar.open}
-        message={snackbar.message}
-        severity={snackbar.severity}
-        onClose={() => setSnackbar((current) => ({ ...current, open: false }))}
-      />
+      <Notification {...notificationProps} />
     </Box>
   );
 }

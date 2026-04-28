@@ -192,6 +192,28 @@ export const updateSupplierCategories = async (req: Request, res: Response, next
   }
 };
 
+export const getTenantCategoriesBatch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const param = String(req.query.tenantIds ?? '');
+    const tenantIds = param.split(',').filter(Boolean);
+    const map = await repo.findCategoriesByTenantIds(tenantIds);
+    res.json(map);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getSupplierCategoriesBatch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const param = String(req.query.supplierIds ?? '');
+    const supplierIds = param.split(',').filter(Boolean);
+    const map = await repo.findCategoriesBySupplierIds(supplierIds);
+    res.json(map);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getTenantsByCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!(await ensureCategoryBelongsToCompany(String(req.params.categoryId), req.userCompanyId!))) {

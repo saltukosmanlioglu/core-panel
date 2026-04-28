@@ -2,23 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { Box, CircularProgress, Drawer, Paper } from '@mui/material';
-import { Assignment as AssignmentIcon } from '@mui/icons-material';
+import {
+  AccountBalance as AccountBalanceIcon,
+  Assignment as AssignmentIcon,
+  ArrowBack as ArrowBackIcon,
+  Calculate as CalculateIcon,
+  Gavel as GavelIcon,
+  GridOn as GridOnIcon,
+  Payments as PaymentsIcon,
+  ViewInAr as ViewInArIcon,
+} from '@mui/icons-material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar, type SidebarGroup } from './sidebar';
 import { Navbar } from './navbar';
 import { useAuth } from '@/hooks/useAuth';
 import { useUser } from '@/contexts/UserContext';
-
-const dashboardGroups: SidebarGroup[] = [
-  {
-    label: 'Hızlı Erişim',
-    items: [
-      { label: 'Çalışma Alanı', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/workspace', exact: true },
-      { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects' },
-    ],
-  },
-];
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
@@ -27,8 +26,64 @@ interface WorkspaceLayoutProps {
 
 export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, isLoading, logout } = useUser();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const projectMatch = pathname.match(/\/workspace\/projects\/([^/]+)/);
+  const projectId = projectMatch?.[1];
+  const isInsideProject = !!projectId && pathname !== '/workspace/projects';
+  const projectBase = isInsideProject ? `/workspace/projects/${projectId}` : null;
+  const dashboardGroups: SidebarGroup[] = projectBase
+    ? [
+      {
+        items: [
+          { label: 'İnşaatlara Dön', icon: <ArrowBackIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects', exact: true },
+          {
+            label: 'Proje Araçları',
+            icon: <CalculateIcon sx={{ fontSize: 20 }} />,
+            href: `${projectBase}/tools`,
+            defaultOpen: true,
+            toggleOnly: true,
+            children: [
+              { label: 'İnşaat Alanı Hesaplama', icon: <CalculateIcon fontSize="small" />, href: `${projectBase}/area-calculation`, color: '#0ea5e9' },
+              { label: 'Kat Planı', icon: <GridOnIcon fontSize="small" />, href: `${projectBase}/floor-plan`, color: '#0ea5e9' },
+              { label: '3D Modelleme', icon: <ViewInArIcon fontSize="small" />, href: `${projectBase}/3d-model`, color: '#0ea5e9' },
+            ],
+          },
+          {
+            label: 'Muhasebe',
+            icon: <AccountBalanceIcon sx={{ fontSize: 20 }} />,
+            href: `${projectBase}/accounting`,
+            defaultOpen: true,
+            toggleOnly: true,
+            children: [
+              { label: 'Ödemeler', icon: <PaymentsIcon fontSize="small" />, href: `${projectBase}/payments`, color: '#10b981' },
+              { label: 'Gelir-Gider', icon: <AccountBalanceIcon fontSize="small" />, href: `${projectBase}/income-outcome`, color: '#10b981' },
+            ],
+          },
+          {
+            label: 'İhale',
+            icon: <GavelIcon sx={{ fontSize: 20 }} />,
+            href: `${projectBase}/procurement`,
+            defaultOpen: true,
+            toggleOnly: true,
+            children: [
+              { label: 'İhaleler', icon: <GavelIcon fontSize="small" />, href: `${projectBase}/tenders`, color: '#f59e0b' },
+            ],
+          },
+        ],
+      },
+    ]
+    : [
+      {
+        label: 'Hızlı Erişim',
+        items: [
+          { label: 'Çalışma Alanı', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/workspace', exact: true },
+          { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects' },
+        ],
+      },
+    ];
 
   useAuth();
 

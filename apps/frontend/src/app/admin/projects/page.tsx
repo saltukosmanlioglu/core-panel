@@ -24,7 +24,8 @@ import { ConfirmationDialog, Notification } from '@/components';
 import { DataTable } from '@/components/data-table';
 import { getProjectsApi, deleteProjectApi, createProjectApi, updateProjectApi } from '@/services/workspace/api';
 import type { Project } from '@core-panel/shared';
-import axios from 'axios';
+import { getErrorMessage } from '@/utils/getErrorMessage';
+import { useSnackbar } from '@/hooks/useSnackbar';
 
 const statusColors: Record<string, { bg: string; color: string }> = {
   active: { bg: '#DCFCE7', color: '#15803D' },
@@ -46,23 +47,17 @@ export default function AdminProjectsPage() {
   const [formData, setFormData] = useState<ProjectFormData>({ name: '', description: '', status: 'active' });
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const fetchProjects = () => {
     setLoading(true);
     getProjectsApi()
       .then(setProjects)
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as { error?: string })?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
+      .catch((err: unknown) => showError(getErrorMessage(err, 'Yüklenemedi')))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchProjects(); }, []);
-
-  const showSnackbar = (message: string, severity: 'success' | 'error' = 'success') =>
-    setSnackbar({ open: true, message, severity });
 
   const openCreate = () => {
     setEditingProject(null);
@@ -94,15 +89,15 @@ export default function AdminProjectsPage() {
     try {
       if (editingProject) {
         await updateProjectApi(editingProject.id, formData);
-        showSnackbar('Proje güncellendi');
+        showSuccess('Proje güncellendi');
       } else {
         await createProjectApi(formData);
-        showSnackbar('Proje eklendi');
+        showSuccess('Proje eklendi');
       }
       handleClose();
       fetchProjects();
     } catch {
-      showSnackbar('Bir hata oluştu', 'error');
+      showError('Bir hata oluştu');
     } finally {
       setSaving(false);
     }
@@ -114,9 +109,9 @@ export default function AdminProjectsPage() {
       await deleteProjectApi(deleteId);
       setDeleteId(null);
       fetchProjects();
-      showSnackbar('Proje silindi');
+      showSuccess('Proje silindi');
     } catch {
-      showSnackbar('Silinemedi', 'error');
+      showError('Silinemedi');
     }
   };
 
@@ -176,12 +171,12 @@ export default function AdminProjectsPage() {
 
         <Dialog open={modalOpen} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown={saving}>
           <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
-            {editingProject ? 'Proje Düzenle' : 'Yeni Proje Ekle'}
+            {editingProject ? 'İnşaat Düzenle' : 'Yeni İnşaat Ekle'}
           </DialogTitle>
           <Divider />
           <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <TextField
-              label="Proje Adı"
+              label="İnşaat Adı"
               required
               fullWidth
               value={formData.name}
@@ -226,12 +221,12 @@ export default function AdminProjectsPage() {
         <ConfirmationDialog
           open={!!deleteId}
           title="İnşaat Sil"
-          description="Bu projeyi silmek istediğinizden emin misiniz? Projeye ait tüm ihaleler de silinecektir."
+          description="Bu inşaatı silmek istediğinizden emin misiniz? İnşaata ait tüm ihaleler de silinecektir."
           onConfirm={handleDelete}
           onCancel={() => setDeleteId(null)}
           confirmLabel="Sil"
         />
-        <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })} />
+        <Notification {...notificationProps} />
     </Box>
   );
 }
