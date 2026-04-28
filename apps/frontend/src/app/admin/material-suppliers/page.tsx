@@ -17,10 +17,6 @@ import { getCategoriesApi, getSupplierCategoriesApi, updateSupplierCategoriesApi
 import type { Category } from '@core-panel/shared';
 import axios from 'axios';
 
-interface SupplierWithCategories extends MaterialSupplier {
-  categoryIds?: string[];
-}
-
 interface SupplierFormData {
   name: string;
   contactName: string;
@@ -29,8 +25,9 @@ interface SupplierFormData {
 }
 
 export default function MaterialSuppliersPage() {
-  const [suppliers, setSuppliers] = useState<SupplierWithCategories[]>([]);
+  const [suppliers, setSuppliers] = useState<MaterialSupplier[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [supplierCategoryMap, setSupplierCategoryMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<MaterialSupplier | null>(null);
@@ -39,21 +36,38 @@ export default function MaterialSuppliersPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const load = () => {
-    setLoading(true);
-    Promise.all([getMaterialSuppliersApi(), getCategoriesApi()])
-      .then(([suppliersRes, catsRes]) => {
-        setSuppliers(suppliersRes);
-        setCategories(catsRes);
-      })
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
-      .finally(() => setLoading(false));
+  const loadSupplierCategoryMap = async (supplierList: MaterialSupplier[]): Promise<Record<string, string[]>> => {
+    const entries = await Promise.all(
+      supplierList.map(async (supplier) => {
+        try {
+          const categoryIds = await getSupplierCategoriesApi(supplier.id);
+          return [supplier.id, categoryIds] as const;
+        } catch {
+          return [supplier.id, []] as const;
+        }
+      }),
+    );
+
+    return Object.fromEntries(entries);
   };
 
-  useEffect(() => { load(); }, []);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [suppliersRes, catsRes] = await Promise.all([getMaterialSuppliersApi(), getCategoriesApi()]);
+      const categoryMap = await loadSupplierCategoryMap(suppliersRes);
+      setSuppliers(suppliersRes);
+      setCategories(catsRes);
+      setSupplierCategoryMap(categoryMap);
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
 
   const openCreate = () => {
     setEditingSupplier(null);
@@ -98,7 +112,7 @@ export default function MaterialSuppliersPage() {
       }
       await updateSupplierCategoriesApi(supplierId, formData.categoryIds);
       handleClose();
-      load();
+      void load();
       setSnackbar({ open: true, message: editingSupplier ? 'Malzemeci güncellendi' : 'Malzemeci eklendi', severity: 'success' });
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? 'Bir hata oluştu';
@@ -114,7 +128,7 @@ export default function MaterialSuppliersPage() {
       await deleteMaterialSupplierApi(deleteId);
       setSnackbar({ open: true, message: 'Malzemeci silindi', severity: 'success' });
       setDeleteId(null);
-      load();
+      void load();
     } catch {
       setSnackbar({ open: true, message: 'Silme işlemi başarısız', severity: 'error' });
     }
@@ -132,7 +146,7 @@ export default function MaterialSuppliersPage() {
         </FormButton>
       </Box>
 
-      <DataTable<SupplierWithCategories>
+      <DataTable<MaterialSupplier>
         rows={suppliers}
         loading={loading}
         getRowId={(row) => row.id}
@@ -147,16 +161,17 @@ export default function MaterialSuppliersPage() {
             ),
           },
           {
-            field: 'categoryIds',
+            field: 'categories',
             headerName: 'Kategoriler',
             flex: 1,
             renderCell: (row) => {
-              const visibleCats = categories.filter(c => (row.categoryIds ?? []).includes(c.id));
-              if (!visibleCats.length) return <Typography sx={{ color: '#9CA3AF', fontSize: '13px' }}>—</Typography>;
+              const supplierCatIds = supplierCategoryMap[row.id] ?? [];
+              const visibleCats = categories.filter(c => supplierCatIds.includes(c.id));
               return (
                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  {visibleCats.slice(0, 2).map(c => <Chip key={c.id} label={c.name} size="small" sx={{ fontSize: '11px' }} />)}
-                  {visibleCats.length > 2 && <Chip label={`+${visibleCats.length - 2}`} size="small" variant="outlined" sx={{ fontSize: '11px' }} />}
+                  {visibleCats.length === 0 && <Typography variant="caption" color="text.secondary">—</Typography>}
+                  {visibleCats.slice(0, 2).map(c => <Chip key={c.id} label={c.name} size="small" variant="outlined" sx={{ fontSize: '11px' }} />)}
+                  {visibleCats.length > 2 && <Chip label={`+${visibleCats.length - 2}`} size="small" sx={{ fontSize: '11px' }} />}
                 </Box>
               );
             },

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Box, CircularProgress, Drawer, Paper } from '@mui/material';
 import { Assignment as AssignmentIcon } from '@mui/icons-material';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import { useRouter } from 'next/navigation';
 import { Sidebar, type SidebarGroup } from './sidebar';
 import { Navbar } from './navbar';
@@ -13,6 +14,7 @@ const dashboardGroups: SidebarGroup[] = [
   {
     label: 'Hızlı Erişim',
     items: [
+      { label: 'Çalışma Alanı', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/workspace', exact: true },
       { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects' },
     ],
   },

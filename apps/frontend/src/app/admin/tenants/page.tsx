@@ -11,10 +11,6 @@ import { getCategoriesApi, getTenantCategoriesApi, updateTenantCategoriesApi } f
 import type { Tenant, Category } from '@core-panel/shared';
 import axios from 'axios';
 
-interface TenantWithCategories extends Tenant {
-  categoryIds?: string[];
-}
-
 interface TenantFormData {
   name: string;
   contactName: string;
@@ -23,8 +19,9 @@ interface TenantFormData {
 }
 
 export default function TenantsPage() {
-  const [tenants, setTenants] = useState<TenantWithCategories[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [tenantCategoryMap, setTenantCategoryMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -33,31 +30,53 @@ export default function TenantsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
-  const load = () => {
+  const loadTenantCategoryMap = async (tenantList: Tenant[]): Promise<Record<string, string[]>> => {
+    const entries = await Promise.all(
+      tenantList.map(async (tenant) => {
+        try {
+          const categoryIds = await getTenantCategoriesApi(tenant.id);
+          return [tenant.id, categoryIds] as const;
+        } catch {
+          return [tenant.id, []] as const;
+        }
+      }),
+    );
+
+    return Object.fromEntries(entries);
+  };
+
+  const load = async () => {
     setLoading(true);
-    Promise.all([getTenantsApi(), getCategoriesApi()])
-      .then(([tenantsRes, catsRes]) => {
-        setTenants(tenantsRes);
-        setCategories(catsRes);
-      })
-      .catch((err: unknown) => {
-        const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
-      .finally(() => setLoading(false));
+    try {
+      const [tenantsRes, catsRes] = await Promise.all([getTenantsApi(), getCategoriesApi()]);
+      const categoryMap = await loadTenantCategoryMap(tenantsRes);
+      setTenants(tenantsRes);
+      setCategories(catsRes);
+      setTenantCategoryMap(categoryMap);
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? ((err.response?.data as any)?.error ?? 'Yüklenemedi') : 'Yüklenemedi';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const refreshTenants = () => {
-    getTenantsApi()
-      .then(setTenants)
-      .catch(() => {
-        const msg = 'Liste güncellenemedi';
-        setSnackbar({ open: true, message: msg, severity: 'error' });
-      })
-      .finally(() => setLoading(false));
+  const refreshTenants = async () => {
+    setLoading(true);
+    try {
+      const tenantsRes = await getTenantsApi();
+      const categoryMap = await loadTenantCategoryMap(tenantsRes);
+      setTenants(tenantsRes);
+      setTenantCategoryMap(categoryMap);
+    } catch {
+      const msg = 'Liste güncellenemedi';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   const openCreate = () => {
     setEditingTenant(null);
@@ -102,7 +121,7 @@ export default function TenantsPage() {
       }
       await updateTenantCategoriesApi(tenantId, formData.categoryIds);
       handleClose();
-      refreshTenants();
+      void refreshTenants();
       setSnackbar({ open: true, message: editingTenant ? 'Taşeron güncellendi' : 'Taşeron eklendi', severity: 'success' });
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? 'Bir hata oluştu';
@@ -118,7 +137,7 @@ export default function TenantsPage() {
       await deleteTenantApi(deleteId);
       setSnackbar({ open: true, message: `Taşeron silindi`, severity: 'success' });
       setDeleteId(null);
-      refreshTenants();
+      void refreshTenants();
     } catch {
       setSnackbar({ open: true, message: 'Silme işlemi başarısız', severity: 'error' });
     }
@@ -136,7 +155,7 @@ export default function TenantsPage() {
         </FormButton>
       </Box>
 
-      <DataTable<TenantWithCategories>
+      <DataTable<Tenant>
         rows={tenants}
         loading={loading}
         getRowId={(row) => row.id}
@@ -162,16 +181,17 @@ export default function TenantsPage() {
             ),
           },
           {
-            field: 'categoryIds',
+            field: 'categories',
             headerName: 'Kategoriler',
             flex: 1,
             renderCell: (row) => {
-              const visibleCats = categories.filter(c => (row.categoryIds ?? []).includes(c.id));
-              if (!visibleCats.length) return <Typography sx={{ color: '#9CA3AF', fontSize: '13px' }}>—</Typography>;
+              const tenantCatIds = tenantCategoryMap[row.id] ?? [];
+              const visibleCats = categories.filter(c => tenantCatIds.includes(c.id));
               return (
                 <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  {visibleCats.slice(0, 2).map(c => <Chip key={c.id} label={c.name} size="small" sx={{ fontSize: '11px' }} />)}
-                  {visibleCats.length > 2 && <Chip label={`+${visibleCats.length - 2}`} size="small" variant="outlined" sx={{ fontSize: '11px' }} />}
+                  {visibleCats.length === 0 && <Typography variant="caption" color="text.secondary">—</Typography>}
+                  {visibleCats.slice(0, 2).map(c => <Chip key={c.id} label={c.name} size="small" variant="outlined" sx={{ fontSize: '11px' }} />)}
+                  {visibleCats.length > 2 && <Chip label={`+${visibleCats.length - 2}`} size="small" sx={{ fontSize: '11px' }} />}
                 </Box>
               );
             },

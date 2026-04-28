@@ -54,6 +54,7 @@ import {
 import { ConfirmationDialog, Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
 import { getCompaniesApi, getTenantsApi } from '@/services/admin/api';
+import { exportComparison } from '@/utils/exportComparison';
 import { exportTenderForm } from '@/utils/exportTenderForm';
 import { getTenantsByCategoryApi } from '@/services/categories/api';
 import {
@@ -696,36 +697,22 @@ export default function WorkspaceTenderWorkflowPage() {
     }
   };
 
-  const handleExportComparison = () => {
-    if (!comparisonResult) {
+  const handleExportComparison = async () => {
+    if (!comparisonResult || !tender) {
       return;
     }
 
-    const selectedTenantIds = comparisonTenantEntries.map(([tenantId]) => tenantId);
-    const header = ['#', 'Description', 'Unit', ...comparisonTenantEntries.map(([, tenantName]) => tenantName), 'Note'];
-    const lines = comparisonResult.rows.map((row) => {
-      const rowNumber = row.siraNo;
-      return [
-        rowNumber,
-        row.description,
-        row.unit,
-        ...selectedTenantIds.map((tenantId) => {
-          const total = getPriceTotal((row.prices as Record<string, PriceCellCompat | undefined>)[tenantId]);
-          return total === null ? '' : String(total);
-        }),
-        notes[rowNumber] ?? '',
-      ];
-    });
-    const csv = [header, ...lines]
-      .map((line) => line.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${tender?.title ?? 'tender'}-comparison.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      await exportComparison({
+        tenderTitle: tender.title,
+        projectName: tender.projectName ?? '',
+        categoryName: tender.categoryName ?? '',
+        companyName,
+        result: comparisonResult,
+      });
+    } catch {
+      setSnackbar({ open: true, message: 'Excel indirilemedi', severity: 'error' });
+    }
   };
 
   // ─── Loading ────────────────────────────────────────────────────────────────
@@ -1058,7 +1045,7 @@ export default function WorkspaceTenderWorkflowPage() {
                     size="small"
                     variant="outlined"
                     startIcon={<DownloadIcon />}
-                    onClick={handleExportComparison}
+                    onClick={() => { void handleExportComparison(); }}
                     disabled={!comparisonResult}
                   >
                     Excel Export
