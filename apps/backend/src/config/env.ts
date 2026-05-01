@@ -5,6 +5,8 @@ const required = [
   'FRONTEND_URL',
   'MFA_ENCRYPTION_KEY',
   'ANTHROPIC_API_KEY',
+  'MESHY_API_KEY',
+  'FLOORPLANNER_API_KEY',
 ] as const;
 
 for (const key of required) {
@@ -21,6 +23,12 @@ if (!/^[0-9a-fA-F]{64}$/.test(process.env.MFA_ENCRYPTION_KEY!)) {
   throw new Error('MFA_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)');
 }
 
+const floorplannerEnvironment = process.env.FLOORPLANNER_ENV ?? 'sandbox';
+
+if (!['sandbox', 'production'].includes(floorplannerEnvironment)) {
+  throw new Error('FLOORPLANNER_ENV must be either "sandbox" or "production"');
+}
+
 export const env = {
   PORT: Number(process.env.PORT ?? 4000),
   DATABASE_URL: process.env.DATABASE_URL!,
@@ -29,5 +37,10 @@ export const env = {
   FRONTEND_URL: process.env.FRONTEND_URL!,
   MFA_ENCRYPTION_KEY: process.env.MFA_ENCRYPTION_KEY!,
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
+  MESHY_API_KEY: process.env.MESHY_API_KEY!,
+  FLOORPLANNER_API_KEY: process.env.FLOORPLANNER_API_KEY!,
+  FLOORPLANNER_ENV: floorplannerEnvironment as 'sandbox' | 'production',
+  FLOORPLANNER_BASE_URL: process.env.FLOORPLANNER_BASE_URL
+    ?? (floorplannerEnvironment === 'production' ? 'https://floorplanner.com' : 'https://sandbox.floorplanner.com'),
   NODE_ENV: process.env.NODE_ENV ?? 'development',
 } as const;

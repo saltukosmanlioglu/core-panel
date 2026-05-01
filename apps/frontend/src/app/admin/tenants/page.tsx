@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Box, Chip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Button, CircularProgress, Autocomplete, TextField } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Construction as ConstructionIcon } from '@mui/icons-material';
-import { FormButton, FormInput } from '@/components/form-elements';
+import { Box, Chip, Typography, Autocomplete, TextField } from '@mui/material';
+import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { FormInput } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
+import { CrudModal } from '@/components/crud-modal';
 import { DataTable } from '@/components/data-table';
+import { PageHeader } from '@/components/page-header';
 import { getTenantsApi, deleteTenantApi, createTenantApi, updateTenantApi } from '@/services/admin/api';
 import { getCategoriesApi, getTenantCategoriesApi, getTenantCategoriesBatchApi, updateTenantCategoriesApi } from '@/services/categories/api';
 import type { Tenant, Category } from '@core-panel/shared';
@@ -133,15 +135,7 @@ export default function TenantsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Taşeronlar</Typography>
-          <Typography variant="body2" color="text.secondary">{tenants.length} kayıt</Typography>
-        </Box>
-        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={openCreate}>
-          Taşeron Ekle
-        </FormButton>
-      </Box>
+      <PageHeader title="Taşeronlar" subtitle={`${tenants.length} kayıt`} addLabel="Taşeron Ekle" onAdd={openCreate} />
 
       <DataTable<Tenant>
         rows={tenants}
@@ -235,38 +229,27 @@ export default function TenantsPage() {
         emptyMessage="Henüz taşeron yok"
       />
 
-      <Dialog open={modalOpen} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown={saving}>
-        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
-          {editingTenant ? 'Taşeron Düzenle' : 'Yeni Taşeron Ekle'}
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <FormInput label="Taşeron Adı" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-          <FormInput label="İlgili Kişi Adı" value={formData.contactName} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
-          <FormInput label="Telefon Numarası" type="tel" value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} />
-          <Autocomplete
-            multiple
-            options={categories}
-            getOptionLabel={(o) => o.name}
-            value={categories.filter((c) => formData.categoryIds.includes(c.id))}
-            onChange={(_, v) => setFormData({ ...formData, categoryIds: v.map((c) => c.id) })}
-            renderInput={(params) => <TextField {...params} label="Kategoriler" placeholder="Kategori seçin..." />}
-            isOptionEqualToValue={(o, v) => o.id === v.id}
-          />
-        </DialogContent>
-        <Divider />
-        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={handleClose} disabled={saving}>İptal</Button>
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={saving || !formData.name.trim()}
-            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
-          >
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CrudModal
+        open={modalOpen}
+        title={editingTenant ? 'Taşeron Düzenle' : 'Yeni Taşeron Ekle'}
+        saving={saving}
+        saveDisabled={!formData.name.trim()}
+        onClose={handleClose}
+        onSave={handleSave}
+      >
+        <FormInput label="Taşeron Adı" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+        <FormInput label="İlgili Kişi Adı" value={formData.contactName} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} />
+        <FormInput label="Telefon Numarası" type="tel" value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} />
+        <Autocomplete
+          multiple
+          options={categories}
+          getOptionLabel={(o) => o.name}
+          value={categories.filter((c) => formData.categoryIds.includes(c.id))}
+          onChange={(_, v) => setFormData({ ...formData, categoryIds: v.map((c) => c.id) })}
+          renderInput={(params) => <TextField {...params} label="Kategoriler" placeholder="Kategori seçin..." />}
+          isOptionEqualToValue={(o, v) => o.id === v.id}
+        />
+      </CrudModal>
 
       <ConfirmationDialog
         open={!!deleteId}

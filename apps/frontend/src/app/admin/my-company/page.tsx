@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { Notification } from '@/components';
 import { FormButton } from '@/components/form-elements';
+import { StatCard } from '@/components/stat-card';
 import { TenderStatusChip } from '@/components/tender-status-chip';
 import { getCompaniesApi, getStatsApi, reprovisionCompanySchemaApi } from '@/services/admin/api';
 import { getTendersApi } from '@/services/workspace/api';
@@ -50,59 +51,6 @@ function formatLongDate(value?: string | null): string {
 
 function formatShortDate(value?: string | null): string {
   return value ? new Date(value).toLocaleDateString('tr-TR') : '—';
-}
-
-function StatCard({
-  value,
-  label,
-  icon,
-  color,
-  href,
-}: {
-  value: number;
-  label: string;
-  icon: React.ReactNode;
-  color: string;
-  href: string;
-}) {
-  const router = useRouter();
-
-  return (
-    <Card
-      onClick={() => router.push(href)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') router.push(href);
-      }}
-      sx={{
-        borderRadius: '6px',
-        borderLeft: `4px solid ${color}`,
-        backgroundColor: `${color}0d`,
-        boxShadow: '0 8px 20px rgba(15, 23, 42, 0.06)',
-        cursor: 'pointer',
-        transition: 'transform 0.16s ease, box-shadow 0.16s ease',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: '0 14px 28px rgba(15, 23, 42, 0.10)',
-        },
-      }}
-    >
-      <CardContent sx={{ p: 2.25, '&:last-child': { pb: 2.25 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
-          <Box>
-            <Typography sx={{ fontSize: 30, lineHeight: 1, fontWeight: 800, color, mb: 0.75 }}>
-              {value.toLocaleString('tr-TR')}
-            </Typography>
-            <Typography sx={{ fontSize: 13, color: '#6B7280', fontWeight: 600 }}>
-              {label}
-            </Typography>
-          </Box>
-          <Box sx={{ color, mt: 0.25 }}>{icon}</Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
 }
 
 export default function CompaniesPage() {

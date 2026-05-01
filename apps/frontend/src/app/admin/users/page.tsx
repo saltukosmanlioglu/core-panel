@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Box, Chip, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Divider, Button, CircularProgress, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
-import { FormButton, FormInput } from '@/components/form-elements';
+import { Box, Chip, Typography, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import { FormInput } from '@/components/form-elements';
 import { ConfirmationDialog, Notification } from '@/components';
+import { CrudModal } from '@/components/crud-modal';
 import { DataTable } from '@/components/data-table';
+import { PageHeader } from '@/components/page-header';
 import { getAdminUsersApi, deleteAdminUserApi, createAdminUserApi, updateAdminUserApi } from '@/services/admin/api';
 import { UserRole, type User } from '@core-panel/shared';
 import { useSnackbar } from '@/hooks/useSnackbar';
@@ -102,15 +104,7 @@ export default function UsersPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Kullanıcılar</Typography>
-          <Typography variant="body2" color="text.secondary">{users.length} kayıt</Typography>
-        </Box>
-        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={openCreate}>
-          Kullanıcı Ekle
-        </FormButton>
-      </Box>
+      <PageHeader title="Kullanıcılar" subtitle={`${users.length} kayıt`} addLabel="Kullanıcı Ekle" onAdd={openCreate} />
 
       <DataTable<User>
         rows={users}
@@ -197,36 +191,30 @@ export default function UsersPage() {
         emptyMessage="Henüz kullanıcı yok"
       />
 
-      <Dialog open={modalOpen} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown={saving}>
-        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
-          {editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı Ekle'}
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <FormInput label="Ad Soyad" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-          <FormInput label="E-posta" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
-          <FormInput
-            label={editingUser ? 'Şifre (Değiştirmek için girin)' : 'Şifre'}
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            required={!editingUser}
-          />
-          <FormControl fullWidth>
-            <InputLabel>Rol</InputLabel>
-            <Select value={formData.role} label="Rol" onChange={(e) => setFormData({ ...formData, role: e.target.value })}>
-              <MenuItem value={UserRole.COMPANY_ADMIN}>Şirket Yöneticisi</MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <Divider />
-        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={handleClose} disabled={saving}>İptal</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving} startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}>
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CrudModal
+        open={modalOpen}
+        title={editingUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı Ekle'}
+        saving={saving}
+        saveDisabled={!formData.name.trim() || !formData.email.trim()}
+        onClose={handleClose}
+        onSave={handleSave}
+      >
+        <FormInput label="Ad Soyad" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+        <FormInput label="E-posta" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+        <FormInput
+          label={editingUser ? 'Şifre (Değiştirmek için girin)' : 'Şifre'}
+          type="password"
+          value={formData.password}
+          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+          required={!editingUser}
+        />
+        <FormControl fullWidth>
+          <InputLabel>Rol</InputLabel>
+          <Select value={formData.role} label="Rol" onChange={(e) => setFormData({ ...formData, role: e.target.value })}>
+            <MenuItem value={UserRole.COMPANY_ADMIN}>Şirket Yöneticisi</MenuItem>
+          </Select>
+        </FormControl>
+      </CrudModal>
 
       <ConfirmationDialog
         open={!!deleteId}

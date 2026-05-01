@@ -6,6 +6,9 @@ interface ProjectRow {
   name: string;
   description: string | null;
   status: string;
+  floorplanner_user_id: string | null;
+  floorplanner_project_id: string | null;
+  floorplanner_synced_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -16,6 +19,9 @@ function mapRow(row: ProjectRow) {
     name: row.name,
     description: row.description,
     status: row.status,
+    floorplannerUserId: row.floorplanner_user_id ?? null,
+    floorplannerProjectId: row.floorplanner_project_id ?? null,
+    floorplannerSyncedAt: row.floorplanner_synced_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -86,6 +92,38 @@ export async function update(
   const { rows } = await tdb.query<ProjectRow>(
     `UPDATE ${tdb.ref('projects')} SET ${setClauses.join(', ')} WHERE id = $${params.length} RETURNING *`,
     params,
+  );
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
+export async function updateFloorplannerUserId(
+  companyId: string,
+  id: string,
+  floorplannerUserId: string,
+): Promise<ProjectRecord | null> {
+  const tdb = new TenantDb(companyId);
+  const { rows } = await tdb.query<ProjectRow>(
+    `UPDATE ${tdb.ref('projects')}
+     SET floorplanner_user_id = $1, floorplanner_synced_at = NOW(), updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [floorplannerUserId, id],
+  );
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
+export async function updateFloorplannerProjectId(
+  companyId: string,
+  id: string,
+  floorplannerProjectId: string,
+): Promise<ProjectRecord | null> {
+  const tdb = new TenantDb(companyId);
+  const { rows } = await tdb.query<ProjectRow>(
+    `UPDATE ${tdb.ref('projects')}
+     SET floorplanner_project_id = $1, floorplanner_synced_at = NOW(), updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [floorplannerProjectId, id],
   );
   return rows[0] ? mapRow(rows[0]) : null;
 }

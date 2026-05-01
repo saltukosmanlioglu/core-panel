@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Notification } from '@/components';
+import { PageHeader } from '@/components/page-header';
 import { FormButton } from '@/components/form-elements';
 import { TenderStatusChip } from '@/components/tender-status-chip';
 import { getTenderItemsApi } from '@/services/tender-items/api';
@@ -69,16 +70,7 @@ export default function ProjectTendersPage() {
 
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
-      <Box>
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#111827' }}>
-          İhaleler
-        </Typography>
-        {!loading ? (
-          <Typography variant="body2" color="text.secondary">
-            {tenders.length} kayıt
-          </Typography>
-        ) : null}
-      </Box>
+      <PageHeader title="İhaleler" subtitle={!loading ? `${tenders.length} kayıt` : undefined} />
 
       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
         <Table size="small">

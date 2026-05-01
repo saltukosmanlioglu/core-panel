@@ -1,31 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Box, Card, CircularProgress, Typography } from '@mui/material';
+import { Box, CircularProgress, Typography } from '@mui/material';
 import { Assignment as AssignmentIcon, Gavel as GavelIcon, HourglassEmpty as PendingIcon } from '@mui/icons-material';
 import { WorkspaceLayout } from '@/components/layout/workspace-layout';
+import { StatCard } from '@/components/stat-card';
 import { getProjectsApi, getTendersApi } from '@/services/workspace/api';
 import { Notification } from '@/components';
 import { useUser } from '@/contexts/UserContext';
 import axios from 'axios';
-
-function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
-  return (
-    <Card sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2.5 }}>
-      <Box sx={{ width: 48, height: 48, borderRadius: '12px', backgroundColor: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Box sx={{ color }}>{icon}</Box>
-      </Box>
-      <Box>
-        <Typography variant="h4" sx={{ fontWeight: 700, fontSize: '28px', lineHeight: 1, mb: 0.25 }}>
-          {value.toLocaleString()}
-        </Typography>
-        <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '13px' }}>
-          {label}
-        </Typography>
-      </Box>
-    </Card>
-  );
-}
 
 export default function WorkspacePage() {
   const { user } = useUser();

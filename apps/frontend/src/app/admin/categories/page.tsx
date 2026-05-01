@@ -1,26 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Box, Typography } from '@mui/material';
 import {
-  Box,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Typography,
-} from '@mui/material';
-import {
-  Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
 } from '@mui/icons-material';
 import type { Category } from '@core-panel/shared';
 import { ConfirmationDialog, Notification } from '@/components';
+import { CrudModal } from '@/components/crud-modal';
 import { DataTable } from '@/components/data-table';
-import { FormButton, FormInput } from '@/components/form-elements';
+import { FormInput } from '@/components/form-elements';
+import { PageHeader } from '@/components/page-header';
 import {
   createCategoryApi,
   deleteCategoryApi,
@@ -90,15 +81,7 @@ export default function CategoriesPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700} color="#111827">Kategoriler</Typography>
-          <Typography variant="body2" color="text.secondary">{categories.length} kayıt</Typography>
-        </Box>
-        <FormButton variant="primary" size="md" startIcon={<AddIcon />} onClick={openCreate}>
-          Yeni Kategori
-        </FormButton>
-      </Box>
+      <PageHeader title="Kategoriler" subtitle={`${categories.length} kayıt`} addLabel="Yeni Kategori" onAdd={openCreate} />
 
       <DataTable<Category>
         rows={categories}
@@ -143,36 +126,25 @@ export default function CategoriesPage() {
         emptyMessage="Henüz kategori yok"
       />
 
-      <Dialog open={modalOpen} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown={saving}>
-        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
-          {editingCategory ? 'Kategori Düzenle' : 'Yeni Kategori Ekle'}
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ pt: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <FormInput
-            label="Kategori Adı"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim()) void handleSave();
-            }}
-          />
-        </DialogContent>
-        <Divider />
-        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={handleClose} disabled={saving}>İptal</Button>
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
-          >
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CrudModal
+        open={modalOpen}
+        title={editingCategory ? 'Kategori Düzenle' : 'Yeni Kategori Ekle'}
+        saving={saving}
+        saveDisabled={!name.trim()}
+        onClose={handleClose}
+        onSave={handleSave}
+      >
+        <FormInput
+          label="Kategori Adı"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && name.trim()) void handleSave();
+          }}
+        />
+      </CrudModal>
 
       <ConfirmationDialog
         open={!!deleteId}

@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -37,11 +38,22 @@ app.use(cookieParser(env.COOKIE_SECRET));
 // Rate limiting
 app.use('/api', apiLimiter);
 
-// Local uploads — allow cross-origin image loading (frontend is on a different port)
-app.use('/uploads', (_req, res, next) => {
+// Local uploads — allow cross-origin image/model loading (frontend is on a different port)
+const setUploadHeaders = (res: express.Response, filePath?: string) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', env.FRONTEND_URL);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (filePath && path.extname(filePath).toLowerCase() === '.glb') {
+    res.setHeader('Content-Type', 'model/gltf-binary');
+  }
+};
+
+app.use('/uploads', (req, res, next) => {
+  setUploadHeaders(res, req.path);
+
   next();
-}, express.static(UPLOADS_DIR));
+}, express.static(UPLOADS_DIR, { setHeaders: setUploadHeaders }));
 
 // Routes
 app.use('/api', baseRouter);

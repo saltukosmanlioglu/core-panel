@@ -1,6 +1,15 @@
 import type { Project, Tender } from '@core-panel/shared';
 import { apiClient } from '../api-client';
-import type { ProjectPayload, TenderPayload, TenderQueryParams } from './types';
+import type {
+  FloorplannerDrawingResult,
+  FloorplannerExportResult,
+  FloorplannerGenerateDrawingPayload,
+  FloorplannerProvisionPayload,
+  FloorplannerProvisionResult,
+  ProjectPayload,
+  TenderPayload,
+  TenderQueryParams,
+} from './types';
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
@@ -26,6 +35,32 @@ export async function updateProjectApi(id: string, data: ProjectPayload): Promis
 
 export async function deleteProjectApi(id: string): Promise<void> {
   await apiClient.delete(`/api/projects/${id}`);
+}
+
+export async function provisionFloorplannerProjectApi(
+  id: string,
+  data?: FloorplannerProvisionPayload,
+): Promise<FloorplannerProvisionResult> {
+  const res = await apiClient.post(`/api/projects/${id}/floorplanner/provision`, data ?? {});
+  return (res.data as { floorplanner: FloorplannerProvisionResult }).floorplanner;
+}
+
+export async function generateFloorplannerDrawingApi(
+  id: string,
+  data: FloorplannerGenerateDrawingPayload,
+): Promise<FloorplannerDrawingResult> {
+  const res = await apiClient.post(`/api/projects/${id}/floorplanner/generate-drawing`, data);
+  return (res.data as { drawing: FloorplannerDrawingResult }).drawing;
+}
+
+export async function startFloorplannerExportApi(id: string): Promise<FloorplannerExportResult> {
+  const res = await apiClient.post(`/api/projects/${id}/floorplanner/export`);
+  return (res.data as { export: FloorplannerExportResult }).export;
+}
+
+export async function getFloorplannerExportApi(id: string, exportId: string): Promise<FloorplannerExportResult> {
+  const res = await apiClient.get(`/api/projects/${id}/floorplanner/export/${exportId}`);
+  return (res.data as { export: FloorplannerExportResult }).export;
 }
 
 // ─── Tenders ──────────────────────────────────────────────────────────────────
