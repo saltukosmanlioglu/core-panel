@@ -12,5 +12,11 @@ export const updateProjectSchema = z.object({
   status: z.enum(['active', 'inactive', 'completed']).optional(),
 });
 
+export const updateProjectStatusSchema = z.object({
+  status: z.enum(['active', 'approved', 'lost']),
+  note: z.string().optional(),
+});
+
 export type CreateProjectRequest = z.infer<typeof createProjectSchema>;
 export type UpdateProjectRequest = z.infer<typeof updateProjectSchema>;
+export type UpdateProjectStatusRequest = z.infer<typeof updateProjectStatusSchema>;

@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import axios from 'axios';
-import { Box, Card, CircularProgress, Typography } from '@mui/material';
+import { Box, Card, Chip, CircularProgress, Typography } from '@mui/material';
 import { Gavel as GavelIcon, CheckCircle as CheckIcon, HourglassEmpty as PendingIcon } from '@mui/icons-material';
 import { Notification } from '@/components';
-import { getTendersApi } from '@/services/workspace/api';
-import type { Tender } from '@core-panel/shared';
+import { getProjectApi, getTendersApi } from '@/services/workspace/api';
+import type { Project, Tender } from '@core-panel/shared';
 
 function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string | number; color: string }) {
   return (
@@ -27,15 +27,25 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
   );
 }
 
+const projectStatusStyles: Record<string, { label: string; bg: string; color: string }> = {
+  active: { label: 'Aktif', bg: '#DBEAFE', color: '#1D4ED8' },
+  approved: { label: 'Onaylandı', bg: '#DCFCE7', color: '#15803D' },
+  lost: { label: 'İş Kaybedildi', bg: '#FEE2E2', color: '#DC2626' },
+};
+
 export default function ProjectOverviewPage() {
   const { id } = useParams<{ id: string }>();
+  const [project, setProject] = useState<Project | null>(null);
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as const });
 
   useEffect(() => {
-    getTendersApi({ projectId: id })
-      .then(setTenders)
+    Promise.all([getProjectApi(id), getTendersApi({ projectId: id })])
+      .then(([projectData, tenderData]) => {
+        setProject(projectData);
+        setTenders(tenderData);
+      })
       .catch((err: unknown) => {
         const msg = axios.isAxiosError(err)
           ? ((err.response?.data as { error?: string })?.error ?? 'Proje verileri yüklenemedi')
@@ -58,6 +68,24 @@ export default function ProjectOverviewPage() {
 
   return (
     <>
+      {project && (
+        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Box>
+            <Typography sx={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{project.name}</Typography>
+            {project.statusNote && (
+              <Typography sx={{ fontSize: 13, color: '#6B7280' }}>{project.statusNote}</Typography>
+            )}
+          </Box>
+          <Chip
+            label={(projectStatusStyles[project.status] ?? { label: project.status }).label}
+            sx={{
+              bgcolor: (projectStatusStyles[project.status] ?? { bg: '#F3F4F6' }).bg,
+              color: (projectStatusStyles[project.status] ?? { color: '#6B7280' }).color,
+              fontWeight: 800,
+            }}
+          />
+        </Box>
+      )}
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
         <StatCard icon={<GavelIcon sx={{ fontSize: 24 }} />}   label="Toplam İhale"   value={tenders.length}                  color="#1F2937" />
         <StatCard icon={<PendingIcon sx={{ fontSize: 24 }} />} label="Açık İhale"     value={openCount}                       color="#3B82F6" />

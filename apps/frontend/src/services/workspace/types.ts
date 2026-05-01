@@ -4,6 +4,11 @@ export interface ProjectPayload {
   status: string;
 }
 
+export interface ProjectStatusPayload {
+  status: 'active' | 'approved' | 'lost';
+  note?: string;
+}
+
 export interface FloorplannerProvisionPayload {
   user?: {
     email?: string;

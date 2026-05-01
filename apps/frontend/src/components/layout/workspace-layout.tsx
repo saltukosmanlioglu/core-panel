@@ -10,6 +10,7 @@ import {
   Gavel as GavelIcon,
   GridOn as GridOnIcon,
   Payments as PaymentsIcon,
+  People as PeopleIcon,
   ViewInAr as ViewInArIcon,
 } from '@mui/icons-material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -49,6 +50,7 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
               { label: 'İnşaat Alanı Hesaplama', icon: <CalculateIcon fontSize="small" />, href: `${projectBase}/area-calculation`, color: '#0ea5e9' },
               { label: 'Kat Planı', icon: <GridOnIcon fontSize="small" />, href: `${projectBase}/floor-plan`, color: '#0ea5e9' },
               { label: '3D Modelleme', icon: <ViewInArIcon fontSize="small" />, href: `${projectBase}/3d-model`, color: '#0ea5e9' },
+              { label: 'Tapu Sahipleri', icon: <PeopleIcon fontSize="small" />, href: `${projectBase}/property-owners`, color: '#0ea5e9' },
             ],
           },
           {

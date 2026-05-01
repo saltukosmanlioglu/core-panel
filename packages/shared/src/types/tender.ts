@@ -6,6 +6,9 @@ export interface Project {
   floorplannerUserId: string | null;
   floorplannerProjectId: string | null;
   floorplannerSyncedAt: string | null;
+  statusNote: string | null;
+  statusUpdatedAt: string | null;
+  statusUpdatedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }

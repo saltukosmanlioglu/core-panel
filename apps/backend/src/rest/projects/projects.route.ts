@@ -16,6 +16,7 @@ router.post('/:id/floorplanner/provision', requireAdminAccess, validateUUID(), f
 router.post('/:id/floorplanner/generate-drawing', requireAdminAccess, validateUUID(), floorplannerController.generateDrawing);
 router.post('/:id/floorplanner/export', requireAdminAccess, validateUUID(), floorplannerController.startExport);
 router.get('/:id/floorplanner/export/:exportId', requireAdminAccess, validateUUID(), floorplannerController.getExport);
+router.put('/:id/status', requireAdminAccess, validateUUID(), projectsController.updateStatus);
 router.put('/:id', requireAdminAccess, validateUUID(), projectsController.update);
 router.delete('/:id', requireAdminAccess, validateUUID(), projectsController.deleteById);
 

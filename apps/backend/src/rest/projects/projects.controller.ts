@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import * as projectsRepo from './projects.repo';
-import { createProjectSchema, updateProjectSchema } from '../../models/project.model';
+import * as tendersRepo from '../tenders/tenders.repo';
+import * as auditRepo from '../tender-audit-logs/tender-audit-logs.repo';
+import { TenantDb } from '../../lib/tenantDb';
+import { createProjectSchema, updateProjectSchema, updateProjectStatusSchema } from '../../models/project.model';
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -68,6 +71,38 @@ export const deleteById = async (req: Request, res: Response, next: NextFunction
       return;
     }
     res.json({ status: 'ok' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const parsed = updateProjectStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
+      return;
+    }
+
+    const project = await projectsRepo.updateStatus(req.resolvedCompanyId!, String(req.params.id), {
+      ...parsed.data,
+      userId: req.userId!,
+    });
+
+    if (!project) {
+      res.status(404).json({ error: 'İnşaat bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+
+    const tdb = new TenantDb(req.resolvedCompanyId!);
+    const tenders = await tendersRepo.findAll(req.resolvedCompanyId!, { projectId: project.id });
+    await Promise.all(tenders.map((tender) => auditRepo.create(tdb, tender.id, 'project_status_updated', {
+      projectId: project.id,
+      status: parsed.data.status,
+      note: parsed.data.note ?? null,
+    }, req.userId!)));
+
+    res.json({ project });
   } catch (err) {
     next(err);
   }

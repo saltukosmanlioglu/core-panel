@@ -7,6 +7,7 @@ import type {
   FloorplannerProvisionPayload,
   FloorplannerProvisionResult,
   ProjectPayload,
+  ProjectStatusPayload,
   TenderPayload,
   TenderQueryParams,
 } from './types';
@@ -35,6 +36,11 @@ export async function updateProjectApi(id: string, data: ProjectPayload): Promis
 
 export async function deleteProjectApi(id: string): Promise<void> {
   await apiClient.delete(`/api/projects/${id}`);
+}
+
+export async function updateProjectStatusApi(id: string, data: ProjectStatusPayload): Promise<Project> {
+  const res = await apiClient.put(`/api/projects/${id}/status`, data);
+  return (res.data as { project: Project }).project;
 }
 
 export async function provisionFloorplannerProjectApi(

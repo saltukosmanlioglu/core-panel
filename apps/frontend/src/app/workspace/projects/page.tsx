@@ -3,21 +3,25 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import { Box, Skeleton, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem, Skeleton, TextField, Typography } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
   CalendarToday as CalendarTodayIcon,
   ChevronRight as ChevronRightIcon,
   HomeWork as HomeWorkIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { Notification } from '@/components';
 import { WorkspaceLayout } from '@/components/layout/workspace-layout';
+import { useUser } from '@/contexts/UserContext';
 import { getTenantsApi } from '@/services/admin/api';
-import { getProjectsApi, getTendersApi } from '@/services/workspace/api';
-import type { Project } from '@core-panel/shared';
+import { getProjectsApi, getTendersApi, updateProjectStatusApi } from '@/services/workspace/api';
+import { UserRole, type Project } from '@core-panel/shared';
 
 const getStatusStyle = (status: string) => ({
-  active:    { label: 'Aktif',      bg: 'rgba(22,163,74,0.2)',   color: '#86efac',  border: 'rgba(134,239,172,0.3)', headerBg: '#1E3A5F' },
+  active:    { label: 'Aktif',      bg: 'rgba(59,130,246,0.2)',  color: '#bfdbfe',  border: 'rgba(191,219,254,0.35)', headerBg: '#1E3A5F' },
+  approved:  { label: 'Onaylandı',  bg: 'rgba(22,163,74,0.2)',   color: '#86efac',  border: 'rgba(134,239,172,0.35)', headerBg: '#166534' },
+  lost:      { label: 'İş Kaybedildi', bg: 'rgba(220,38,38,0.22)', color: '#fecaca', border: 'rgba(254,202,202,0.35)', headerBg: '#7f1d1d' },
   completed: { label: 'Tamamlandı', bg: 'rgba(99,102,241,0.2)',  color: '#a5b4fc',  border: 'rgba(165,180,252,0.3)', headerBg: '#374151' },
   cancelled: { label: 'İptal',      bg: 'rgba(148,163,184,0.2)', color: '#94a3b8',  border: 'rgba(148,163,184,0.3)', headerBg: '#64748b' },
 }[status] ?? { label: status, bg: 'rgba(148,163,184,0.2)', color: '#94a3b8', border: 'rgba(148,163,184,0.3)', headerBg: '#374151' });
@@ -34,14 +38,26 @@ function ProjectCard({
   project,
   tenderCount,
   tenantCount,
+  isAdmin,
   onClick,
+  onStatusChange,
 }: {
   project: Project;
   tenderCount: number;
   tenantCount: number;
+  isAdmin: boolean;
   onClick: () => void;
+  onStatusChange: (status: 'active' | 'approved' | 'lost', note?: string) => void;
 }) {
   const statusStyle = getStatusStyle(project.status);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [lostOpen, setLostOpen] = useState(false);
+  const [lostNote, setLostNote] = useState('');
+
+  const runStatusChange = (status: 'active' | 'approved' | 'lost', note?: string) => {
+    setMenuAnchor(null);
+    onStatusChange(status, note);
+  };
 
   return (
     <Box
@@ -62,7 +78,7 @@ function ProjectCard({
       onClick={onClick}
     >
       <Box sx={{ backgroundColor: statusStyle.headerBg, px: 2.5, pt: 2, pb: 1.75 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
             <Box sx={{
               width: 36, height: 36, borderRadius: 1,
@@ -80,16 +96,45 @@ function ProjectCard({
               </Typography>
             </Box>
           </Box>
-          <Box sx={{
-            backgroundColor: statusStyle.bg,
-            color: statusStyle.color,
-            border: `0.5px solid ${statusStyle.border}`,
-            fontSize: 11, fontWeight: 500,
-            px: 1.25, py: 0.4,
-            borderRadius: 10,
-            whiteSpace: 'nowrap',
-          }}>
-            {statusStyle.label}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{
+              backgroundColor: statusStyle.bg,
+              color: statusStyle.color,
+              border: `0.5px solid ${statusStyle.border}`,
+              fontSize: 11, fontWeight: 500,
+              px: 1.25, py: 0.4,
+              borderRadius: 10,
+              whiteSpace: 'nowrap',
+            }}>
+              {statusStyle.label}
+            </Box>
+            {isAdmin && (
+              <>
+                <IconButton
+                  size="small"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMenuAnchor(event.currentTarget);
+                  }}
+                  sx={{ color: 'rgba(255,255,255,0.8)' }}
+                >
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+                <Menu
+                  anchorEl={menuAnchor}
+                  open={Boolean(menuAnchor)}
+                  onClose={(event: object) => {
+                    (event as { stopPropagation?: () => void }).stopPropagation?.();
+                    setMenuAnchor(null);
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {project.status !== 'approved' && <MenuItem onClick={() => runStatusChange('approved')}>Onayla</MenuItem>}
+                  {project.status !== 'lost' && <MenuItem onClick={() => { setMenuAnchor(null); setLostOpen(true); }}>İş Kaybedildi</MenuItem>}
+                  {project.status !== 'active' && <MenuItem onClick={() => runStatusChange('active')}>Aktife Al</MenuItem>}
+                </Menu>
+              </>
+            )}
           </Box>
         </Box>
       </Box>
@@ -143,6 +188,33 @@ function ProjectCard({
           </Box>
         </Box>
       </Box>
+      <Dialog open={lostOpen} onClose={() => setLostOpen(false)} onClick={(event) => event.stopPropagation()} maxWidth="xs" fullWidth>
+        <DialogTitle>İş Kaybedildi Notu</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Not"
+            value={lostNote}
+            onChange={(event) => setLostNote(event.target.value)}
+            multiline
+            rows={3}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLostOpen(false)}>İptal</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              setLostOpen(false);
+              runStatusChange('lost', lostNote);
+              setLostNote('');
+            }}
+          >
+            Kaydet
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -155,6 +227,7 @@ function CardSkeleton() {
 
 export default function DashboardProjectsPage() {
   const router = useRouter();
+  const { user } = useUser();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTenderCounts, setProjectTenderCounts] = useState<Record<string, number>>({});
   const [tenantCount, setTenantCount] = useState(0);
@@ -213,6 +286,18 @@ export default function DashboardProjectsPage() {
       .catch(() => undefined);
   }, []);
 
+  const handleStatusChange = async (projectId: string, status: 'active' | 'approved' | 'lost', note?: string) => {
+    try {
+      const updated = await updateProjectStatusApi(projectId, { status, note });
+      setProjects((current) => current.map((project) => (project.id === updated.id ? updated : project)));
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err)
+        ? ((err.response?.data as { error?: string })?.error ?? 'Durum güncellenemedi')
+        : 'Durum güncellenemedi';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+    }
+  };
+
   return (
     <WorkspaceLayout>
       <Box>
@@ -239,7 +324,9 @@ export default function DashboardProjectsPage() {
                 project={p}
                 tenderCount={projectTenderCounts[p.id] ?? 0}
                 tenantCount={tenantCount}
+                isAdmin={user?.role === UserRole.COMPANY_ADMIN}
                 onClick={() => router.push(`/workspace/projects/${p.id}`)}
+                onStatusChange={(status, note) => void handleStatusChange(p.id, status, note)}
               />
             ))
           }

@@ -4,6 +4,8 @@ export * from './types/api';
 export * from './types/company';
 export * from './types/fileInfo';
 export * from './types/payment';
+export * from './types/propertyOwner';
+export * from './types/paymentPlan';
 export * from './types/tender';
 export * from './types/threeDModel';
 export * from './enums';
