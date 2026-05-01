@@ -19,6 +19,7 @@ import tenderItemNotesRouter from './tender-item-notes/tender-item-notes.route';
 import tenderAwardsRouter from './tender-awards/tender-awards.route';
 import tenderAuditLogsRouter from './tender-audit-logs/tender-audit-logs.route';
 import threeDModelsRouter from './3d-models/3d-models.route';
+import paymentsRouter from './payments/payments.route';
 
 const baseRouter = Router();
 
@@ -39,6 +40,7 @@ baseRouter.use('/tenders/:tenderId/comparison', verifyToken, checkIsActive, tend
 baseRouter.use('/tenders/:tenderId/item-notes', verifyToken, checkIsActive, tenderItemNotesRouter);
 baseRouter.use('/tenders/:tenderId/awards', verifyToken, checkIsActive, tenderAwardsRouter);
 baseRouter.use('/tenders/:tenderId/audit-log', verifyToken, checkIsActive, tenderAuditLogsRouter);
+baseRouter.use('/', verifyToken, checkIsActive, paymentsRouter);
 baseRouter.use('/', verifyToken, checkIsActive, threeDModelsRouter);
 
 export default baseRouter;

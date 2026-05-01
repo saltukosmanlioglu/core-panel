@@ -57,6 +57,22 @@ type KitchenType = 'open' | 'closed';
 type GenerationMethod = 'ai' | 'manual';
 type ExtraId = 'balcony' | 'homeOffice' | 'laundryRoom' | 'storage' | 'walkInCloset' | 'terrace';
 
+declare global {
+  interface Window {
+    initFPEditor?: (options: {
+      mountSelector: string;
+      projectId: number;
+      autoSetup: boolean;
+      user: {
+        id: string;
+        auth_token: string;
+        permissions: string[];
+      };
+      language: string;
+    }) => void;
+  }
+}
+
 interface WizardValues {
   propertyType: PropertyType;
   totalArea: number;
@@ -377,7 +393,7 @@ export function FloorPlanWizard() {
     const el = document.getElementById('fp-editor');
     if (!el) return;
     fpEditorMounted.current = true;
-    (window as Record<string, unknown>)['initFPEditor']?.({
+    window.initFPEditor?.({
       mountSelector: '#fp-editor',
       projectId: parseInt(floorplannerResult.projectId, 10),
       autoSetup: true,
