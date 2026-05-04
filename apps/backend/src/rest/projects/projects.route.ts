@@ -10,6 +10,7 @@ const router = Router();
 router.use(resolveCompany);
 
 router.get('/', requireAdminAccess, projectsController.getAll);
+router.get('/:id/summary-counts', requireAdminAccess, validateUUID(), projectsController.getSummaryCounts);
 router.get('/:id', requireAdminAccess, validateUUID(), projectsController.getById);
 router.post('/', requireAdminAccess, projectsController.create);
 router.post('/:id/floorplanner/provision', requireAdminAccess, validateUUID(), floorplannerController.provisionProject);

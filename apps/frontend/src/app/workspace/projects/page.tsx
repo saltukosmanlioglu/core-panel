@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem, Skeleton, TextField, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem, Skeleton, TextField, Typography } from '@mui/material';
 import {
   Assignment as AssignmentIcon,
   CalendarToday as CalendarTodayIcon,
   ChevronRight as ChevronRightIcon,
+  Delete as DeleteIcon,
   HomeWork as HomeWorkIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
@@ -15,7 +16,8 @@ import { Notification } from '@/components';
 import { WorkspaceLayout } from '@/components/layout/workspace-layout';
 import { useUser } from '@/contexts/UserContext';
 import { getTenantsApi } from '@/services/admin/api';
-import { getProjectsApi, getTendersApi, updateProjectStatusApi } from '@/services/workspace/api';
+import { deleteProjectApi, getProjectSummaryCountsApi, getProjectsApi, getTendersApi, updateProjectStatusApi } from '@/services/workspace/api';
+import type { ProjectSummaryCounts } from '@/services/workspace/types';
 import { UserRole, type Project } from '@core-panel/shared';
 
 const getStatusStyle = (status: string) => ({
@@ -41,6 +43,7 @@ function ProjectCard({
   isAdmin,
   onClick,
   onStatusChange,
+  onDelete,
 }: {
   project: Project;
   tenderCount: number;
@@ -48,6 +51,7 @@ function ProjectCard({
   isAdmin: boolean;
   onClick: () => void;
   onStatusChange: (status: 'active' | 'approved' | 'lost', note?: string) => void;
+  onDelete: () => void;
 }) {
   const statusStyle = getStatusStyle(project.status);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -132,6 +136,17 @@ function ProjectCard({
                   {project.status !== 'approved' && <MenuItem onClick={() => runStatusChange('approved')}>Onayla</MenuItem>}
                   {project.status !== 'lost' && <MenuItem onClick={() => { setMenuAnchor(null); setLostOpen(true); }}>İş Kaybedildi</MenuItem>}
                   {project.status !== 'active' && <MenuItem onClick={() => runStatusChange('active')}>Aktife Al</MenuItem>}
+                  <MenuItem
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuAnchor(null);
+                      onDelete();
+                    }}
+                    sx={{ color: '#dc2626' }}
+                  >
+                    <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                    Sil
+                  </MenuItem>
                 </Menu>
               </>
             )}
@@ -232,7 +247,11 @@ export default function DashboardProjectsPage() {
   const [projectTenderCounts, setProjectTenderCounts] = useState<Record<string, number>>({});
   const [tenantCount, setTenantCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as const });
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleteCounts, setDeleteCounts] = useState<ProjectSummaryCounts | null>(null);
+  const [deleteCountsLoading, setDeleteCountsLoading] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' as 'success' | 'error' });
 
   useEffect(() => {
     getProjectsApi()
@@ -298,6 +317,69 @@ export default function DashboardProjectsPage() {
     }
   };
 
+  const openDeleteDialog = async (project: Project) => {
+    setDeleteTarget(project);
+    setDeleteCounts(null);
+    setDeleteCountsLoading(true);
+    try {
+      const counts = await getProjectSummaryCountsApi(project.id);
+      setDeleteCounts(counts);
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err)
+        ? ((err.response?.data as { error?: string })?.error ?? 'Silme özeti alınamadı')
+        : 'Silme özeti alınamadı';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+      setDeleteTarget(null);
+    } finally {
+      setDeleteCountsLoading(false);
+    }
+  };
+
+  const closeDeleteDialog = () => {
+    if (deletingProject) {
+      return;
+    }
+    setDeleteTarget(null);
+    setDeleteCounts(null);
+  };
+
+  const confirmDeleteProject = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    try {
+      setDeletingProject(true);
+      await deleteProjectApi(deleteTarget.id);
+      setProjects((current) => current.filter((project) => project.id !== deleteTarget.id));
+      setProjectTenderCounts((current) => {
+        const next = { ...current };
+        delete next[deleteTarget.id];
+        return next;
+      });
+      setDeleteTarget(null);
+      setDeleteCounts(null);
+      setSnackbar({ open: true, message: 'Proje silindi', severity: 'success' });
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err)
+        ? ((err.response?.data as { error?: string })?.error ?? 'Proje silinemedi')
+        : 'Proje silinemedi';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+    } finally {
+      setDeletingProject(false);
+    }
+  };
+
+  const deleteCountItems = deleteCounts
+    ? [
+      { count: deleteCounts.areaCalculations, label: 'alan hesaplama kaydı' },
+      { count: deleteCounts.models3d, label: '3D model' },
+      { count: deleteCounts.propertyOwners, label: 'tapu sahibi ve ödeme planları' },
+      { count: deleteCounts.tenders, label: 'ihale' },
+      { count: deleteCounts.payments, label: 'ödeme kaydı' },
+    ].filter((item) => item.count > 0)
+    : [];
+
   return (
     <WorkspaceLayout>
       <Box>
@@ -327,11 +409,53 @@ export default function DashboardProjectsPage() {
                 isAdmin={user?.role === UserRole.COMPANY_ADMIN}
                 onClick={() => router.push(`/workspace/projects/${p.id}`)}
                 onStatusChange={(status, note) => void handleStatusChange(p.id, status, note)}
+                onDelete={() => void openDeleteDialog(p)}
               />
             ))
           }
         </Box>
       </Box>
+      <Dialog open={Boolean(deleteTarget)} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Projeyi Sil</DialogTitle>
+        <DialogContent>
+          {deleteCountsLoading ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
+              <CircularProgress size={20} />
+              <Typography>Proje verileri kontrol ediliyor...</Typography>
+            </Box>
+          ) : (
+            <>
+              <Typography sx={{ mb: 2 }}>
+                Bu projeyi silmek istediğinizden emin misiniz? Aşağıdaki veriler kalıcı olarak silinecektir:
+              </Typography>
+              {deleteCounts && deleteCountItems.length > 0 ? (
+                <Box component="ul" sx={{ m: 0, pl: 3 }}>
+                  {deleteCountItems.map((item) => (
+                    <Typography component="li" key={item.label} sx={{ mb: 0.5 }}>
+                      {item.count} {item.label}
+                    </Typography>
+                  ))}
+                </Box>
+              ) : (
+                <Typography>Bu proje henüz veri içermiyor.</Typography>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={closeDeleteDialog} disabled={deletingProject}>
+            İptal
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={deleteCountsLoading || deletingProject}
+            onClick={() => void confirmDeleteProject()}
+          >
+            {deletingProject ? <CircularProgress size={18} color="inherit" /> : 'Evet, Sil'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Notification open={snackbar.open} message={snackbar.message} severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))} />
     </WorkspaceLayout>
   );

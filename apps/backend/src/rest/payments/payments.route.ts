@@ -29,6 +29,7 @@ router.put('/projects/:projectId/expenses/:expenseId', validateUUID('projectId')
 router.delete('/projects/:projectId/expenses/:expenseId', validateUUID('projectId'), validateUUID('expenseId'), controller.deleteExpense);
 
 router.get('/notifications', controller.unreadNotifications);
+router.put('/notifications/read-all', controller.markAllNotificationsRead);
 router.put('/notifications/:id/read', validateUUID(), controller.markNotificationRead);
 
 export default router;

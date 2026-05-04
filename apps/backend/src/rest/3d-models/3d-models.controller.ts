@@ -3,6 +3,7 @@ import { getTdb } from '../../lib/tenantDb';
 import {
   generateThreeDModelFromImageSchema,
   generateThreeDModelImageSchema,
+  updateThreeDModelStatusSchema,
 } from '../../models/three-d-model.model';
 import * as projectsRepo from '../projects/projects.repo';
 import * as repo from './3d-models.repo';
@@ -73,6 +74,38 @@ export const generateImage = async (req: Request, res: Response, next: NextFunct
   }
 };
 
+export const createFromFloorPlanImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!(await ensureProjectExists(req, res))) {
+      return;
+    }
+
+    const { z } = await import('zod');
+    const schema = z.object({
+      imageUrl: z.string().url(),
+      floorPlanExportId: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
+        code: 'VALIDATION_ERROR',
+      });
+      return;
+    }
+
+    const model = await repo.createFromFloorPlanImage(getTdb(req), {
+      projectId: String(req.params.projectId),
+      imageUrl: parsed.data.imageUrl,
+      floorPlanExportId: parsed.data.floorPlanExportId,
+    });
+
+    res.status(201).json(withPublicModelUrl(req, model));
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const generate3d = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const parsed = generateThreeDModelFromImageSchema.safeParse(req.body);
@@ -99,6 +132,33 @@ export const generate3d = async (req: Request, res: Response, next: NextFunction
 export const status = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const model = await service.syncStatus(getTdb(req), String(req.params.id), req.userId!);
+    res.json(withPublicModelUrl(req, model));
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const parsed = updateThreeDModelStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
+        code: 'VALIDATION_ERROR',
+      });
+      return;
+    }
+
+    const model = await repo.updateGenerationStatus(getTdb(req), String(req.params.id), {
+      generationStep: parsed.data.status,
+      progress: parsed.data.status === repo.GENERATION_STEP.FAILED ? 0 : undefined,
+    });
+
+    if (!model) {
+      res.status(404).json({ error: '3D model bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+
     res.json(withPublicModelUrl(req, model));
   } catch (error) {
     next(error);

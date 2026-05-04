@@ -35,6 +35,14 @@ function mapRow(row: ProjectRow) {
 
 export type ProjectRecord = ReturnType<typeof mapRow>;
 
+export interface ProjectSummaryCounts {
+  areaCalculations: number;
+  models3d: number;
+  propertyOwners: number;
+  tenders: number;
+  payments: number;
+}
+
 export async function findAll(companyId: string): Promise<ProjectRecord[]> {
   const tdb = new TenantDb(companyId);
   const { rows } = await tdb.query<ProjectRow>(
@@ -65,6 +73,46 @@ export async function findById(companyId: string, id: string): Promise<ProjectRe
     [id],
   );
   return rows[0] ? mapRow(rows[0]) : null;
+}
+
+async function countByProjectId(tdb: TenantDb, tableName: string, projectId: string): Promise<number> {
+  const { rows } = await tdb.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM ${tdb.ref(tableName)} WHERE project_id = $1`,
+    [projectId],
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function getSummaryCounts(companyId: string, id: string): Promise<ProjectSummaryCounts | null> {
+  const project = await findById(companyId, id);
+  if (!project) {
+    return null;
+  }
+
+  const tdb = new TenantDb(companyId);
+  const [
+    areaCalculations,
+    models3d,
+    propertyOwners,
+    tenders,
+    progressPayments,
+    generalExpenses,
+  ] = await Promise.all([
+    countByProjectId(tdb, 'area_calculations', id),
+    countByProjectId(tdb, 'project_3d_models', id),
+    countByProjectId(tdb, 'property_owners', id),
+    countByProjectId(tdb, 'tenders', id),
+    countByProjectId(tdb, 'progress_payments', id),
+    countByProjectId(tdb, 'general_expenses', id),
+  ]);
+
+  return {
+    areaCalculations,
+    models3d,
+    propertyOwners,
+    tenders,
+    payments: progressPayments + generalExpenses,
+  };
 }
 
 export async function create(

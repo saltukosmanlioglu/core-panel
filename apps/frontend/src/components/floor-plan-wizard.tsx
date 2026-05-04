@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Alert,
   Box,
@@ -13,6 +13,7 @@ import {
   FormControlLabel,
   IconButton,
   LinearProgress,
+  Skeleton,
   Slider,
   Stack,
   Step,
@@ -36,9 +37,11 @@ import {
   Inventory2 as InventoryIcon,
   KingBed as KingBedIcon,
   Layers as LayersIcon,
+  OpenInNew as OpenInNewIcon,
   Remove as RemoveIcon,
   RestartAlt as RestartAltIcon,
   SquareFoot as SquareFootIcon,
+  ViewInAr as ViewInArIcon,
 } from '@mui/icons-material';
 import {
   generateFloorplannerDrawingApi,
@@ -50,6 +53,9 @@ import type {
   FloorplannerDrawingResult,
   FloorplannerProvisionResult,
 } from '@/services/workspace/types';
+import { getLatestAreaCalculationApi } from '@/services/area-calculations/api';
+import { getProjectFloorPlanExportsApi } from '@/services/floor-plan-exports/api';
+import type { AreaCalculation, FloorPlanExport } from '@core-panel/shared';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 
 type PropertyType = 'apartment' | 'villa' | 'office';
@@ -291,10 +297,15 @@ function SummaryChips({ values }: { values: WizardValues }) {
 
 export function FloorPlanWizard() {
   const { id: projectId } = useParams<{ id: string }>();
+  const router = useRouter();
   const [wizardState, setWizardState] = useState<WizardState>({
     currentStep: 0,
     values: initialValues,
   });
+  const [areaCalc, setAreaCalc] = useState<AreaCalculation | null>(null);
+  const [areaCalcDismissed, setAreaCalcDismissed] = useState(false);
+  const [previousExports, setPreviousExports] = useState<FloorPlanExport[]>([]);
+  const [exportsLoading, setExportsLoading] = useState(true);
   const [floorplannerResult, setFloorplannerResult] = useState<FloorplannerProvisionResult | null>(null);
   const [floorplannerLoading, setFloorplannerLoading] = useState(false);
   const [floorplannerError, setFloorplannerError] = useState<string | null>(null);
@@ -310,6 +321,46 @@ export function FloorPlanWizard() {
   const fpEditorMounted = useRef(false);
   const exportPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const [calc, exps] = await Promise.all([
+          getLatestAreaCalculationApi(projectId),
+          getProjectFloorPlanExportsApi(projectId),
+        ]);
+
+        if (!active) return;
+
+        if (calc?.calculatedResults) {
+          setAreaCalc(calc);
+          const cr = calc.calculatedResults;
+          const prefillArea = cr.net_alan ?? cr.net_area_calculated;
+          const prefillFloors = cr.kat_adedi;
+          setWizardState((state) => ({
+            ...state,
+            values: {
+              ...state.values,
+              ...(prefillArea != null ? { totalArea: Math.min(300, Math.max(40, Math.round(Number(prefillArea)))) } : {}),
+              ...(prefillFloors != null ? { floorCount: Math.min(30, Math.max(1, Math.round(Number(prefillFloors)))) } : {}),
+            },
+          }));
+        }
+
+        setPreviousExports(exps);
+      } catch {
+        // Non-fatal
+      } finally {
+        if (active) setExportsLoading(false);
+      }
+    };
+
+    void load();
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const existing = document.getElementById('fp-embed-script');
@@ -350,6 +401,8 @@ export function FloorPlanWizard() {
           stopPolling();
           setExportStatus('done');
           setExportImageUrl(result.url ?? null);
+          // Refresh exports gallery
+          getProjectFloorPlanExportsApi(projectId).then(setPreviousExports).catch(() => undefined);
         } else {
           exportPollRef.current = setTimeout(() => void poll(exportId), 2000);
         }
@@ -510,12 +563,48 @@ export function FloorPlanWizard() {
     }
   };
 
-  const renderPropertyStep = () => (
+  const renderPropertyStep = () => {
+    const cr = areaCalc?.calculatedResults;
+    const showAlert = Boolean(cr) && !areaCalcDismissed;
+
+    return (
     <Box sx={{ display: 'grid', gap: 3 }}>
       <Box>
         <Typography sx={{ fontSize: 20, fontWeight: 800, color: '#111827' }}>Mülk bilgileri</Typography>
         <Typography sx={{ color: '#6B7280', fontSize: 14 }}>Tip, alan ve kat sayısını belirleyin.</Typography>
       </Box>
+
+      {showAlert && cr && (
+        <Alert
+          severity="info"
+          onClose={() => setAreaCalcDismissed(true)}
+          sx={{ '& .MuiAlert-message': { width: '100%' } }}
+        >
+          <Typography sx={{ fontWeight: 700, mb: 1, fontSize: 13 }}>
+            Alan hesabından otomatik dolduruldu
+          </Typography>
+          <Stack direction="row" flexWrap="wrap" gap={0.75}>
+            {cr.net_alan != null && (
+              <Chip label={`Net Alan: ${Number(cr.net_alan).toFixed(0)} m²`} size="small" color="info" />
+            )}
+            {cr.on_bahce != null && (
+              <Chip label={`Ön Bahçe: ${cr.on_bahce} m`} size="small" />
+            )}
+            {cr.yan_bahce != null && (
+              <Chip label={`Yan Bahçe: ${cr.yan_bahce} m`} size="small" />
+            )}
+            {cr.arka_bahce != null && (
+              <Chip label={`Arka Bahçe: ${cr.arka_bahce} m`} size="small" />
+            )}
+            {cr.kat_adedi != null && (
+              <Chip label={`Kat Adedi: ${cr.kat_adedi}`} size="small" color="info" />
+            )}
+            {cr.insaat_nizami != null && (
+              <Chip label={`Nizam: ${cr.insaat_nizami}`} size="small" />
+            )}
+          </Stack>
+        </Alert>
+      )}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
         {propertyTypes.map((type) => (
@@ -575,7 +664,8 @@ export function FloorPlanWizard() {
         onChange={(floorCount) => updateValues({ floorCount })}
       />
     </Box>
-  );
+    );
+  };
 
   const renderRoomsStep = () => (
     <Box sx={{ display: 'grid', gap: 3 }}>
@@ -895,6 +985,88 @@ export function FloorPlanWizard() {
           Mülk değerlerini adım adım girin ve üretim akışını seçin.
         </Typography>
       </Box>
+
+      {(exportsLoading || previousExports.length > 0) && (
+        <Box>
+          <Typography sx={{ fontSize: 16, fontWeight: 800, color: '#111827', mb: 1.5 }}>
+            Önceki Kat Planları
+          </Typography>
+          {exportsLoading ? (
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} variant="rectangular" width={180} height={200} sx={{ borderRadius: 2, flexShrink: 0 }} />
+              ))}
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 2,
+                overflowX: 'auto',
+                pb: 1,
+                scrollbarWidth: 'none',
+                '&::-webkit-scrollbar': { display: 'none' },
+              }}
+            >
+              {previousExports.map((exp) => (
+                <Box
+                  key={exp.id}
+                  sx={{
+                    width: 180,
+                    minWidth: 180,
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    bgcolor: '#FFFFFF',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={exp.imageUrl}
+                    alt="Kat planı"
+                    sx={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', bgcolor: '#F1F5F9' }}
+                  />
+                  <Box sx={{ p: 1.25 }}>
+                    <Typography sx={{ fontSize: 11, color: '#94A3B8', mb: 1 }}>
+                      {new Date(exp.createdAt).toLocaleDateString('tr-TR')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.75 }}>
+                      <Button
+                        size="small"
+                        startIcon={<OpenInNewIcon sx={{ fontSize: 13 }} />}
+                        href={exp.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{ fontSize: 11, px: 1, py: 0.5, minWidth: 0, color: '#475569', flexShrink: 0 }}
+                      >
+                        Görüntüle
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        startIcon={<ViewInArIcon sx={{ fontSize: 13 }} />}
+                        onClick={() => router.push(`/workspace/projects/${projectId}/3d-model?fromFloorPlan=${exp.id}`)}
+                        sx={{
+                          fontSize: 11,
+                          px: 1,
+                          py: 0.5,
+                          minWidth: 0,
+                          bgcolor: '#2D6A4F',
+                          '&:hover': { bgcolor: '#52B788' },
+                          flexShrink: 0,
+                        }}
+                      >
+                        3D'ye Gönder
+                      </Button>
+                    </Box>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
+      )}
 
       <Box
         sx={{

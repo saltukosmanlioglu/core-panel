@@ -194,6 +194,36 @@ export async function updateGenerationStatus(
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
+export async function createFromFloorPlanImage(
+  tdb: TenantDb,
+  data: {
+    projectId: string;
+    imageUrl: string;
+    floorPlanExportId?: string;
+  },
+): Promise<ThreeDModelRecord> {
+  const { rows } = await tdb.query<ThreeDModelRow>(
+    `INSERT INTO ${tdb.ref('project_3d_models')}
+       (project_id, prompt, enhanced_prompt, image_task_id, preview_image_urls,
+        original_image_urls, generation_step, status, progress, model_name, selected_image_url)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $5::jsonb, $6, $6, $7, $8, $9)
+     RETURNING *`,
+    [
+      data.projectId,
+      'Kat planından 3D model',
+      'Kat planından 3D model',
+      data.floorPlanExportId ?? 'floor-plan',
+      JSON.stringify([data.imageUrl]),
+      GENERATION_STEP.IMAGE_DONE,
+      100,
+      'Kat Planı 3D',
+      data.imageUrl,
+    ],
+  );
+
+  return mapRow(rows[0]!);
+}
+
 export async function remove(tdb: TenantDb, id: string): Promise<ThreeDModelRecord | null> {
   const { rows } = await tdb.query<ThreeDModelRow>(
     `DELETE FROM ${tdb.ref('project_3d_models')} WHERE id = $1 RETURNING *`,

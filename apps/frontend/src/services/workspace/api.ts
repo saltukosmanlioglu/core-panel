@@ -7,6 +7,7 @@ import type {
   FloorplannerProvisionPayload,
   FloorplannerProvisionResult,
   ProjectPayload,
+  ProjectSummaryCounts,
   ProjectStatusPayload,
   TenderPayload,
   TenderQueryParams,
@@ -41,6 +42,11 @@ export async function deleteProjectApi(id: string): Promise<void> {
 export async function updateProjectStatusApi(id: string, data: ProjectStatusPayload): Promise<Project> {
   const res = await apiClient.put(`/api/projects/${id}/status`, data);
   return (res.data as { project: Project }).project;
+}
+
+export async function getProjectSummaryCountsApi(id: string): Promise<ProjectSummaryCounts> {
+  const res = await apiClient.get(`/api/projects/${id}/summary-counts`);
+  return res.data as ProjectSummaryCounts;
 }
 
 export async function provisionFloorplannerProjectApi(

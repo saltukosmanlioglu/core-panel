@@ -484,6 +484,19 @@ export const unreadNotifications = async (req: Request, res: Response, next: Nex
   }
 };
 
+export const markAllNotificationsRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const updated = await repo.markAllNotificationsRead(
+      new TenantDb(req.resolvedCompanyId!),
+      req.resolvedCompanyId!,
+      req.userId!,
+    );
+    res.json({ updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const markNotificationRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const notification = await repo.markNotificationRead(

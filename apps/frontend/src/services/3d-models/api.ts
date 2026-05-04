@@ -25,6 +25,15 @@ export async function generateThreeDModelImagesApi(
   return res.data as GenerateImageResponse;
 }
 
+export async function createThreeDModelFromFloorPlanApi(
+  projectId: string,
+  data: { imageUrl: string; floorPlanExportId?: string },
+): Promise<{ id: string; selectedImageUrl: string }> {
+  const res = await apiClient.post(`/api/projects/${projectId}/3d-models/from-floor-plan`, data);
+  const model = res.data as { id: string; selectedImageUrl: string };
+  return model;
+}
+
 export async function generateThreeDModelFromImageApi(
   id: string,
   selectedImageUrl: string,
@@ -35,6 +44,14 @@ export async function generateThreeDModelFromImageApi(
 
 export async function getThreeDModelStatusApi(id: string): Promise<ThreeDModel> {
   const res = await apiClient.get(`/api/3d-models/${id}/status`);
+  return res.data as ThreeDModel;
+}
+
+export async function updateThreeDModelStatusApi(
+  id: string,
+  data: { status: GenerationStep; reason?: string },
+): Promise<ThreeDModel> {
+  const res = await apiClient.put(`/api/3d-models/${id}/status`, data);
   return res.data as ThreeDModel;
 }
 

@@ -89,6 +89,7 @@ interface NotificationRow {
   message: string;
   related_id: string | null;
   related_type: string | null;
+  related_project_id: string | null;
   is_read: boolean;
   created_at: Date;
 }
@@ -198,6 +199,7 @@ function mapNotification(row: NotificationRow) {
     message: row.message,
     relatedId: row.related_id,
     relatedType: row.related_type,
+    relatedProjectId: row.related_project_id ?? null,
     isRead: row.is_read,
     createdAt: row.created_at,
   };
@@ -612,14 +614,15 @@ export async function ensureDueNotifications(
 ): Promise<void> {
   await tdb.query(
     `INSERT INTO ${tdb.ref('payment_notifications')}
-       (company_id, user_id, type, message, related_id, related_type)
+       (company_id, user_id, type, message, related_id, related_type, related_project_id)
      SELECT
        $1::uuid,
        $2::uuid,
        'payment_due_soon',
        CONCAT('Hakediş vadesi yaklaşıyor: ', COALESCE(tenants.name, pp.tenant_id), ' - ', COALESCE(pp.period, 'Dönem yok')),
        pp.id,
-       'progress_payment'
+       'progress_payment',
+       pp.project_id
      FROM ${tdb.ref('progress_payments')} pp
      LEFT JOIN "public"."tenants" tenants ON tenants.id::text = pp.tenant_id
      WHERE pp.project_id = $3
@@ -651,6 +654,20 @@ export async function findUnreadNotifications(
     [companyId, userId],
   );
   return rows.map(mapNotification);
+}
+
+export async function markAllNotificationsRead(
+  tdb: TenantDb,
+  companyId: string,
+  userId: string,
+): Promise<number> {
+  const { rowCount } = await tdb.query(
+    `UPDATE ${tdb.ref('payment_notifications')}
+     SET is_read = TRUE
+     WHERE company_id = $1 AND (user_id = $2 OR user_id IS NULL) AND is_read = FALSE`,
+    [companyId, userId],
+  );
+  return rowCount ?? 0;
 }
 
 export async function markNotificationRead(

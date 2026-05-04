@@ -14,7 +14,9 @@ const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const MODEL_UPLOADS_DIR_NAME = '3d-models';
 const IMAGES_UPLOADS_DIR_NAME = '3d-images';
 const IMAGE_POLL_INTERVAL_MS = 2000;
-const IMAGE_POLL_MAX_ATTEMPTS = 120;
+const IMAGE_POLL_MAX_ATTEMPTS = 180;
+const IMAGE_GENERATION_TIMEOUT_MS = 6 * 60 * 1000;
+const MODEL_STATUS_TIMEOUT_MS = 11 * 60 * 1000;
 const BASE_URL = process.env.API_BASE_URL ?? `http://localhost:${env.PORT}`;
 
 const ANGLE_SUFFIXES = [
@@ -52,6 +54,22 @@ interface MeshyModelStatusResponse {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string, code: string): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(new AppError(message, 504, code));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   });
 }
 
@@ -212,7 +230,7 @@ Max 600 characters. Return only the prompt text.`,
   }
 }
 
-async function waitForImageGeneration(taskId: string): Promise<string> {
+async function waitForImageGenerationLoop(taskId: string): Promise<string> {
   for (let attempt = 0; attempt < IMAGE_POLL_MAX_ATTEMPTS; attempt += 1) {
     const result = await pollMeshyImage(taskId);
     const remoteStatus = normalizeRemoteStatus(result.status);
@@ -237,6 +255,15 @@ async function waitForImageGeneration(taskId: string): Promise<string> {
   }
 
   throw new AppError('Görsel üretimi zaman aşımına uğradı', 504, 'MESHY_IMAGE_TIMEOUT');
+}
+
+async function waitForImageGeneration(taskId: string): Promise<string> {
+  return withTimeout(
+    waitForImageGenerationLoop(taskId),
+    IMAGE_GENERATION_TIMEOUT_MS,
+    'Image generation timed out',
+    'MESHY_IMAGE_TIMEOUT',
+  );
 }
 
 async function saveGlbFromUrl(
@@ -392,7 +419,12 @@ export async function syncStatus(
     throw new AppError('Model için Meshy görev numarası bulunamadı', 400, 'MESHY_TASK_ID_MISSING');
   }
 
-  const meshyStatus = await pollMeshyModel(model.meshyTaskId);
+  const meshyStatus = await withTimeout(
+    pollMeshyModel(model.meshyTaskId),
+    MODEL_STATUS_TIMEOUT_MS,
+    '3D model generation timed out',
+    'MESHY_MODEL_TIMEOUT',
+  );
   const remoteStatus = normalizeRemoteStatus(meshyStatus.status);
   const progress = normalizeProgress(meshyStatus.progress);
   const thumbnailUrl = meshyStatus.thumbnail_url ?? model.thumbnailUrl;

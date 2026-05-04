@@ -112,6 +112,7 @@ export interface PaymentNotification {
   message: string;
   relatedId: string | null;
   relatedType: string | null;
+  relatedProjectId: string | null;
   isRead: boolean;
   createdAt: string;
 }

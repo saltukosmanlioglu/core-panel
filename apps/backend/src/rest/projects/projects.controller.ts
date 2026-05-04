@@ -31,6 +31,19 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
   }
 };
 
+export const getSummaryCounts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const counts = await projectsRepo.getSummaryCounts(req.resolvedCompanyId!, String(req.params.id));
+    if (!counts) {
+      res.status(404).json({ error: 'İnşaat bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+    res.json(counts);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const parsed = createProjectSchema.safeParse(req.body);

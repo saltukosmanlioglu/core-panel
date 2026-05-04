@@ -19,9 +19,12 @@ import tenderItemNotesRouter from './tender-item-notes/tender-item-notes.route';
 import tenderAwardsRouter from './tender-awards/tender-awards.route';
 import tenderAuditLogsRouter from './tender-audit-logs/tender-audit-logs.route';
 import threeDModelsRouter from './3d-models/3d-models.route';
+import floorPlanExportsRouter from './floor-plan-exports/floor-plan-exports.route';
+import priceListRouter from './price-list/price-list.route';
 import paymentsRouter from './payments/payments.route';
 import propertyOwnersRouter from './property-owners/property-owners.route';
 import paymentPlansRouter from './payment-plans/payment-plans.route';
+import areaCalculationsRouter from './area-calculations/area-calculations.route';
 
 const baseRouter = Router();
 
@@ -45,6 +48,9 @@ baseRouter.use('/tenders/:tenderId/audit-log', verifyToken, checkIsActive, tende
 baseRouter.use('/', verifyToken, checkIsActive, paymentsRouter);
 baseRouter.use('/', verifyToken, checkIsActive, propertyOwnersRouter);
 baseRouter.use('/', verifyToken, checkIsActive, paymentPlansRouter);
+baseRouter.use('/', verifyToken, checkIsActive, areaCalculationsRouter);
 baseRouter.use('/', verifyToken, checkIsActive, threeDModelsRouter);
+baseRouter.use('/', verifyToken, checkIsActive, floorPlanExportsRouter);
+baseRouter.use('/', verifyToken, checkIsActive, priceListRouter);
 
 export default baseRouter;

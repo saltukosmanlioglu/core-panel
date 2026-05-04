@@ -126,3 +126,8 @@ export async function markPaymentNotificationReadApi(id: string): Promise<Paymen
   const res = await apiClient.put(`/api/notifications/${id}/read`);
   return (res.data as { notification: PaymentNotification }).notification;
 }
+
+export async function markAllNotificationsReadApi(): Promise<{ updated: number }> {
+  const res = await apiClient.put('/api/notifications/read-all');
+  return res.data as { updated: number };
+}

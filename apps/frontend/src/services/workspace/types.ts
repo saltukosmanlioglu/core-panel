@@ -9,6 +9,14 @@ export interface ProjectStatusPayload {
   note?: string;
 }
 
+export interface ProjectSummaryCounts {
+  areaCalculations: number;
+  models3d: number;
+  propertyOwners: number;
+  tenders: number;
+  payments: number;
+}
+
 export interface FloorplannerProvisionPayload {
   user?: {
     email?: string;

@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -42,15 +43,20 @@ import { Notification } from '@/components';
 import { ThreeDModelViewer } from '@/components/ThreeDModelViewer';
 import { useSnackbar } from '@/hooks/useSnackbar';
 import {
+  createThreeDModelFromFloorPlanApi,
   deleteThreeDModelApi,
   generateThreeDModelFromImageApi,
   generateThreeDModelImagesApi,
   getProjectThreeDModelsApi,
   getThreeDModelStatusApi,
+  updateThreeDModelStatusApi,
 } from '@/services/3d-models/api';
+import { getFloorPlanExportApi } from '@/services/floor-plan-exports/api';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 
 const MAX_PROMPT_LENGTH = 600;
+const IMAGE_GENERATION_TIMEOUT_MS = 5 * 60 * 1000;
+const MODEL_GENERATION_TIMEOUT_MS = 10 * 60 * 1000;
 const WIZARD_STEPS = ['Tanım', 'Görsel Seç', '3D Model', 'Tamamlandı'];
 const MODEL_STEPS = ['Görsel Alındı ✓', '3D Dönüşüm', 'Tamamlandı'];
 
@@ -63,7 +69,20 @@ const chipStyles: Record<GenerationStep, { label: string; bg: string; color: str
   [GenerationStep.FAILED]: { label: 'Hata', bg: '#fee2e2', color: '#dc2626' },
 };
 
-type PollingState = { id: string };
+type PollingState = { id: string; startedAt: number };
+
+function withClientTimeout<T>(promise: Promise<T>, timeoutMs: number, code: string): Promise<T> {
+  let timeout: number | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = window.setTimeout(() => reject(new Error(code)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) {
+      window.clearTimeout(timeout);
+    }
+  });
+}
 
 function getModelUrl(model: ThreeDModel | null): string | null {
   return model?.modelUrl ?? model?.filePath ?? null;
@@ -86,7 +105,10 @@ function isGenerating(model: ThreeDModel): boolean {
 
 export default function ModelPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const fromFloorPlanExportId = searchParams.get('fromFloorPlan');
   const [activeStep, setActiveStep] = useState(0);
+  const [fromFloorPlan, setFromFloorPlan] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [models, setModels] = useState<ThreeDModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<ThreeDModel | null>(null);
@@ -123,7 +145,7 @@ export default function ModelPage() {
 
     if (model.generationStep === GenerationStep.MODEL_GENERATING) {
       setActiveStep(2);
-      setPolling({ id: model.id });
+      setPolling({ id: model.id, startedAt: Date.now() });
       return;
     }
 
@@ -158,13 +180,51 @@ export default function ModelPage() {
 
     const processing = projectModels.find((model) => model.generationStep === GenerationStep.MODEL_GENERATING);
     if (processing) {
-      setPolling({ id: processing.id });
+      setPolling({ id: processing.id, startedAt: Date.now() });
     }
 
     return projectModels;
   }, [id, selectModel, selectedModel]);
 
   useEffect(() => {
+    if (!fromFloorPlanExportId) return;
+
+    let active = true;
+
+    const init = async () => {
+      try {
+        setLoading(true);
+        const floorExport = await getFloorPlanExportApi(fromFloorPlanExportId);
+
+        if (!active) return;
+
+        const model = await createThreeDModelFromFloorPlanApi(id, {
+          imageUrl: floorExport.imageUrl,
+          floorPlanExportId: floorExport.id,
+        });
+
+        if (!active) return;
+
+        setFromFloorPlan(true);
+        await loadModels(model.id);
+        setSelectedImageUrl(model.selectedImageUrl);
+        setActiveStep(1);
+      } catch (error) {
+        if (active) showError(getErrorMessage(error, 'Kat planı yüklenemedi'));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void init();
+
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromFloorPlanExportId]);
+
+  useEffect(() => {
+    if (fromFloorPlanExportId) return;
+
     let active = true;
 
     const load = async () => {
@@ -180,7 +240,7 @@ export default function ModelPage() {
         const processing = projectModels.find((model) => model.generationStep === GenerationStep.MODEL_GENERATING);
         if (processing) {
           selectModel(processing);
-          setPolling({ id: processing.id });
+          setPolling({ id: processing.id, startedAt: Date.now() });
         }
       } catch (error) {
         if (active) {
@@ -209,6 +269,21 @@ export default function ModelPage() {
 
     const poll = async () => {
       try {
+        if (Date.now() - polling.startedAt > MODEL_GENERATION_TIMEOUT_MS) {
+          const timedOut = await updateThreeDModelStatusApi(polling.id, { status: GenerationStep.FAILED, reason: 'timeout' });
+
+          if (!active) {
+            return;
+          }
+
+          replaceModel(timedOut);
+          setPolling(null);
+          setModelStarting(false);
+          setActiveStep(1);
+          showError('3D model oluşturma zaman aşımına uğradı. Lütfen tekrar deneyin.');
+          return;
+        }
+
         const updated = await getThreeDModelStatusApi(polling.id);
 
         if (!active) {
@@ -259,13 +334,24 @@ export default function ModelPage() {
       setImageGenerating(true);
       setSelectedModel(null);
       setSelectedImageUrl(null);
-      const response = await generateThreeDModelImagesApi(id, { prompt: trimmedPrompt });
+      const response = await withClientTimeout(
+        generateThreeDModelImagesApi(id, { prompt: trimmedPrompt }),
+        IMAGE_GENERATION_TIMEOUT_MS,
+        'IMAGE_GENERATION_TIMEOUT',
+      );
       await loadModels(response.id);
       setSelectedImageUrl(null);
       setActiveStep(1);
       showSuccess('Görseller hazır');
     } catch (error) {
-      showError(getErrorMessage(error, 'Görseller oluşturulamadı'));
+      if (error instanceof Error && error.message === 'IMAGE_GENERATION_TIMEOUT') {
+        setSelectedModel(null);
+        setSelectedImageUrl(null);
+        setActiveStep(0);
+        showError('Görsel oluşturma zaman aşımına uğradı. Lütfen tekrar deneyin.');
+      } else {
+        showError(getErrorMessage(error, 'Görseller oluşturulamadı'));
+      }
     } finally {
       setImageGenerating(false);
     }
@@ -290,7 +376,7 @@ export default function ModelPage() {
       replaceModel(optimistic);
       const response = await generateThreeDModelFromImageApi(selectedModel.id, selectedImageUrl);
       await loadModels(response.id);
-      setPolling({ id: selectedModel.id });
+      setPolling({ id: selectedModel.id, startedAt: Date.now() });
     } catch (error) {
       setActiveStep(1);
       showError(getErrorMessage(error, '3D model oluşturma başlatılamadı'));
@@ -407,12 +493,30 @@ export default function ModelPage() {
 
     return (
       <Box sx={{ minHeight: 560, pb: 2 }}>
-        <Typography variant="h5" fontWeight={800} textAlign="center" sx={{ mb: 0.75 }}>
-          En iyi görseli seçin
-        </Typography>
-        <Typography textAlign="center" color="text.secondary" sx={{ mb: 3 }}>
-          Seçtiğiniz görsel 3D modele dönüştürülecek
-        </Typography>
+        {fromFloorPlan ? (
+          <>
+            <Typography variant="h5" fontWeight={800} textAlign="center" sx={{ mb: 0.75 }}>
+              Kat planından 3D model oluştur
+            </Typography>
+            <Typography textAlign="center" color="text.secondary" sx={{ mb: 2 }}>
+              Kat planı görseli 3D modele dönüştürülecek
+            </Typography>
+            <Box sx={{ maxWidth: 480, mx: 'auto', mb: 3 }}>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Kat planınız hazır. Aşağıdaki butona tıklayarak 3D model oluşturun.
+              </Alert>
+            </Box>
+          </>
+        ) : (
+          <>
+            <Typography variant="h5" fontWeight={800} textAlign="center" sx={{ mb: 0.75 }}>
+              En iyi görseli seçin
+            </Typography>
+            <Typography textAlign="center" color="text.secondary" sx={{ mb: 3 }}>
+              Seçtiğiniz görsel 3D modele dönüştürülecek
+            </Typography>
+          </>
+        )}
         <Box
           sx={{
             display: 'grid',
@@ -527,7 +631,13 @@ export default function ModelPage() {
               fontWeight: 800,
             }}
           >
-            {modelStarting ? <CircularProgress size={18} color="inherit" /> : '3D Modele Çevir →'}
+            {modelStarting ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : fromFloorPlan ? (
+              'Bu kat planını 3D modele dönüştür →'
+            ) : (
+              '3D Modele Çevir →'
+            )}
           </Button>
         </Box>
       </Box>

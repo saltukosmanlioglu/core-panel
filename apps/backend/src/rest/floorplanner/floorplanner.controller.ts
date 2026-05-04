@@ -1,8 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
+import { getTdb } from '../../lib/tenantDb';
 import {
   floorplannerGenerateDrawingSchema,
   floorplannerProvisionSchema,
 } from '../../models/floorplanner.model';
+import * as floorPlanExportsRepo from '../floor-plan-exports/floor-plan-exports.repo';
 import * as service from './floorplanner.service';
 
 export const provisionProject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -73,6 +75,20 @@ export const startExport = async (req: Request, res: Response, next: NextFunctio
 export const getExport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const result = await service.getExport(String(req.params.exportId));
+
+    if (result.status === 'done' && result.url) {
+      try {
+        await floorPlanExportsRepo.upsert(getTdb(req), {
+          projectId: String(req.params.id),
+          floorplannerExportId: String(req.params.exportId),
+          imageUrl: result.url,
+        });
+      } catch {
+        // Non-fatal: log but don't fail the response
+        console.warn('[FloorPlanExports] Auto-save failed for export', req.params.exportId);
+      }
+    }
+
     res.json({ export: result });
   } catch (error) {
     next(error);

@@ -9,6 +9,7 @@ import {
   Calculate as CalculateIcon,
   Gavel as GavelIcon,
   GridOn as GridOnIcon,
+  ListAlt as ListAltIcon,
   Payments as PaymentsIcon,
   People as PeopleIcon,
   ViewInAr as ViewInArIcon,
@@ -62,6 +63,7 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
             children: [
               { label: 'Ödemeler', icon: <PaymentsIcon fontSize="small" />, href: `${projectBase}/payments`, color: '#10b981' },
               { label: 'Gelir-Gider', icon: <AccountBalanceIcon fontSize="small" />, href: `${projectBase}/income-outcome`, color: '#10b981' },
+              { label: 'Toplu Fiyat Listesi', icon: <ListAltIcon fontSize="small" />, href: `${projectBase}/price-list`, color: '#10b981' },
             ],
           },
           {
