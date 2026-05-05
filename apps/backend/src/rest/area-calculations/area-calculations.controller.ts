@@ -198,6 +198,36 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
   }
 };
 
+export const recalculate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const tdb = getTdb(req);
+    const calculation = await repo.findById(tdb, String(req.params.id));
+
+    if (!calculation) {
+      res.status(404).json({ error: 'Analiz bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+
+    if (!calculation.extractedData) {
+      res.status(400).json({ error: 'Bu analizde çıkarılmış veri yok', code: 'NO_EXTRACTED_DATA' });
+      return;
+    }
+
+    const calculatedResults = calculateResults(calculation.extractedData);
+    const warnings = calculation.extractedData.warnings;
+    const updated = await repo.markCompleted(tdb, calculation.id, calculation.extractedData, calculatedResults, warnings);
+
+    res.json({
+      id: updated?.id ?? calculation.id,
+      extractedData: calculation.extractedData,
+      calculatedResults,
+      warnings,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const calculation = await repo.remove(getTdb(req), String(req.params.id));

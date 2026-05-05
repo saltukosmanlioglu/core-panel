@@ -89,6 +89,7 @@ export interface CalculatedResults {
   dedication_area: number | null;
   net_area_calculated: number | null;
   net_area_source: string | null;
+  aplikasyon_alani: number | null;
   area_discrepancy: number | null;
   buildable_width: number | null;
   buildable_depth: number | null;

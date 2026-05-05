@@ -41,6 +41,7 @@ import {
   analyzeAreaCalculationApi,
   deleteAreaCalculationApi,
   getAreaCalculationsApi,
+  recalculateAreaCalculationApi,
 } from '@/services/area-calculations/api';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 import ParcelVisualization from '@/components/ParcelVisualization';
@@ -698,6 +699,7 @@ export default function AreaCalculationPage() {
   const [zoneErrors, setZoneErrors] = useState<Partial<Record<UploadKey, string>>>({});
   const [note, setNote] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { showSuccess, showError, notificationProps } = useSnackbar();
 
@@ -796,6 +798,20 @@ export default function AreaCalculationPage() {
       showError(getErrorMessage(error, 'Analiz tamamlanamadı'));
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const handleRecalculate = async () => {
+    if (!selected) return;
+    try {
+      setRecalculating(true);
+      await recalculateAreaCalculationApi(selected.id);
+      await loadCalculations(selected.id);
+      showSuccess('Hesaplama güncellendi');
+    } catch (error) {
+      showError(getErrorMessage(error, 'Hesaplama güncellenemedi'));
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -945,6 +961,18 @@ export default function AreaCalculationPage() {
                   }}
                 />
                 <Typography variant="body2" sx={{ color: '#64748b' }}>{formatDate(selected.createdAt)}</Typography>
+                {selected.extractedData && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={recalculating}
+                    onClick={() => void handleRecalculate()}
+                    sx={{ ml: 'auto', textTransform: 'none', fontSize: 12 }}
+                  >
+                    {recalculating ? <CircularProgress size={14} sx={{ mr: 0.5 }} /> : null}
+                    Yeniden Hesapla
+                  </Button>
+                )}
               </Box>
 
               <ResultsSection calculation={selected} />

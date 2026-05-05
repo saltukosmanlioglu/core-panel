@@ -23,6 +23,7 @@ router.post(
 router.get('/projects/:projectId/area-calculations/latest', validateUUID('projectId'), controller.getLatest);
 router.get('/projects/:projectId/area-calculations', validateUUID('projectId'), controller.list);
 router.get('/area-calculations/:id', validateUUID(), controller.getById);
+router.post('/area-calculations/:id/recalculate', validateUUID(), controller.recalculate);
 router.delete('/area-calculations/:id', validateUUID(), controller.remove);
 
 export default router;

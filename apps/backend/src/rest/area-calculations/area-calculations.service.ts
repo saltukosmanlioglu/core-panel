@@ -16,11 +16,11 @@ You will receive one or more of the following documents:
 1. İnşaat İstikamet Rölovesi (Construction Alignment Survey)
 Extract:
 - Corner coordinates (Nokta No, Y, X values in meters)
-- Road dedication/setback values shown in parentheses (terk mesafeleri)
+- Road dedication/setback values shown in parentheses (terk mesafeleri) — ONLY from road edges
 - Block front line position (Blok Ön Çizgisi) in meters from edge
 - Block rear line position (Blok Arka Çizgisi) in meters from edge
 - Which edge faces the road (ön cephe)
-- Net parcel area if shown
+- Net parcel area if shown (Yeni Hesap from Aplikasyon Krokisi section)
 
 2. E-İmar Belgesi (Zoning Status Document)
 Extract:
@@ -76,7 +76,48 @@ RULES:
 6. Setback per floor: Always include setback_increase_per_floor if found in plan notes.
 7. Coordinate system: Y = East, X = North. Keep original sign values.
 8. Multiple documents: Merge all extracted data into single JSON response.
-9. Front facade: Identify which edge faces the road.`;
+9. Front facade: Identify which edge faces the road.
+
+### TERK MESAFELERİ (Road Dedications)
+Terk mesafeleri are areas physically subtracted from the cadastral parcel for road widening. They appear as values in parentheses on the rölevesi drawing ALONG THE ROAD EDGE ONLY.
+Example: (5.83) next to a road edge = 5.83m road dedication strip.
+
+IMPORTANT DISTINCTIONS - do NOT confuse these:
+- Terk mesafesi: strip along road edge given to municipality (reduces net area)
+- Blok ön çizgisi: setback line from road (does NOT reduce net area)
+- Blok arka çizgisi: rear setback line (does NOT reduce net area)
+- Kenar uzunluğu: edge length of parcel (does NOT reduce net area)
+
+If you see values like 6.25m, 13.25m, 18.69m, 19.00m, 19.69m labeled as 'blok ön çizgisi', 'blok arka çizgisi', or edge dimensions — these go into block_lines and coordinates only.
+Do NOT put them in dedications array.
+
+dedications array should ONLY contain actual road/public area dedications that reduce the usable parcel area.
+If no actual terk exists, return dedications: []
+
+### NET ALAN
+For KAKS calculation, use the parcel area shown in the Aplikasyon Krokisi as 'Yeni Hesap' value if available.
+If not available, use tapu_alani.
+The net_alan should be close to tapu_alani (typically 95-100% of it).
+If Claude extracts a net_alan that is less than 50% of tapu_alani, it has made an error — re-examine and correct.
+
+### PAFTA NUMARASI HATASI
+Turkish cadastral documents often contain pafta numbers in format like 'G22A09A4C(33)' where (33) is the pafta index.
+Never interpret pafta index numbers as area values.
+Area values always have 'm²' unit or appear in area columns.
+
+### BLOK ÇİZGİLERİ
+block_lines contains the approved buildable zone lines:
+- on_cizgisi_m: distance from road edge to front build line
+- arka_cizgisi_m: distance from opposite edge to rear build line
+
+These define WHERE the building can be placed within the parcel.
+The buildable width = parcel width - (on_cizgisi_m + any side setbacks)
+The buildable depth = arka_cizgisi_m - on_cizgisi_m
+
+For the sample parcel:
+on_cizgisi_m = 6.25 (from road edge, Pazarcı Çıkmazı Sokak side)
+arka_cizgisi_m = 13.00 (from west edge)
+These are the belediye-approved construction zone limits.`;
 
 type ClaudeImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
@@ -472,9 +513,15 @@ function calculateNetArea(
 
   console.log('[AREA CALC] Gross:', polygonArea, 'Dedication:', dedicationArea);
 
-  if ((dedicationArea ?? 0) >= polygonArea) {
-    const warning = 'Terk alanı hesabı hatalı, ham parsel alanı kullanıldı';
-    console.warn('[AREA CALC] WARNING: dedicationArea', dedicationArea, '>= polygonArea', polygonArea, '— skipping dedication subtraction');
+  // Trivially small dedication (< 5%) — not meaningful, use polygon directly
+  if ((dedicationArea ?? 0) < 0.05 * polygonArea) {
+    return { grossArea: polygonArea, dedicationArea: dedicationArea ?? 0, netArea: polygonArea };
+  }
+
+  // Unrealistically large dedication (>= 20%) — Claude misidentified something, ignore
+  if ((dedicationArea ?? 0) >= 0.20 * polygonArea) {
+    const warning = 'Terk alanı hesabı anormal sonuç verdi, ham parsel alanı kullanıldı. Manuel kontrol gerekli.';
+    console.warn('[AREA CALC] WARNING: dedicationArea', dedicationArea, '>= 20% of polygonArea', polygonArea, '— ignoring dedications');
     if (!warnings.includes(warning)) warnings.push(warning);
     return { grossArea: polygonArea, dedicationArea, netArea: polygonArea };
   }
@@ -675,15 +722,11 @@ export function calculateResults(extracted: ExtractedData): CalculatedResults {
   const { grossArea, dedicationArea, netArea: rawNetArea } = calculateNetArea(polygonArea, coordinates, normalizedDedications, extracted.warnings);
   console.log('[AREA CALC] Gross:', grossArea, 'Dedication:', dedicationArea, 'Net:', rawNetArea);
 
-  // If net area calculated to 0, fall back to the document-extracted net_alan
-  const netArea = (rawNetArea === 0 && documentNetArea !== null && documentNetArea > 0)
-    ? (() => {
-      console.log('[AREA CALC] netArea is 0 — falling back to extracted.parcel.net_alan:', documentNetArea);
-      return documentNetArea;
-    })()
-    : rawNetArea;
-
-  const effectiveNetArea = netArea ?? documentNetArea;
+  // Prefer polygon area when available; fall back to document net_alan, then tapu_alani
+  const effectiveNetArea =
+    (polygonArea !== null && polygonArea > 10) ? polygonArea :
+    (documentNetArea !== null && documentNetArea > 10) ? documentNetArea :
+    titleDeedArea;
   const netAreaSource = polygonArea === null ? 'eimar_document' : 'röleve_coordinates';
   const areaDiscrepancy = effectiveNetArea === null
     ? null
@@ -739,8 +782,9 @@ export function calculateResults(extracted: ExtractedData): CalculatedResults {
     max_taban_oturumu_max: multiply(taksMax, effectiveNetArea),
     polygon_area_calculated: grossArea,
     dedication_area: dedicationArea,
-    net_area_calculated: netArea ?? effectiveNetArea,
+    net_area_calculated: rawNetArea ?? effectiveNetArea,
     net_area_source: netAreaSource,
+    aplikasyon_alani: documentNetArea,
     area_discrepancy: areaDiscrepancy,
     buildable_width: buildableArea.buildableWidth,
     buildable_depth: buildableArea.buildableDepth,

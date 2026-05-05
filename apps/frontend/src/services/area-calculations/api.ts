@@ -52,3 +52,8 @@ export async function getAreaCalculationApi(id: string): Promise<AreaCalculation
 export async function deleteAreaCalculationApi(id: string): Promise<void> {
   await apiClient.delete(`/api/area-calculations/${id}`);
 }
+
+export async function recalculateAreaCalculationApi(id: string): Promise<AnalyzeAreaCalculationResponse> {
+  const res = await apiClient.post(`/api/area-calculations/${id}/recalculate`);
+  return res.data as AnalyzeAreaCalculationResponse;
+}
