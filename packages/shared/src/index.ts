@@ -11,4 +11,5 @@ export * from './types/tender';
 export * from './types/threeDModel';
 export * from './types/floorPlanExport';
 export * from './types/priceList';
+export * from './types/roughEstimate';
 export * from './enums';

@@ -64,6 +64,17 @@ interface ParcelVisualizationProps {
   calculatedResults: CalculatedResults;
 }
 
+type SetbackEdgeRole = 'front' | 'left' | 'right' | 'rear';
+
+interface SetbackEdgeAnnotation {
+  edgeIndex: number;
+  role: SetbackEdgeRole;
+  first: SvgPoint;
+  second: SvgPoint;
+  value: number;
+  labelPosition: { x: number; y: number };
+}
+
 const SVG_WIDTH = 800;
 const SVG_HEIGHT = 620;
 const PADDING = 90;
@@ -71,7 +82,7 @@ const COLORS = {
   background: '#0f1117',
   grid: '#1e2433',
   parcel: { fill: '#2563eb22', stroke: '#3b82f6' },
-  setback: { fill: '#f9731622', stroke: '#f97316' },
+  setback: { stroke: '#f97316' },
   buildable: { fill: '#ef444422', stroke: '#ef4444' },
   text: '#e2e8f0',
   textMuted: '#94a3b8',
@@ -169,11 +180,140 @@ function calculateOutsideLabelPosition(
   return dA >= dB ? cA : cB;
 }
 
-function getRelevantSetbackLabel(isFrontEdge: boolean, setbacks: Setbacks): string | null {
-  if (isFrontEdge && setbacks.on_bahce !== null) return `Ön: ${formatMeter(setbacks.on_bahce)}`;
-  if (!isFrontEdge && setbacks.yan_bahce !== null) return `Yan: ${formatMeter(setbacks.yan_bahce)}`;
-  if (!isFrontEdge && setbacks.arka_bahce !== null) return `Arka: ${formatMeter(setbacks.arka_bahce)}`;
-  return null;
+function getSetbackValueForRole(role: SetbackEdgeRole, setbacks: Setbacks): number | null {
+  const value = role === 'front'
+    ? setbacks.on_bahce
+    : role === 'rear'
+      ? setbacks.arka_bahce
+      : setbacks.yan_bahce;
+
+  return value !== null && Number.isFinite(value) ? value : null;
+}
+
+function findBottomEdgeIdx(svgPoints: SvgPoint[]): number | null {
+  if (svgPoints.length < 2) return null;
+
+  let edgeIdx = 0;
+  let maxY = -Infinity;
+  for (let i = 0; i < svgPoints.length; i++) {
+    const first = svgPoints[i]!;
+    const second = svgPoints[(i + 1) % svgPoints.length]!;
+    const midpointY = (first.svgY + second.svgY) / 2;
+    if (midpointY > maxY) {
+      maxY = midpointY;
+      edgeIdx = i;
+    }
+  }
+
+  return edgeIdx;
+}
+
+function findRearEdgeIdx(
+  svgPoints: SvgPoint[],
+  frontEdgeIdx: number | null,
+  centroid: { x: number; y: number },
+): number | null {
+  if (svgPoints.length < 3 || frontEdgeIdx === null) return null;
+
+  const frontFirst = svgPoints[frontEdgeIdx]!;
+  const frontSecond = svgPoints[(frontEdgeIdx + 1) % svgPoints.length]!;
+  const frontMid = {
+    svgX: (frontFirst.svgX + frontSecond.svgX) / 2,
+    svgY: (frontFirst.svgY + frontSecond.svgY) / 2,
+  };
+  const inwardNormal = getEdgeInwardNormal(frontFirst, frontSecond, { svgX: centroid.x, svgY: centroid.y });
+
+  let rearEdgeIdx: number | null = null;
+  let maxProjection = -Infinity;
+  for (let i = 0; i < svgPoints.length; i++) {
+    if (i === frontEdgeIdx) continue;
+
+    const first = svgPoints[i]!;
+    const second = svgPoints[(i + 1) % svgPoints.length]!;
+    const midpoint = {
+      svgX: (first.svgX + second.svgX) / 2,
+      svgY: (first.svgY + second.svgY) / 2,
+    };
+    const projection =
+      (midpoint.svgX - frontMid.svgX) * inwardNormal.nx +
+      (midpoint.svgY - frontMid.svgY) * inwardNormal.ny;
+
+    if (projection > maxProjection) {
+      maxProjection = projection;
+      rearEdgeIdx = i;
+    }
+  }
+
+  return rearEdgeIdx;
+}
+
+function calculateSetbackLabelPosition(
+  first: SvgPoint,
+  second: SvgPoint,
+  centroid: { x: number; y: number },
+  role: SetbackEdgeRole,
+): { x: number; y: number } {
+  const distance = 24;
+  const midpoint = {
+    x: (first.svgX + second.svgX) / 2,
+    y: (first.svgY + second.svgY) / 2,
+  };
+  const preferred = {
+    front: { x: midpoint.x, y: midpoint.y + distance },
+    left: { x: midpoint.x - distance, y: midpoint.y },
+    right: { x: midpoint.x + distance, y: midpoint.y },
+    rear: { x: midpoint.x, y: midpoint.y - distance },
+  }[role];
+  const midpointDistance = (midpoint.x - centroid.x) ** 2 + (midpoint.y - centroid.y) ** 2;
+  const preferredDistance = (preferred.x - centroid.x) ** 2 + (preferred.y - centroid.y) ** 2;
+
+  if (preferredDistance > midpointDistance) return preferred;
+
+  return calculateOutsideLabelPosition(first, second, centroid, distance);
+}
+
+function createSetbackEdgeAnnotations(
+  svgPoints: SvgPoint[],
+  frontEdgeIdx: number | null,
+  setbacks: Setbacks,
+  centroid: { x: number; y: number },
+): SetbackEdgeAnnotation[] {
+  if (svgPoints.length < 3) return [];
+
+  const resolvedFrontEdgeIdx = frontEdgeIdx ?? findBottomEdgeIdx(svgPoints);
+  const rearEdgeIdx = findRearEdgeIdx(svgPoints, resolvedFrontEdgeIdx, centroid);
+  const annotations: SetbackEdgeAnnotation[] = [];
+
+  for (let i = 0; i < svgPoints.length; i++) {
+    const first = svgPoints[i]!;
+    const second = svgPoints[(i + 1) % svgPoints.length]!;
+    const midpointX = (first.svgX + second.svgX) / 2;
+    const role: SetbackEdgeRole = i === resolvedFrontEdgeIdx
+      ? 'front'
+      : i === rearEdgeIdx
+        ? 'rear'
+        : midpointX < centroid.x
+          ? 'left'
+          : 'right';
+    const value = getSetbackValueForRole(role, setbacks);
+
+    if (value === null) continue;
+
+    annotations.push({
+      edgeIndex: i,
+      role,
+      first,
+      second,
+      value,
+      labelPosition: calculateSetbackLabelPosition(first, second, centroid, role),
+    });
+  }
+
+  return annotations;
+}
+
+function getSetbackLabelWidth(label: string): number {
+  return Math.max(48, label.length * 6.4 + 12);
 }
 
 function createGridLines(limit: number): number[] {
@@ -351,9 +491,13 @@ export default function ParcelVisualization({ extractedData, calculatedResults }
     extractedData.setbacks.effective_west !== null;
   const parcelPolygonPoints = svgPoints.map((p) => `${p.svgX},${p.svgY}`).join(' ');
   const headerLocation = [extractedData.parcel.ilce, extractedData.parcel.mahalle].filter(Boolean).join(' / ') || '—';
+  const frontEdgeIdx = hasCoordinates ? findFrontEdgeIdx(svgPoints, extractedData.front_facade) : null;
+  const setbackEdgeAnnotations = hasCoordinates
+    ? createSetbackEdgeAnnotations(svgPoints, frontEdgeIdx, extractedData.setbacks, centroid)
+    : [];
+  const setbackEdgeIndices = new Set(setbackEdgeAnnotations.map((annotation) => annotation.edgeIndex));
 
   // ── Compute inset polygons ─────────────────────────────────────────────────
-  let setbackPolyStr: string | null = null;
   let buildablePolyStr: string | null = null;
   let buildableCentroidPt: Pt | null = null;
   let buildableAreaTooSmall = false;
@@ -366,15 +510,10 @@ export default function ParcelVisualization({ extractedData, calculatedResults }
 
   if (hasCoordinates && hasAnySetback) {
     const pts: Pt[] = svgPoints.map((p) => ({ svgX: p.svgX, svgY: p.svgY }));
-    const frontEdgeIdx = findFrontEdgeIdx(svgPoints, extractedData.front_facade);
 
     const frontPx = (extractedData.setbacks.on_bahce ?? 0) * scale;
     const rearPx = (extractedData.setbacks.arka_bahce ?? extractedData.setbacks.yan_bahce ?? 0) * scale;
     const sidePx = (extractedData.setbacks.yan_bahce ?? 0) * scale;
-
-    // Hint polygon at 35% of setbacks — shows the setback zone visually.
-    const hintPoly = insetPolygon(pts, frontEdgeIdx, frontPx * 0.35, rearPx * 0.35, sidePx * 0.35);
-    if (hintPoly) setbackPolyStr = hintPoly.map((p) => `${p.svgX},${p.svgY}`).join(' ');
 
     // Buildable polygon at full setbacks.
     const shouldDraw = calculatedResults.max_taban_oturumu_max !== null;
@@ -484,10 +623,14 @@ export default function ParcelVisualization({ extractedData, calculatedResults }
               const currentPoint = svgPoints[index]!;
               const nextPoint = svgPoints[nextIndex]!;
               const nextCoordinate = coordinates[nextIndex]!;
-              const midpoint = calculateOutsideLabelPosition(currentPoint, nextPoint, centroid, 32);
+              const midpoint = calculateOutsideLabelPosition(
+                currentPoint,
+                nextPoint,
+                centroid,
+                setbackEdgeIndices.has(index) ? 52 : 32,
+              );
               const edgeDistance = calculateDistance(coordinate, nextCoordinate);
               const frontEdge = isFrontFacadeEdge(coordinate, nextCoordinate, extractedData.front_facade);
-              const setbackLabel = getRelevantSetbackLabel(frontEdge, extractedData.setbacks);
               const labelWidth = frontEdge ? 92 : 64;
 
               return (
@@ -496,7 +639,7 @@ export default function ParcelVisualization({ extractedData, calculatedResults }
                     x={midpoint.x - labelWidth / 2}
                     y={midpoint.y - 15}
                     width={labelWidth}
-                    height={frontEdge ? (setbackLabel ? 46 : 34) : setbackLabel ? 28 : 18}
+                    height={frontEdge ? 34 : 18}
                     rx="4"
                     fill="#0f1117"
                     stroke={COLORS.parcel.stroke}
@@ -511,32 +654,52 @@ export default function ParcelVisualization({ extractedData, calculatedResults }
                       <text x={midpoint.x} y={midpoint.y + 13} textAnchor="middle" fill="#22c55e" fontSize="8" fontWeight="700" fontFamily="monospace">
                         ÖN CEPHE
                       </text>
-                      {setbackLabel && (
-                        <text x={midpoint.x} y={midpoint.y + 28} textAnchor="middle" fill={COLORS.textMuted} fontSize="8" fontFamily="monospace">
-                          {setbackLabel}
-                        </text>
-                      )}
                     </>
-                  )}
-                  {!frontEdge && setbackLabel && (
-                    <text x={midpoint.x} y={midpoint.y + 10} textAnchor="middle" fill={COLORS.textMuted} fontSize="8" fontFamily="monospace">
-                      {setbackLabel}
-                    </text>
                   )}
                 </g>
               );
             })}
 
-            {/* Setback zone hint (orange dashed) — inset polygon at 35% of setbacks */}
-            {setbackPolyStr && (
-              <polygon
-                points={setbackPolyStr}
-                fill={COLORS.setback.fill}
-                stroke={COLORS.setback.stroke}
-                strokeWidth="1.5"
-                strokeDasharray="6,4"
-              />
-            )}
+            {/* Setback edge lines */}
+            {setbackEdgeAnnotations.map((annotation) => {
+              const label = formatMeter(annotation.value);
+              const labelWidth = getSetbackLabelWidth(label);
+
+              return (
+                <g key={`setback-${annotation.role}-${annotation.edgeIndex}`}>
+                  <line
+                    x1={annotation.first.svgX}
+                    y1={annotation.first.svgY}
+                    x2={annotation.second.svgX}
+                    y2={annotation.second.svgY}
+                    stroke={COLORS.setback.stroke}
+                    strokeWidth="2.5"
+                    strokeDasharray="8,5"
+                  />
+                  <rect
+                    x={annotation.labelPosition.x - labelWidth / 2}
+                    y={annotation.labelPosition.y - 8}
+                    width={labelWidth}
+                    height="16"
+                    rx="4"
+                    ry="4"
+                    fill="rgba(0,0,0,0.7)"
+                    stroke={COLORS.setback.stroke}
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={annotation.labelPosition.x}
+                    y={annotation.labelPosition.y + 3.5}
+                    textAnchor="middle"
+                    fill="white"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    {label}
+                  </text>
+                </g>
+              );
+            })}
 
             {/* Buildable area polygon (red) — inset polygon at full setbacks */}
             {buildablePolyStr && buildableCentroidPt && (
@@ -674,10 +837,8 @@ export default function ParcelVisualization({ extractedData, calculatedResults }
         <g transform="translate(430 590)" fontFamily="monospace" fontSize="10" fill={COLORS.textMuted}>
           <rect x="0" y="-9" width="12" height="8" fill={COLORS.parcel.fill} stroke={COLORS.parcel.stroke} />
           <text x="18" y="-2">Parsel {formatArea(calculatedResults.tapu_alani ?? extractedData.parcel.tapu_alani)}</text>
-          <line x1="150" y1="-5" x2="174" y2="-5" stroke={COLORS.setback.stroke} strokeDasharray="6,4" />
-          <text x="180" y="-2">Bahçe Mesafeleri</text>
-          <rect x="300" y="-9" width="12" height="8" fill={COLORS.buildable.fill} stroke={COLORS.buildable.stroke} />
-          <text x="318" y="-2">Net Taban {formatArea(calculatedResults.max_taban_oturumu_max)}</text>
+          <rect x="190" y="-9" width="12" height="8" fill={COLORS.buildable.fill} stroke={COLORS.buildable.stroke} />
+          <text x="208" y="-2">Net Taban {formatArea(calculatedResults.max_taban_oturumu_max)}</text>
         </g>
       </svg>
     </div>
