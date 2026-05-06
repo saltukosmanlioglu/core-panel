@@ -10,20 +10,18 @@ import type {
 interface PaymentRow {
   id: string;
   project_id: string;
-  tender_id: string | null;
-  tender_title?: string | null;
   tenant_id: string;
   tenant_name?: string | null;
   contact_name?: string | null;
   contact_phone?: string | null;
-  period: string | null;
+  title: string;
+  description: string | null;
   total_amount: string | number;
   paid_amount: string | number;
-  remaining_amount: string | number;
   status: string;
   due_date: Date | string | null;
-  payment_frequency: string | null;
-  note: string | null;
+  approved_at: Date | null;
+  approved_by: string | null;
   created_by: string | null;
   created_at: Date;
   updated_at: Date;
@@ -34,19 +32,19 @@ interface PaymentItemRow {
   payment_id: string;
   description: string;
   quantity: string | number | null;
-  unit: string | null;
   unit_price: string | number;
-  amount: string | number;
+  total_price: string | number;
   created_at: Date;
 }
 
 interface PaymentTransactionRow {
   id: string;
   payment_id: string;
-  payment_date: Date | string;
+  paid_at: Date | string;
   amount: string | number;
   receipt_path: string | null;
-  note: string | null;
+  receipt_original_name: string | null;
+  notes: string | null;
   created_by: string | null;
   created_at: Date;
 }
@@ -69,13 +67,11 @@ interface TenantSummaryRow {
 interface ExpenseRow {
   id: string;
   project_id: string;
+  title: string;
   category: string;
-  description: string;
+  description: string | null;
   amount: string | number;
-  invoice_path: string | null;
-  payment_date: Date | string | null;
-  status: string;
-  note: string | null;
+  expense_date: Date | string | null;
   created_by: string | null;
   created_at: Date;
   updated_at: Date;
@@ -83,13 +79,10 @@ interface ExpenseRow {
 
 interface NotificationRow {
   id: string;
-  company_id: string;
-  user_id: string | null;
-  type: string;
+  project_id: string | null;
+  payment_id: string | null;
+  user_id: string;
   message: string;
-  related_id: string | null;
-  related_type: string | null;
-  related_project_id: string | null;
   is_read: boolean;
   created_at: Date;
 }
@@ -110,9 +103,8 @@ function mapItem(row: PaymentItemRow) {
     paymentId: row.payment_id,
     description: row.description,
     quantity: toNumber(row.quantity),
-    unit: row.unit,
     unitPrice: toNumber(row.unit_price),
-    amount: toNumber(row.amount),
+    amount: toNumber(row.total_price),
     createdAt: row.created_at,
   };
 }
@@ -121,10 +113,11 @@ function mapTransaction(row: PaymentTransactionRow) {
   return {
     id: row.id,
     paymentId: row.payment_id,
-    paymentDate: toDateString(row.payment_date)!,
+    paymentDate: toDateString(row.paid_at)!,
     amount: toNumber(row.amount),
     receiptPath: row.receipt_path,
-    note: row.note,
+    receiptOriginalName: row.receipt_original_name,
+    note: row.notes,
     createdBy: row.created_by,
     createdAt: row.created_at,
   };
@@ -134,20 +127,18 @@ function mapPayment(row: PaymentRow) {
   return {
     id: row.id,
     projectId: row.project_id,
-    tenderId: row.tender_id,
-    tenderTitle: row.tender_title ?? null,
     tenantId: row.tenant_id,
     tenantName: row.tenant_name ?? null,
     contactName: row.contact_name ?? null,
     contactPhone: row.contact_phone ?? null,
-    period: row.period,
+    title: row.title,
+    description: row.description ?? null,
     totalAmount: toNumber(row.total_amount),
     paidAmount: toNumber(row.paid_amount),
-    remainingAmount: toNumber(row.remaining_amount),
     status: row.status,
     dueDate: toDateString(row.due_date),
-    paymentFrequency: row.payment_frequency ?? 'none',
-    note: row.note,
+    approvedAt: row.approved_at ?? null,
+    approvedBy: row.approved_by ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -177,29 +168,27 @@ function mapExpense(row: ExpenseRow) {
   return {
     id: row.id,
     projectId: row.project_id,
+    title: row.title,
     category: row.category,
-    description: row.description,
+    description: row.description ?? null,
     amount: toNumber(row.amount),
-    invoicePath: row.invoice_path,
-    paymentDate: toDateString(row.payment_date),
-    status: row.status,
-    note: row.note,
+    expenseDate: toDateString(row.expense_date),
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function mapNotification(row: NotificationRow) {
+function mapNotification(row: NotificationRow, companyId: string) {
   return {
     id: row.id,
-    companyId: row.company_id,
+    companyId,
     userId: row.user_id,
-    type: row.type,
+    type: 'payment_due_soon',
     message: row.message,
-    relatedId: row.related_id,
-    relatedType: row.related_type,
-    relatedProjectId: row.related_project_id ?? null,
+    relatedId: row.payment_id,
+    relatedType: row.payment_id ? 'progress_payment' : null,
+    relatedProjectId: row.project_id,
     isRead: row.is_read,
     createdAt: row.created_at,
   };
@@ -216,8 +205,7 @@ const PAYMENT_SELECT = `
   pp.*,
   tenants.name AS tenant_name,
   tenants.contact_name AS contact_name,
-  tenants.contact_phone AS contact_phone,
-  tenders.title AS tender_title
+  tenants.phone AS contact_phone
 `;
 
 async function attachRelations(tdb: TenantDb, payments: ProgressPaymentRecord[]): Promise<ProgressPaymentRecord[]> {
@@ -232,7 +220,7 @@ async function attachRelations(tdb: TenantDb, payments: ProgressPaymentRecord[])
   const { rows: txRows } = await tdb.query<PaymentTransactionRow>(
     `SELECT * FROM ${tdb.ref('progress_payment_transactions')}
      WHERE payment_id = ANY($1::uuid[])
-     ORDER BY payment_date DESC, created_at DESC`,
+     ORDER BY paid_at DESC, created_at DESC`,
     [ids],
   );
   const itemsByPayment = new Map<string, ProgressPaymentItemRecord[]>();
@@ -258,25 +246,25 @@ export async function findTenantSummaries(tdb: TenantDb, projectId: string): Pro
        pp.tenant_id,
        tenants.name AS tenant_name,
        tenants.contact_name,
-       tenants.contact_phone,
+       tenants.phone AS contact_phone,
        COALESCE(SUM(pp.total_amount), 0) AS total_amount,
        COALESCE(SUM(pp.paid_amount), 0) AS paid_amount,
-       COALESCE(SUM(pp.remaining_amount), 0) AS remaining_amount,
-       MAX(tx.payment_date) AS last_payment_date,
-       MIN(CASE WHEN pp.remaining_amount > 0 THEN pp.due_date END) AS next_due_date,
-       COALESCE(SUM(CASE WHEN pp.due_date < CURRENT_DATE AND pp.remaining_amount > 0 THEN pp.remaining_amount ELSE 0 END), 0) AS overdue_amount,
+       COALESCE(SUM(pp.total_amount) - SUM(pp.paid_amount), 0) AS remaining_amount,
+       MAX(tx.paid_at) AS last_payment_date,
+       MIN(CASE WHEN (pp.total_amount - pp.paid_amount) > 0 THEN pp.due_date END) AS next_due_date,
+       COALESCE(SUM(CASE WHEN pp.due_date < CURRENT_DATE AND (pp.total_amount - pp.paid_amount) > 0 THEN (pp.total_amount - pp.paid_amount) ELSE 0 END), 0) AS overdue_amount,
        COUNT(DISTINCT pp.id) AS payments_count,
        CASE
-         WHEN COALESCE(SUM(CASE WHEN pp.due_date < CURRENT_DATE AND pp.remaining_amount > 0 THEN pp.remaining_amount ELSE 0 END), 0) > 0 THEN 'overdue'
-         WHEN COALESCE(SUM(pp.remaining_amount), 0) <= 0 THEN 'paid'
+         WHEN COALESCE(SUM(CASE WHEN pp.due_date < CURRENT_DATE AND (pp.total_amount - pp.paid_amount) > 0 THEN (pp.total_amount - pp.paid_amount) ELSE 0 END), 0) > 0 THEN 'overdue'
+         WHEN COALESCE(SUM(pp.total_amount) - SUM(pp.paid_amount), 0) <= 0 THEN 'paid'
          WHEN SUM(CASE WHEN pp.status = 'approved' THEN 1 ELSE 0 END) > 0 THEN 'approved'
-         ELSE 'draft'
+         ELSE 'pending'
        END AS status
      FROM ${tdb.ref('progress_payments')} pp
-     LEFT JOIN "public"."tenants" tenants ON tenants.id::text = pp.tenant_id
+     LEFT JOIN ${tdb.ref('tenants')} tenants ON tenants.id = pp.tenant_id
      LEFT JOIN ${tdb.ref('progress_payment_transactions')} tx ON tx.payment_id = pp.id
      WHERE pp.project_id = $1
-     GROUP BY pp.tenant_id, tenants.name, tenants.contact_name, tenants.contact_phone
+     GROUP BY pp.tenant_id, tenants.name, tenants.contact_name, tenants.phone
      ORDER BY tenants.name ASC NULLS LAST`,
     [projectId],
   );
@@ -300,8 +288,7 @@ export async function findPayments(
   const { rows } = await tdb.query<PaymentRow>(
     `SELECT ${PAYMENT_SELECT}
      FROM ${tdb.ref('progress_payments')} pp
-     LEFT JOIN "public"."tenants" tenants ON tenants.id::text = pp.tenant_id
-     LEFT JOIN ${tdb.ref('tenders')} tenders ON tenders.id = pp.tender_id
+     LEFT JOIN ${tdb.ref('tenants')} tenants ON tenants.id = pp.tenant_id
      WHERE ${where.join(' AND ')}
      ORDER BY pp.due_date ASC NULLS LAST, pp.created_at DESC`,
     params,
@@ -314,8 +301,7 @@ export async function findPaymentById(tdb: TenantDb, id: string): Promise<Progre
   const { rows } = await tdb.query<PaymentRow>(
     `SELECT ${PAYMENT_SELECT}
      FROM ${tdb.ref('progress_payments')} pp
-     LEFT JOIN "public"."tenants" tenants ON tenants.id::text = pp.tenant_id
-     LEFT JOIN ${tdb.ref('tenders')} tenders ON tenders.id = pp.tender_id
+     LEFT JOIN ${tdb.ref('tenants')} tenants ON tenants.id = pp.tenant_id
      WHERE pp.id = $1
      LIMIT 1`,
     [id],
@@ -332,30 +318,28 @@ export async function createPayment(
 ): Promise<ProgressPaymentRecord> {
   const { rows } = await tdb.query<PaymentRow>(
     `INSERT INTO ${tdb.ref('progress_payments')}
-       (project_id, tender_id, tenant_id, period, total_amount, paid_amount, remaining_amount, status, due_date, payment_frequency, note, created_by)
-     VALUES ($1, $2, $3, $4, $5, 0, $5, 'draft', $6, $7, $8, $9)
-     RETURNING *, NULL::text AS tenant_name, NULL::text AS contact_name, NULL::text AS contact_phone, NULL::text AS tender_title`,
+       (project_id, tenant_id, title, description, total_amount, paid_amount, status, due_date, created_by)
+     VALUES ($1, $2, $3, $4, $5, 0, 'pending', $6, $7)
+     RETURNING *, NULL::text AS tenant_name, NULL::text AS contact_name, NULL::text AS contact_phone`,
     [
       projectId,
-      data.tenderId ?? null,
       data.tenantId,
-      data.period ?? null,
+      data.title,
+      data.description ?? null,
       data.totalAmount,
       data.dueDate ?? null,
-      data.paymentFrequency,
-      data.note ?? null,
       userId,
     ],
   );
   const payment = mapPayment(rows[0]!);
 
   for (const item of data.items) {
-    const amount = item.amount ?? item.quantity * item.unitPrice;
+    const totalPrice = item.totalPrice ?? item.quantity * item.unitPrice;
     await tdb.query(
       `INSERT INTO ${tdb.ref('progress_payment_items')}
-         (payment_id, description, quantity, unit, unit_price, amount)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [payment.id, item.description, item.quantity, item.unit ?? null, item.unitPrice, amount],
+         (payment_id, description, quantity, unit_price, total_price)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [payment.id, item.description, item.quantity, item.unitPrice, totalPrice],
     );
   }
 
@@ -371,13 +355,11 @@ export async function updatePayment(
   const params: unknown[] = [];
 
   if (data.status !== undefined) { params.push(data.status); setClauses.push(`status = $${params.length}`); }
+  if (data.title !== undefined) { params.push(data.title); setClauses.push(`title = $${params.length}`); }
+  if (data.description !== undefined) { params.push(data.description); setClauses.push(`description = $${params.length}`); }
   if (data.totalAmount !== undefined) { params.push(data.totalAmount); setClauses.push(`total_amount = $${params.length}`); }
   if (data.paidAmount !== undefined) { params.push(data.paidAmount); setClauses.push(`paid_amount = $${params.length}`); }
-  if (data.remainingAmount !== undefined) { params.push(data.remainingAmount); setClauses.push(`remaining_amount = $${params.length}`); }
   if (data.dueDate !== undefined) { params.push(data.dueDate); setClauses.push(`due_date = $${params.length}`); }
-  if (data.paymentFrequency !== undefined) { params.push(data.paymentFrequency); setClauses.push(`payment_frequency = $${params.length}`); }
-  if (data.period !== undefined) { params.push(data.period); setClauses.push(`period = $${params.length}`); }
-  if (data.note !== undefined) { params.push(data.note); setClauses.push(`note = $${params.length}`); }
 
   if (params.length === 0) {
     return findPaymentById(tdb, id);
@@ -396,8 +378,8 @@ export async function updatePayment(
 export async function approvePayment(tdb: TenantDb, id: string): Promise<ProgressPaymentRecord | null> {
   await tdb.query(
     `UPDATE ${tdb.ref('progress_payments')}
-     SET status = 'approved', updated_at = NOW()
-     WHERE id = $1 AND status = 'draft'`,
+     SET status = 'approved', approved_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND status = 'pending'`,
     [id],
   );
   return findPaymentById(tdb, id);
@@ -420,7 +402,6 @@ async function recalculatePayment(tdb: TenantDb, paymentId: string): Promise<voi
      UPDATE ${tdb.ref('progress_payments')} pp
      SET
        paid_amount = totals.paid,
-       remaining_amount = GREATEST(pp.total_amount - totals.paid, 0),
        status = CASE WHEN GREATEST(pp.total_amount - totals.paid, 0) <= 0 THEN 'paid' ELSE pp.status END,
        updated_at = NOW()
      FROM totals
@@ -438,10 +419,10 @@ export async function createTransaction(
 ): Promise<ProgressPaymentTransactionRecord> {
   const { rows } = await tdb.query<PaymentTransactionRow>(
     `INSERT INTO ${tdb.ref('progress_payment_transactions')}
-       (payment_id, payment_date, amount, receipt_path, note, created_by)
+       (payment_id, paid_at, amount, receipt_path, notes, created_by)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [paymentId, data.paymentDate, data.amount, receiptPath ?? null, data.note ?? null, userId],
+    [paymentId, data.paidAt, data.amount, receiptPath ?? null, data.notes ?? null, userId],
   );
   await recalculatePayment(tdb, paymentId);
   return mapTransaction(rows[0]!);
@@ -451,7 +432,7 @@ export async function findTransactions(tdb: TenantDb, paymentId: string): Promis
   const { rows } = await tdb.query<PaymentTransactionRow>(
     `SELECT * FROM ${tdb.ref('progress_payment_transactions')}
      WHERE payment_id = $1
-     ORDER BY payment_date DESC, created_at DESC`,
+     ORDER BY paid_at DESC, created_at DESC`,
     [paymentId],
   );
   return rows.map(mapTransaction);
@@ -475,7 +456,7 @@ export async function removeTransaction(
 export async function findExpenses(
   tdb: TenantDb,
   projectId: string,
-  filters: { category?: string; status?: string } = {},
+  filters: { category?: string } = {},
 ): Promise<GeneralExpenseRecord[]> {
   const params: unknown[] = [projectId];
   const where = ['project_id = $1'];
@@ -485,15 +466,10 @@ export async function findExpenses(
     where.push(`category = $${params.length}`);
   }
 
-  if (filters.status) {
-    params.push(filters.status);
-    where.push(`status = $${params.length}`);
-  }
-
   const { rows } = await tdb.query<ExpenseRow>(
     `SELECT * FROM ${tdb.ref('general_expenses')}
      WHERE ${where.join(' AND ')}
-     ORDER BY payment_date DESC NULLS LAST, created_at DESC`,
+     ORDER BY expense_date DESC NULLS LAST, created_at DESC`,
     params,
   );
   return rows.map(mapExpense);
@@ -512,22 +488,19 @@ export async function createExpense(
   projectId: string,
   data: CreateGeneralExpenseInput,
   userId: string,
-  invoicePath?: string | null,
 ): Promise<GeneralExpenseRecord> {
   const { rows } = await tdb.query<ExpenseRow>(
     `INSERT INTO ${tdb.ref('general_expenses')}
-       (project_id, category, description, amount, invoice_path, payment_date, status, note, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (project_id, title, category, description, amount, expense_date, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
       projectId,
+      data.title,
       data.category,
-      data.description,
+      data.description ?? null,
       data.amount,
-      invoicePath ?? null,
-      data.paymentDate ?? null,
-      data.status,
-      data.note ?? null,
+      data.expenseDate ?? null,
       userId,
     ],
   );
@@ -538,18 +511,15 @@ export async function updateExpense(
   tdb: TenantDb,
   id: string,
   data: UpdateGeneralExpenseInput,
-  invoicePath?: string | null,
 ): Promise<GeneralExpenseRecord | null> {
   const setClauses: string[] = ['updated_at = NOW()'];
   const params: unknown[] = [];
 
+  if (data.title !== undefined) { params.push(data.title); setClauses.push(`title = $${params.length}`); }
   if (data.category !== undefined) { params.push(data.category); setClauses.push(`category = $${params.length}`); }
   if (data.description !== undefined) { params.push(data.description); setClauses.push(`description = $${params.length}`); }
   if (data.amount !== undefined) { params.push(data.amount); setClauses.push(`amount = $${params.length}`); }
-  if (data.paymentDate !== undefined) { params.push(data.paymentDate); setClauses.push(`payment_date = $${params.length}`); }
-  if (data.status !== undefined) { params.push(data.status); setClauses.push(`status = $${params.length}`); }
-  if (data.note !== undefined) { params.push(data.note); setClauses.push(`note = $${params.length}`); }
-  if (invoicePath !== undefined) { params.push(invoicePath); setClauses.push(`invoice_path = $${params.length}`); }
+  if (data.expenseDate !== undefined) { params.push(data.expenseDate); setClauses.push(`expense_date = $${params.length}`); }
 
   if (params.length === 0) {
     return findExpenseById(tdb, id);
@@ -577,8 +547,6 @@ export async function removeExpense(tdb: TenantDb, id: string): Promise<GeneralE
 export async function getExpenseSummary(tdb: TenantDb, projectId: string) {
   const { rows } = await tdb.query<{
     total: string | number;
-    paid: string | number;
-    pending: string | number;
     this_month: string | number;
     by_category: Record<string, number> | null;
   }>(
@@ -590,17 +558,13 @@ export async function getExpenseSummary(tdb: TenantDb, projectId: string) {
      )
      SELECT
        COALESCE((SELECT SUM(amount) FROM ${tdb.ref('general_expenses')} WHERE project_id = $1), 0) AS total,
-       COALESCE((SELECT SUM(amount) FROM ${tdb.ref('general_expenses')} WHERE project_id = $1 AND status = 'paid'), 0) AS paid,
-       COALESCE((SELECT SUM(amount) FROM ${tdb.ref('general_expenses')} WHERE project_id = $1 AND status = 'pending'), 0) AS pending,
-       COALESCE((SELECT SUM(amount) FROM ${tdb.ref('general_expenses')} WHERE project_id = $1 AND payment_date >= date_trunc('month', CURRENT_DATE)), 0) AS this_month,
+       COALESCE((SELECT SUM(amount) FROM ${tdb.ref('general_expenses')} WHERE project_id = $1 AND expense_date >= date_trunc('month', CURRENT_DATE)), 0) AS this_month,
        COALESCE((SELECT jsonb_object_agg(category, amount) FROM category_totals), '{}'::jsonb) AS by_category`,
     [projectId],
   );
   const row = rows[0]!;
   return {
     total: toNumber(row.total),
-    paid: toNumber(row.paid),
-    pending: toNumber(row.pending),
     thisMonth: toNumber(row.this_month),
     byCategory: row.by_category ?? {},
   };
@@ -608,34 +572,29 @@ export async function getExpenseSummary(tdb: TenantDb, projectId: string) {
 
 export async function ensureDueNotifications(
   tdb: TenantDb,
-  companyId: string,
+  _companyId: string,
   projectId: string,
   userId: string,
 ): Promise<void> {
   await tdb.query(
     `INSERT INTO ${tdb.ref('payment_notifications')}
-       (company_id, user_id, type, message, related_id, related_type, related_project_id)
+       (project_id, payment_id, user_id, message)
      SELECT
-       $1::uuid,
-       $2::uuid,
-       'payment_due_soon',
-       CONCAT('Hakediş vadesi yaklaşıyor: ', COALESCE(tenants.name, pp.tenant_id), ' - ', COALESCE(pp.period, 'Dönem yok')),
+       pp.project_id,
        pp.id,
-       'progress_payment',
-       pp.project_id
+       $1::uuid,
+       CONCAT('Hakediş vadesi yaklaşıyor: ', COALESCE(tenants.name, pp.tenant_id::text), ' - ', pp.title)
      FROM ${tdb.ref('progress_payments')} pp
-     LEFT JOIN "public"."tenants" tenants ON tenants.id::text = pp.tenant_id
-     WHERE pp.project_id = $3
-       AND pp.remaining_amount > 0
+     LEFT JOIN ${tdb.ref('tenants')} tenants ON tenants.id = pp.tenant_id
+     WHERE pp.project_id = $2
+       AND COALESCE(pp.total_amount, 0) > COALESCE(pp.paid_amount, 0)
        AND pp.due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
        AND NOT EXISTS (
          SELECT 1 FROM ${tdb.ref('payment_notifications')} pn
-         WHERE pn.related_id = pp.id
-           AND pn.related_type = 'progress_payment'
-           AND pn.type = 'payment_due_soon'
-           AND pn.user_id = $2::uuid
+         WHERE pn.payment_id = pp.id
+           AND pn.user_id = $1::uuid
        )`,
-    [companyId, userId, projectId],
+    [userId, projectId],
   );
 }
 
@@ -646,26 +605,23 @@ export async function findUnreadNotifications(
 ): Promise<PaymentNotificationRecord[]> {
   const { rows } = await tdb.query<NotificationRow>(
     `SELECT * FROM ${tdb.ref('payment_notifications')}
-     WHERE company_id = $1
-       AND (user_id = $2 OR user_id IS NULL)
-       AND is_read = FALSE
-     ORDER BY created_at DESC
-     LIMIT 50`,
-    [companyId, userId],
+     WHERE user_id = $1 AND is_read = false
+     ORDER BY created_at DESC`,
+    [userId],
   );
-  return rows.map(mapNotification);
+  return rows.map((row) => mapNotification(row, companyId));
 }
 
 export async function markAllNotificationsRead(
   tdb: TenantDb,
-  companyId: string,
+  _companyId: string,
   userId: string,
 ): Promise<number> {
   const { rowCount } = await tdb.query(
     `UPDATE ${tdb.ref('payment_notifications')}
      SET is_read = TRUE
-     WHERE company_id = $1 AND (user_id = $2 OR user_id IS NULL) AND is_read = FALSE`,
-    [companyId, userId],
+     WHERE user_id = $1 AND is_read = FALSE`,
+    [userId],
   );
   return rowCount ?? 0;
 }
@@ -679,9 +635,9 @@ export async function markNotificationRead(
   const { rows } = await tdb.query<NotificationRow>(
     `UPDATE ${tdb.ref('payment_notifications')}
      SET is_read = TRUE
-     WHERE id = $1 AND company_id = $2 AND (user_id = $3 OR user_id IS NULL)
+     WHERE id = $1 AND user_id = $2
      RETURNING *`,
-    [id, companyId, userId],
+    [id, userId],
   );
-  return rows[0] ? mapNotification(rows[0]) : null;
+  return rows[0] ? mapNotification(rows[0], companyId) : null;
 }

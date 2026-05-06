@@ -16,9 +16,7 @@ import {
   updateProgressPaymentSchema,
 } from '../../models/payment.model';
 import * as projectsRepo from '../projects/projects.repo';
-import * as tendersRepo from '../tenders/tenders.repo';
 import * as tenantsRepo from '../tenants/tenants.repo';
-import * as auditRepo from '../tender-audit-logs/tender-audit-logs.repo';
 import * as repo from './payments.repo';
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -127,31 +125,14 @@ export const createPayment = async (req: Request, res: Response, next: NextFunct
     const projectId = String(req.params.projectId);
     if (!(await ensureProject(companyId, projectId, res))) return;
 
-    const tenant = await tenantsRepo.findById(parsed.data.tenantId);
-    if (!tenant || tenant.companyId !== companyId) {
+    const tenant = await tenantsRepo.findByIdByCompanyId(companyId, parsed.data.tenantId);
+    if (!tenant) {
       res.status(400).json({ error: 'Tenant not found for this company', code: 'INVALID_TENANT' });
       return;
     }
 
-    if (parsed.data.tenderId) {
-      const tender = await tendersRepo.findById(companyId, parsed.data.tenderId);
-      if (!tender || tender.projectId !== projectId) {
-        res.status(400).json({ error: 'İhale bu inşaata ait değil', code: 'INVALID_TENDER' });
-        return;
-      }
-    }
-
     const tdb = new TenantDb(companyId);
     const payment = await repo.createPayment(tdb, projectId, parsed.data, req.userId!);
-
-    if (parsed.data.tenderId) {
-      await auditRepo.create(tdb, parsed.data.tenderId, 'progress_payment_created', {
-        paymentId: payment.id,
-        tenantId: parsed.data.tenantId,
-        totalAmount: parsed.data.totalAmount,
-      }, req.userId!);
-    }
-
     res.status(201).json({ payment });
   } catch (error) {
     next(error);
@@ -275,7 +256,6 @@ export const listExpenses = async (req: Request, res: Response, next: NextFuncti
     if (!(await ensureProject(companyId, projectId, res))) return;
     const expenses = await repo.findExpenses(new TenantDb(companyId), projectId, {
       category: typeof req.query.category === 'string' ? req.query.category : undefined,
-      status: typeof req.query.status === 'string' ? req.query.status : undefined,
     });
     res.json({ expenses });
   } catch (error) {
@@ -284,49 +264,38 @@ export const listExpenses = async (req: Request, res: Response, next: NextFuncti
 };
 
 export const createExpense = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const uploaded = req.file?.path;
   try {
     const parsed = createGeneralExpenseSchema.safeParse(req.body);
     if (!parsed.success) {
-      safeUnlink(uploaded);
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
       return;
     }
     const companyId = req.resolvedCompanyId!;
     const projectId = String(req.params.projectId);
-    if (!(await ensureProject(companyId, projectId, res))) {
-      safeUnlink(uploaded);
-      return;
-    }
-    const expense = await repo.createExpense(new TenantDb(companyId), projectId, parsed.data, req.userId!, publicUploadPath(req.file));
+    if (!(await ensureProject(companyId, projectId, res))) return;
+    const expense = await repo.createExpense(new TenantDb(companyId), projectId, parsed.data, req.userId!);
     res.status(201).json({ expense });
   } catch (error) {
-    safeUnlink(uploaded);
     next(error);
   }
 };
 
 export const updateExpense = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const uploaded = req.file?.path;
   try {
     const parsed = updateGeneralExpenseSchema.safeParse(req.body);
     if (!parsed.success) {
-      safeUnlink(uploaded);
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
       return;
     }
     const tdb = new TenantDb(req.resolvedCompanyId!);
     const existing = await repo.findExpenseById(tdb, String(req.params.expenseId));
     if (!existing) {
-      safeUnlink(uploaded);
       res.status(404).json({ error: 'Gider bulunamadı', code: 'NOT_FOUND' });
       return;
     }
-    const expense = await repo.updateExpense(tdb, existing.id, parsed.data, req.file ? publicUploadPath(req.file) : undefined);
-    if (req.file) safeUnlink(existing.invoicePath);
+    const expense = await repo.updateExpense(tdb, existing.id, parsed.data);
     res.json({ expense });
   } catch (error) {
-    safeUnlink(uploaded);
     next(error);
   }
 };
@@ -338,7 +307,6 @@ export const deleteExpense = async (req: Request, res: Response, next: NextFunct
       res.status(404).json({ error: 'Gider bulunamadı', code: 'NOT_FOUND' });
       return;
     }
-    safeUnlink(deleted.invoicePath);
     res.json({ status: 'ok' });
   } catch (error) {
     next(error);
@@ -376,7 +344,7 @@ export const exportPayments = async (req: Request, res: Response, next: NextFunc
     const summary = wb.addWorksheet('Progress Payments');
     summary.columns = [
       { header: 'Tenant', key: 'tenant', width: 28 },
-      { header: 'Period', key: 'period', width: 18 },
+      { header: 'Title', key: 'title', width: 30 },
       { header: 'Total', key: 'total', width: 16 },
       { header: 'Paid', key: 'paid', width: 16 },
       { header: 'Remaining', key: 'remaining', width: 16 },
@@ -387,10 +355,10 @@ export const exportPayments = async (req: Request, res: Response, next: NextFunc
     payments.forEach((payment) => {
       summary.addRow({
         tenant: payment.tenantName ?? payment.tenantId,
-        period: payment.period ?? '',
+        title: payment.title,
         total: payment.totalAmount,
         paid: payment.paidAmount,
-        remaining: payment.remainingAmount,
+        remaining: payment.totalAmount - payment.paidAmount,
         status: payment.status,
         dueDate: payment.dueDate ?? '',
         lastPayment: payment.transactions[0]?.paymentDate ?? '',
@@ -400,7 +368,7 @@ export const exportPayments = async (req: Request, res: Response, next: NextFunc
       tenant: 'TOTAL',
       total: payments.reduce((sum, payment) => sum + payment.totalAmount, 0),
       paid: payments.reduce((sum, payment) => sum + payment.paidAmount, 0),
-      remaining: payments.reduce((sum, payment) => sum + payment.remainingAmount, 0),
+      remaining: payments.reduce((sum, payment) => sum + (payment.totalAmount - payment.paidAmount), 0),
     });
     summaryTotal.font = { bold: true };
     ['C', 'D', 'E'].forEach((col) => currencyStyle(summary.getCell(`${col}${summaryTotal.number}`)));
@@ -411,7 +379,7 @@ export const exportPayments = async (req: Request, res: Response, next: NextFunc
       { header: 'Tenant', key: 'tenant', width: 28 },
       { header: 'Amount', key: 'amount', width: 16 },
       { header: 'Receipt', key: 'receipt', width: 32 },
-      { header: 'Note', key: 'note', width: 36 },
+      { header: 'Notes', key: 'notes', width: 36 },
     ];
     const transactions = payments.flatMap((payment) => payment.transactions.map((tx) => ({ payment, tx })));
     transactions.forEach(({ payment, tx }) => {
@@ -420,7 +388,7 @@ export const exportPayments = async (req: Request, res: Response, next: NextFunc
         tenant: payment.tenantName ?? payment.tenantId,
         amount: tx.amount,
         receipt: tx.receiptPath ?? '',
-        note: tx.note ?? '',
+        notes: tx.note ?? '',
       });
     });
     const txTotal = txSheet.addRow({ tenant: 'TOTAL', amount: transactions.reduce((sum, row) => sum + row.tx.amount, 0) });
@@ -429,26 +397,24 @@ export const exportPayments = async (req: Request, res: Response, next: NextFunc
 
     const expenseSheet = wb.addWorksheet('General Expenses');
     expenseSheet.columns = [
+      { header: 'Title', key: 'title', width: 28 },
       { header: 'Category', key: 'category', width: 18 },
       { header: 'Description', key: 'description', width: 40 },
       { header: 'Amount', key: 'amount', width: 16 },
-      { header: 'Invoice', key: 'invoice', width: 32 },
-      { header: 'Payment Date', key: 'paymentDate', width: 16 },
-      { header: 'Status', key: 'status', width: 14 },
+      { header: 'Expense Date', key: 'expenseDate', width: 16 },
     ];
     expenses.forEach((expense) => {
       expenseSheet.addRow({
+        title: expense.title,
         category: expense.category,
-        description: expense.description,
+        description: expense.description ?? '',
         amount: expense.amount,
-        invoice: expense.invoicePath ?? '',
-        paymentDate: expense.paymentDate ?? '',
-        status: expense.status,
+        expenseDate: expense.expenseDate ?? '',
       });
     });
     const expenseTotal = expenseSheet.addRow({ description: 'TOTAL', amount: expenses.reduce((sum, expense) => sum + expense.amount, 0) });
     expenseTotal.font = { bold: true };
-    currencyStyle(expenseSheet.getCell(`C${expenseTotal.number}`));
+    currencyStyle(expenseSheet.getCell(`D${expenseTotal.number}`));
 
     [summary, txSheet, expenseSheet].forEach((sheet) => {
       sheet.getRow(1).font = { bold: true };

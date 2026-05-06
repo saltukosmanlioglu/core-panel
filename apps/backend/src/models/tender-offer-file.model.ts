@@ -8,8 +8,6 @@ export const ALLOWED_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ] as const;
 
-export const uploadOfferFileSchema = z.object({
-  tenantId: z.string().uuid('Invalid tenant ID'),
-});
+export const uploadOfferFileSchema = z.object({});
 
 export type UploadOfferFileRequest = z.infer<typeof uploadOfferFileSchema>;

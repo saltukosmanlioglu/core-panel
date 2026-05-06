@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { requireAdminAccess } from '../../middleware/requireAdminAccess';
+import { resolveCompany } from '../../middleware/resolveCompany';
 import { validateUUID } from '../../middleware/validateUUID';
 import * as controller from './material-suppliers.controller';
 
 const router = Router();
+
+router.use(resolveCompany);
 
 router.get('/', requireAdminAccess, controller.getAll);
 router.get('/:id', requireAdminAccess, validateUUID(), controller.getById);

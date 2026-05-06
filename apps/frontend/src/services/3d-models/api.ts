@@ -21,7 +21,7 @@ export async function generateThreeDModelImagesApi(
   projectId: string,
   data: GenerateImagePayload,
 ): Promise<GenerateImageResponse> {
-  const res = await apiClient.post(`/api/projects/${projectId}/3d-models/generate-image`, data);
+  const res = await apiClient.post(`/api/projects/${projectId}/3d-models`, data);
   return res.data as GenerateImageResponse;
 }
 

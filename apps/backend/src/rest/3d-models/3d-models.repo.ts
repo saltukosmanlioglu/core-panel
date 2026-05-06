@@ -14,21 +14,17 @@ export type GenerationStep = (typeof GENERATION_STEP)[keyof typeof GENERATION_ST
 interface ThreeDModelRow {
   id: string;
   project_id: string;
-  prompt: string;
-  texture_prompt: string | null;
-  enhanced_prompt: string | null;
+  name: string | null;
   meshy_task_id: string | null;
-  meshy_texture_task_id: string | null;
-  image_task_id: string | null;
   status: string;
   generation_step: string | null;
-  progress: number | null;
-  file_path: string | null;
   thumbnail_url: string | null;
-  model_name: string | null;
+  model_url: string | null;
   preview_image_urls: unknown;
   original_image_urls: unknown;
   selected_image_url: string | null;
+  prompt: string | null;
+  created_by: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -53,19 +49,19 @@ function mapRow(row: ThreeDModelRow) {
   return {
     id: row.id,
     projectId: row.project_id,
-    prompt: row.prompt,
-    texturePrompt: row.texture_prompt,
-    enhancedPrompt: row.enhanced_prompt,
+    prompt: row.prompt ?? '',
+    texturePrompt: null,
+    enhancedPrompt: null,
     meshyTaskId: row.meshy_task_id,
-    meshyTextureTaskId: row.meshy_texture_task_id,
-    imageTaskId: row.image_task_id,
+    meshyTextureTaskId: null,
+    imageTaskId: row.meshy_task_id,
     status: generationStep,
     generationStep,
-    progress: row.progress ?? 0,
-    filePath: row.file_path,
-    modelUrl: row.file_path,
+    progress: generationStep === GENERATION_STEP.COMPLETED || generationStep === GENERATION_STEP.IMAGE_DONE ? 100 : 0,
+    filePath: row.model_url,
+    modelUrl: row.model_url,
     thumbnailUrl: row.thumbnail_url,
-    modelName: row.model_name,
+    modelName: row.name,
     previewImageUrls: toStringArray(row.preview_image_urls),
     originalImageUrls: toStringArray(row.original_image_urls),
     selectedImageUrl: row.selected_image_url,
@@ -81,7 +77,6 @@ export async function createImageDone(
   data: {
     projectId: string;
     prompt: string;
-    enhancedPrompt: string;
     imageTaskId: string;
     previewImageUrls: string[];
     originalImageUrls: string[];
@@ -90,20 +85,18 @@ export async function createImageDone(
 ): Promise<ThreeDModelRecord> {
   const { rows } = await tdb.query<ThreeDModelRow>(
     `INSERT INTO ${tdb.ref('project_3d_models')}
-       (project_id, prompt, enhanced_prompt, image_task_id, preview_image_urls,
-        original_image_urls, generation_step, status, progress, model_name)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $7, $8, $9)
+       (project_id, name, status, meshy_task_id, preview_image_urls,
+        original_image_urls, generation_step, prompt)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $3, $7)
      RETURNING *`,
     [
       data.projectId,
-      data.prompt,
-      data.enhancedPrompt,
+      data.modelName,
+      GENERATION_STEP.IMAGE_DONE,
       data.imageTaskId,
       JSON.stringify(data.previewImageUrls),
       JSON.stringify(data.originalImageUrls),
-      GENERATION_STEP.IMAGE_DONE,
-      100,
-      data.modelName,
+      data.prompt,
     ],
   );
 
@@ -142,7 +135,6 @@ export async function updateModelGeneration(
          meshy_task_id = $2,
          generation_step = $3,
          status = $3,
-         progress = 0,
          updated_at = NOW()
      WHERE id = $4
      RETURNING *`,
@@ -165,14 +157,9 @@ export async function updateGenerationStatus(
   const setClauses = ['generation_step = $1', 'status = $1', 'updated_at = NOW()'];
   const params: unknown[] = [data.generationStep];
 
-  if (data.progress !== undefined) {
-    params.push(data.progress);
-    setClauses.push(`progress = $${params.length}`);
-  }
-
   if (data.filePath !== undefined) {
     params.push(data.filePath);
-    setClauses.push(`file_path = $${params.length}`);
+    setClauses.push(`model_url = $${params.length}`);
   }
 
   if (data.thumbnailUrl !== undefined) {
@@ -204,19 +191,17 @@ export async function createFromFloorPlanImage(
 ): Promise<ThreeDModelRecord> {
   const { rows } = await tdb.query<ThreeDModelRow>(
     `INSERT INTO ${tdb.ref('project_3d_models')}
-       (project_id, prompt, enhanced_prompt, image_task_id, preview_image_urls,
-        original_image_urls, generation_step, status, progress, model_name, selected_image_url)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $5::jsonb, $6, $6, $7, $8, $9)
+       (project_id, name, status, meshy_task_id, preview_image_urls,
+        original_image_urls, generation_step, prompt, selected_image_url)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $5::jsonb, $3, $6, $7)
      RETURNING *`,
     [
       data.projectId,
-      'Kat planından 3D model',
-      'Kat planından 3D model',
+      'Kat Planı 3D',
+      GENERATION_STEP.IMAGE_DONE,
       data.floorPlanExportId ?? 'floor-plan',
       JSON.stringify([data.imageUrl]),
-      GENERATION_STEP.IMAGE_DONE,
-      100,
-      'Kat Planı 3D',
+      'Kat planından 3D model',
       data.imageUrl,
     ],
   );
@@ -245,17 +230,14 @@ export async function createFileInfo(
 ): Promise<void> {
   await tdb.query(
     `INSERT INTO ${tdb.ref('file_info')}
-       (file_name, file_type, file_size, file_path, mime_type, uploaded_by, description, tags)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       (original_name, stored_name, file_path, mime_type, file_size, uploaded_by)
+     VALUES ($1, $1, $2, $3, $4, $5)`,
     [
       data.fileName,
-      '3d-model',
-      data.fileSize,
       data.filePath,
       'model/gltf-binary',
+      data.fileSize,
       data.uploadedBy,
-      data.description ?? null,
-      ['3d-model', 'meshy'],
     ],
   );
 }

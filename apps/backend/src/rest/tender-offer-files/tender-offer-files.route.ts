@@ -8,6 +8,6 @@ const router = Router({ mergeParams: true });
 
 router.get('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.getAll);
 router.post('/', requireAdminAccess, resolveCompany, validateUUID('tenderId'), controller.upload.single('file'), controller.uploadFile);
-router.delete('/:tenantId', requireAdminAccess, resolveCompany, validateUUID('tenderId'), validateUUID('tenantId'), controller.removeFile);
+router.delete('/:fileId', requireAdminAccess, resolveCompany, validateUUID('tenderId'), validateUUID('fileId'), controller.removeFile);
 
 export default router;

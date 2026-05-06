@@ -351,7 +351,6 @@ export async function generateImages(
   return repo.createImageDone(tdb, {
     projectId,
     prompt: data.prompt,
-    enhancedPrompt,
     imageTaskId: taskIds[0]!,
     previewImageUrls: localUrls,
     originalImageUrls: originalUrls,

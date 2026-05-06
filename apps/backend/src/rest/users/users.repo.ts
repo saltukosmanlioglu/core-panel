@@ -1,42 +1,44 @@
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../../db/connection';
-import { users, tenants } from '../../db/schema';
+import { users } from '../../db/schema';
 import type { User } from '../../db/schema';
 
-export type UserWithTenant = Omit<User, 'password' | 'mfaSecret'> & { tenantName: string | null; companyId: string | null };
+export type UserWithTenant = Omit<User, 'password' | 'mfaSecret'> & {
+  name: string | null;
+  tenantId: string | null;
+  tenantName: string | null;
+  companyId: string | null;
+};
 
-const userWithTenantColumns = {
-  id: users.id,
-  email: users.email,
-  name: users.name,
-  role: users.role,
-  companyId: users.companyId,
-  tenantId: users.tenantId,
-  tenantName: tenants.name,
-  isActive: users.isActive,
-  mfaEnabled: users.mfaEnabled,
-  lastUsedOtpAt: users.lastUsedOtpAt,
-  lastLogin: users.lastLogin,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
-} as const;
+function publicUser(user: User): UserWithTenant {
+  return {
+    id: user.id,
+    email: user.email,
+    name: null,
+    role: user.role,
+    companyId: user.companyId,
+    tenantId: null,
+    tenantName: null,
+    isActive: user.isActive,
+    mfaEnabled: user.mfaEnabled,
+    lastLogin: user.lastLogin,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
 
 export async function findAll(): Promise<UserWithTenant[]> {
-  return db
-    .select(userWithTenantColumns)
-    .from(users)
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
-    .orderBy(users.createdAt);
+  const result = await db.select().from(users).orderBy(users.createdAt);
+  return result.map(publicUser);
 }
 
 export async function findById(id: string): Promise<UserWithTenant | null> {
   const result = await db
-    .select(userWithTenantColumns)
+    .select()
     .from(users)
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .where(eq(users.id, id))
     .limit(1);
-  return result[0] ?? null;
+  return result[0] ? publicUser(result[0]) : null;
 }
 
 export async function findByIdFull(id: string): Promise<User | null> {
@@ -57,22 +59,17 @@ export async function findByEmail(email: string): Promise<User | null> {
   return result[0] ?? null;
 }
 
-export async function findAllByTenantId(tenantId: string): Promise<UserWithTenant[]> {
-  return db
-    .select(userWithTenantColumns)
-    .from(users)
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
-    .where(eq(users.tenantId, tenantId))
-    .orderBy(users.createdAt);
+export async function findAllByTenantId(_tenantId: string): Promise<UserWithTenant[]> {
+  return [];
 }
 
 export async function findAllByCompanyId(companyId: string): Promise<UserWithTenant[]> {
-  return db
-    .select(userWithTenantColumns)
+  const result = await db
+    .select()
     .from(users)
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
-    .where(or(eq(tenants.companyId, companyId), eq(users.companyId, companyId)))
+    .where(eq(users.companyId, companyId))
     .orderBy(users.createdAt);
+  return result.map(publicUser);
 }
 
 export interface CreateUserData {
@@ -86,7 +83,16 @@ export interface CreateUserData {
 }
 
 export async function create(data: CreateUserData): Promise<User> {
-  const [user] = await db.insert(users).values(data).returning();
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: data.email,
+      password: data.password,
+      role: data.role,
+      companyId: data.companyId ?? null,
+      isActive: data.isActive,
+    })
+    .returning();
   return user!;
 }
 
@@ -100,15 +106,26 @@ export interface UpdateUserData {
   isActive?: boolean;
   mfaEnabled?: boolean;
   mfaSecret?: string;
-  lastUsedOtpAt?: Date;
   lastLogin?: Date;
   updatedAt?: Date;
 }
 
 export async function update(id: string, data: UpdateUserData): Promise<User | null> {
+  const updateData: Partial<typeof users.$inferInsert> = {};
+
+  if (data.email !== undefined) updateData.email = data.email;
+  if (data.password !== undefined) updateData.password = data.password;
+  if (data.role !== undefined) updateData.role = data.role;
+  if (data.companyId !== undefined) updateData.companyId = data.companyId;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  if (data.mfaEnabled !== undefined) updateData.mfaEnabled = data.mfaEnabled;
+  if (data.mfaSecret !== undefined) updateData.mfaSecret = data.mfaSecret;
+  if (data.lastLogin !== undefined) updateData.lastLogin = data.lastLogin;
+  updateData.updatedAt = new Date();
+
   const [updated] = await db
     .update(users)
-    .set({ ...data, updatedAt: new Date() })
+    .set(updateData)
     .where(eq(users.id, id))
     .returning();
   return updated ?? null;

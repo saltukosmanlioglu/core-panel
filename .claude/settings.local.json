@@ -121,7 +121,8 @@
       "Bash(curl *)",
       "Bash(echo \"PID: $!\")",
       "Bash([ -d \"/Users/saltuk/Desktop/saltuk/claude/core-panel/$dir\" ])",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(sort echo *)"
     ]
   }
 }

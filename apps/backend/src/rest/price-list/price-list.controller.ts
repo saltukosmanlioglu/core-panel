@@ -40,7 +40,7 @@ async function buildPriceList(companyId: string, projectId: string, kdvRate: num
       const total = unitPrice * quantity;
 
       if (!tenantMap.has(tenantId)) {
-        const tenant = await tenantsRepo.findById(tenantId);
+        const tenant = await tenantsRepo.findByIdByCompanyId(companyId, tenantId);
         tenantMap.set(tenantId, {
           tenantId,
           tenantName: tenant?.name ?? tenantId,

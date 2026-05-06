@@ -87,15 +87,9 @@ export async function verifyMfaSetup(userId: string, otpCode: string): Promise<{
     throw new AppError('Invalid OTP code', 400, 'INVALID_OTP');
   }
 
-  const now = new Date();
-  const windowStart = new Date(Math.floor(now.getTime() / 30000) * 30000);
-  if (user.lastUsedOtpAt && user.lastUsedOtpAt >= windowStart) {
-    throw new AppError('OTP code already used', 400, 'OTP_ALREADY_USED');
-  }
+  await usersRepo.update(userId, { mfaEnabled: true });
 
-  await usersRepo.update(userId, { mfaEnabled: true, lastUsedOtpAt: now });
-
-  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, user.tenantId ?? null);
+  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null);
   return { fullToken };
 }
 
@@ -118,15 +112,9 @@ export async function verifyMfa(userId: string, otpCode: string): Promise<{ full
     throw new AppError('Invalid OTP code', 400, 'INVALID_OTP');
   }
 
-  const now = new Date();
-  const windowStart = new Date(Math.floor(now.getTime() / 30000) * 30000);
-  if (user.lastUsedOtpAt && user.lastUsedOtpAt >= windowStart) {
-    throw new AppError('OTP code already used', 400, 'OTP_ALREADY_USED');
-  }
+  await usersRepo.update(userId, { lastLogin: new Date() });
 
-  await usersRepo.update(userId, { lastLogin: now, lastUsedOtpAt: now });
-
-  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, user.tenantId ?? null);
+  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null);
   return { fullToken };
 }
 

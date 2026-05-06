@@ -4,16 +4,14 @@ import type { CreatePropertyOwnerInput, UpdatePropertyOwnerInput } from '../../m
 interface PropertyOwnerRow {
   id: string;
   project_id: string;
-  full_name: string;
+  name: string;
   phone: string | null;
   email: string | null;
-  id_number: string | null;
   floor_number: number | null;
   apartment_number: string | null;
   apartment_size_sqm: string | number | null;
   share_percentage: string | number | null;
-  apartment_count: number | null;
-  note: string | null;
+  notes: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -27,16 +25,14 @@ function mapRow(row: PropertyOwnerRow) {
   return {
     id: row.id,
     projectId: row.project_id,
-    fullName: row.full_name,
+    name: row.name,
     phone: row.phone,
     email: row.email,
-    idNumber: row.id_number,
     floorNumber: row.floor_number,
     apartmentNumber: row.apartment_number,
     apartmentSizeSqm: toNumber(row.apartment_size_sqm),
     sharePercentage: toNumber(row.share_percentage),
-    apartmentCount: row.apartment_count ?? 1,
-    note: row.note,
+    notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -48,7 +44,7 @@ export async function findByProjectId(tdb: TenantDb, projectId: string): Promise
   const { rows } = await tdb.query<PropertyOwnerRow>(
     `SELECT * FROM ${tdb.ref('property_owners')}
      WHERE project_id = $1
-     ORDER BY floor_number ASC NULLS LAST, apartment_number ASC NULLS LAST, full_name ASC`,
+     ORDER BY floor_number ASC NULLS LAST, apartment_number ASC NULLS LAST, name ASC`,
     [projectId],
   );
   return rows.map(mapRow);
@@ -69,21 +65,19 @@ export async function create(
 ): Promise<PropertyOwnerRecord> {
   const { rows } = await tdb.query<PropertyOwnerRow>(
     `INSERT INTO ${tdb.ref('property_owners')}
-       (project_id, full_name, phone, email, id_number, floor_number, apartment_number, apartment_size_sqm, share_percentage, apartment_count, note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       (project_id, name, phone, email, floor_number, apartment_number, apartment_size_sqm, share_percentage, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       projectId,
-      data.fullName,
+      data.name,
       data.phone ?? null,
       data.email || null,
-      data.idNumber ?? null,
       data.floorNumber ?? null,
       data.apartmentNumber ?? null,
       data.apartmentSizeSqm ?? null,
       data.sharePercentage ?? null,
-      data.apartmentCount,
-      data.note ?? null,
+      data.notes ?? null,
     ],
   );
   return mapRow(rows[0]!);
@@ -97,16 +91,14 @@ export async function update(
   const setClauses: string[] = ['updated_at = NOW()'];
   const params: unknown[] = [];
 
-  if (data.fullName !== undefined) { params.push(data.fullName); setClauses.push(`full_name = $${params.length}`); }
+  if (data.name !== undefined) { params.push(data.name); setClauses.push(`name = $${params.length}`); }
   if (data.phone !== undefined) { params.push(data.phone || null); setClauses.push(`phone = $${params.length}`); }
   if (data.email !== undefined) { params.push(data.email || null); setClauses.push(`email = $${params.length}`); }
-  if (data.idNumber !== undefined) { params.push(data.idNumber || null); setClauses.push(`id_number = $${params.length}`); }
   if (data.floorNumber !== undefined) { params.push(data.floorNumber ?? null); setClauses.push(`floor_number = $${params.length}`); }
   if (data.apartmentNumber !== undefined) { params.push(data.apartmentNumber || null); setClauses.push(`apartment_number = $${params.length}`); }
   if (data.apartmentSizeSqm !== undefined) { params.push(data.apartmentSizeSqm ?? null); setClauses.push(`apartment_size_sqm = $${params.length}`); }
   if (data.sharePercentage !== undefined) { params.push(data.sharePercentage ?? null); setClauses.push(`share_percentage = $${params.length}`); }
-  if (data.apartmentCount !== undefined) { params.push(data.apartmentCount); setClauses.push(`apartment_count = $${params.length}`); }
-  if (data.note !== undefined) { params.push(data.note || null); setClauses.push(`note = $${params.length}`); }
+  if (data.notes !== undefined) { params.push(data.notes || null); setClauses.push(`notes = $${params.length}`); }
 
   if (params.length === 0) return findById(tdb, id);
 

@@ -1,12 +1,18 @@
 import { z } from 'zod';
-import { Tenant } from '../db/schema';
+
+export interface TenantResponse {
+  id: string;
+  companyId: string;
+  companyName?: string | null;
+  name: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 // Response types
-export type TenantResponse = Tenant;
-
-export interface TenantWithCompanyResponse extends Tenant {
-  companyName: string;
-}
+export type TenantWithCompanyResponse = TenantResponse;
 
 // Request validation schemas
 export const createTenantSchema = z.object({

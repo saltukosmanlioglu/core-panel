@@ -75,7 +75,7 @@ export async function findByTenderId(companyId: string, tenderId: string): Promi
   const { rows } = await tdb.query<OfferRow>(
     `SELECT o.*, t.name AS tenant_name
      FROM ${tdb.ref('tender_offers')} o
-     LEFT JOIN public.tenants t ON o.tenant_id = t.id
+     LEFT JOIN ${tdb.ref('tenants')} t ON o.tenant_id = t.id
      WHERE o.tender_id = $1
      ORDER BY o.created_at ASC`,
     [tenderId],
@@ -92,7 +92,7 @@ export async function findByTenderAndTenant(
   const { rows } = await tdb.query<OfferRow>(
     `SELECT o.*, t.name AS tenant_name
      FROM ${tdb.ref('tender_offers')} o
-     LEFT JOIN public.tenants t ON o.tenant_id = t.id
+     LEFT JOIN ${tdb.ref('tenants')} t ON o.tenant_id = t.id
      WHERE o.tender_id = $1 AND o.tenant_id = $2 LIMIT 1`,
     [tenderId, tenantId],
   );
@@ -104,7 +104,7 @@ export async function findById(companyId: string, id: string): Promise<OfferReco
   const { rows } = await tdb.query<OfferRow>(
     `SELECT o.*, t.name AS tenant_name
      FROM ${tdb.ref('tender_offers')} o
-     LEFT JOIN public.tenants t ON o.tenant_id = t.id
+     LEFT JOIN ${tdb.ref('tenants')} t ON o.tenant_id = t.id
      WHERE o.id = $1 LIMIT 1`,
     [id],
   );
@@ -248,7 +248,7 @@ export async function getOfferComparison(
   }>(
     `SELECT o.id, o.tenant_id, t.name AS tenant_name, o.status, o.submitted_at
      FROM ${to} o
-     LEFT JOIN public.tenants t ON o.tenant_id = t.id
+     LEFT JOIN ${tdb.ref('tenants')} t ON o.tenant_id = t.id
      WHERE o.tender_id = $1
      ORDER BY o.created_at ASC`,
     [tenderId],

@@ -43,8 +43,9 @@ export async function findAll(companyId: string, options: FindAllOptions = {}): 
   const tdb = new TenantDb(companyId);
   const t = tdb.ref('tenders');
   const p = tdb.ref('projects');
+  const c = tdb.ref('categories');
   const sortOrder = options.sortOrder === 'desc' ? 'DESC' : 'ASC';
-  const params: unknown[] = [companyId];
+  const params: unknown[] = [];
   const whereClauses: string[] = [];
 
   if (options.projectId) {
@@ -59,7 +60,7 @@ export async function findAll(companyId: string, options: FindAllOptions = {}): 
     `SELECT t.*, p.name AS project_name, c.name AS category_name
      FROM ${t} t
      LEFT JOIN ${p} p ON t.project_id = p.id
-     LEFT JOIN public.categories c ON t.category_id = c.id AND c.company_id = $1
+     LEFT JOIN ${c} c ON t.category_id = c.id
      ${whereClause}
      ORDER BY t.created_at ${sortOrder}${limitClause}`,
     params,
@@ -105,14 +106,15 @@ export async function findById(companyId: string, id: string): Promise<TenderRec
   const tdb = new TenantDb(companyId);
   const t = tdb.ref('tenders');
   const p = tdb.ref('projects');
+  const c = tdb.ref('categories');
   const { rows } = await tdb.query<TenderRow>(
     `SELECT t.*, p.name AS project_name, c.name AS category_name
      FROM ${t} t
      LEFT JOIN ${p} p ON t.project_id = p.id
-     LEFT JOIN public.categories c ON t.category_id = c.id AND c.company_id = $1
-     WHERE t.id = $2
+     LEFT JOIN ${c} c ON t.category_id = c.id
+     WHERE t.id = $1
      LIMIT 1`,
-    [companyId, id],
+    [id],
   );
   return rows[0] ? mapRow(rows[0]) : null;
 }

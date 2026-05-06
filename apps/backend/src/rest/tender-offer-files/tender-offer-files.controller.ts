@@ -6,10 +6,8 @@ import { Request, Response, NextFunction } from 'express';
 import { TenantDb } from '../../lib/tenantDb';
 import { UPLOADS_DIR } from '../../config/paths';
 import { AppError } from '../../lib/AppError';
-import { ALLOWED_MIME_TYPES, uploadOfferFileSchema } from '../../models/tender-offer-file.model';
+import { ALLOWED_MIME_TYPES } from '../../models/tender-offer-file.model';
 import * as tendersRepo from '../tenders/tenders.repo';
-import * as tenantsRepo from '../tenants/tenants.repo';
-import * as tenderInvitationsRepo from '../tender-invitations/tender-invitations.repo';
 import * as tenderOfferFilesRepo from './tender-offer-files.repo';
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -82,17 +80,6 @@ export const uploadFile = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const parsed = uploadOfferFileSchema.safeParse(req.body);
-
-    if (!parsed.success) {
-      safeUnlink(uploadedFilePath ?? '');
-      res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Validation failed',
-        code: 'VALIDATION_ERROR',
-      });
-      return;
-    }
-
     const companyId = req.resolvedCompanyId!;
     const tenderId = String(req.params.tenderId);
     const tender = await tendersRepo.findById(companyId, tenderId);
@@ -103,26 +90,9 @@ export const uploadFile = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const tenant = await tenantsRepo.findById(parsed.data.tenantId);
-    if (!tenant || tenant.companyId !== companyId) {
-      safeUnlink(uploadedFilePath ?? '');
-      res.status(400).json({ error: 'Tenant not found for this company', code: 'INVALID_TENANT' });
-      return;
-    }
-
-    const invitedTenantIds = await tenderInvitationsRepo.findByTenderId(new TenantDb(companyId), tenderId);
-    if (!invitedTenantIds.includes(parsed.data.tenantId)) {
-      safeUnlink(uploadedFilePath ?? '');
-      res.status(400).json({ error: 'Tenant is not invited to this tender', code: 'TENANT_NOT_INVITED' });
-      return;
-    }
-
     const tdb = new TenantDb(companyId);
-    const existing = await tenderOfferFilesRepo.findByTenderAndTenant(tdb, tenderId, parsed.data.tenantId);
-
-    const offerFile = await tenderOfferFilesRepo.upsert(tdb, {
+    const offerFile = await tenderOfferFilesRepo.create(tdb, {
       tenderId,
-      tenantId: parsed.data.tenantId,
       originalName: req.file.originalname,
       storedName: req.file.filename,
       filePath: `/uploads/${req.file.filename}`,
@@ -131,27 +101,18 @@ export const uploadFile = async (req: Request, res: Response, next: NextFunction
       uploadedBy: req.userId!,
     });
 
-    if (existing && existing.storedName !== offerFile.storedName) {
-      safeUnlink(path.join(UPLOADS_DIR, existing.storedName));
-    }
-
-    res.status(201).json({
-      offerFile: {
-        ...offerFile,
-        tenantName: tenant.name,
-      },
-    });
+    res.status(201).json({ offerFile });
   } catch (error) {
     safeUnlink(uploadedFilePath ?? '');
     next(error);
   }
 };
 
-export const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const removeFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const companyId = req.resolvedCompanyId!;
     const tenderId = String(req.params.tenderId);
-    const tenantId = String(req.params.tenantId);
+    const fileId = String(req.params.fileId);
     const tender = await tendersRepo.findById(companyId, tenderId);
 
     if (!tender) {
@@ -159,7 +120,7 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    const offerFile = await tenderOfferFilesRepo.remove(new TenantDb(companyId), tenderId, tenantId);
+    const offerFile = await tenderOfferFilesRepo.remove(new TenantDb(companyId), fileId);
 
     if (!offerFile) {
       res.status(404).json({ error: 'Dosya bulunamadı', code: 'NOT_FOUND' });
@@ -172,5 +133,3 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 };
-
-export const removeFile = remove;

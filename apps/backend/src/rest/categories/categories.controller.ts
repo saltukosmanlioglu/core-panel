@@ -10,7 +10,7 @@ import * as repo from './categories.repo';
 import { getTdb } from '../../lib/tenantDb';
 
 async function ensureCategoryBelongsToCompany(categoryId: string, companyId: string): Promise<boolean> {
-  const category = await repo.findById(categoryId);
+  const category = await repo.findById(categoryId, companyId);
   return !!category && category.companyId === companyId;
 }
 
@@ -23,7 +23,7 @@ async function categoryIdsBelongToCompany(categoryIds: string[], companyId: stri
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const data = await repo.findAll(req.userCompanyId!);
+    const data = await repo.findAll(req.resolvedCompanyId!);
     res.json(data);
   } catch (err) {
     next(err);
@@ -32,8 +32,8 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
 
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const category = await repo.findById(String(req.params.id));
-    if (!category || category.companyId !== req.userCompanyId) {
+    const category = await repo.findById(String(req.params.id), req.resolvedCompanyId!);
+    if (!category) {
       res.status(404).json({ error: 'Kategori bulunamadı', code: 'NOT_FOUND' });
       return;
     }
@@ -54,7 +54,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    const category = await repo.create(req.userCompanyId!, parsed.data);
+    const category = await repo.create(req.resolvedCompanyId!, parsed.data);
     res.status(201).json(category);
   } catch (err) {
     next(err);
@@ -72,12 +72,12 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
       return;
     }
 
-    if (!(await ensureCategoryBelongsToCompany(String(req.params.id), req.userCompanyId!))) {
+    if (!(await ensureCategoryBelongsToCompany(String(req.params.id), req.resolvedCompanyId!))) {
       res.status(404).json({ error: 'Kategori bulunamadı', code: 'NOT_FOUND' });
       return;
     }
 
-    const category = await repo.update(String(req.params.id), parsed.data);
+    const category = await repo.update(String(req.params.id), parsed.data, req.resolvedCompanyId!);
     res.json(category);
   } catch (err) {
     next(err);
@@ -88,7 +88,7 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
   try {
     const categoryId = String(req.params.id);
 
-    if (!(await ensureCategoryBelongsToCompany(categoryId, req.userCompanyId!))) {
+    if (!(await ensureCategoryBelongsToCompany(categoryId, req.resolvedCompanyId!))) {
       res.status(404).json({ error: 'Kategori bulunamadı', code: 'NOT_FOUND' });
       return;
     }
@@ -99,7 +99,7 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
       [categoryId],
     );
 
-    await repo.remove(categoryId);
+    await repo.remove(categoryId, req.resolvedCompanyId!);
     res.json({ status: 'ok' });
   } catch (err) {
     next(err);
@@ -108,13 +108,13 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
 
 export const getTenantCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const tenant = await tenantsRepo.findById(String(req.params.tenantId));
-    if (!tenant || tenant.companyId !== req.userCompanyId) {
+    const tenant = await tenantsRepo.findByIdByCompanyId(req.resolvedCompanyId!, String(req.params.tenantId));
+    if (!tenant) {
       res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;
     }
 
-    const categoryIds = await repo.findCategoriesByTenantId(String(req.params.tenantId));
+    const categoryIds = await repo.findCategoriesByTenantId(req.resolvedCompanyId!, String(req.params.tenantId));
     res.json({ categoryIds });
   } catch (err) {
     next(err);
@@ -132,17 +132,17 @@ export const updateTenantCategories = async (req: Request, res: Response, next: 
       return;
     }
 
-    const tenant = await tenantsRepo.findById(String(req.params.tenantId));
-    if (!tenant || tenant.companyId !== req.userCompanyId) {
+    const tenant = await tenantsRepo.findByIdByCompanyId(req.resolvedCompanyId!, String(req.params.tenantId));
+    if (!tenant) {
       res.status(404).json({ error: 'Taşeron bulunamadı', code: 'NOT_FOUND' });
       return;
     }
-    if (!(await categoryIdsBelongToCompany(parsed.data.categoryIds, req.userCompanyId!))) {
+    if (!(await categoryIdsBelongToCompany(parsed.data.categoryIds, req.resolvedCompanyId!))) {
       res.status(400).json({ error: 'Geçersiz kategori', code: 'VALIDATION_ERROR' });
       return;
     }
 
-    await repo.replaceTenantCategories(String(req.params.tenantId), parsed.data.categoryIds);
+    await repo.replaceTenantCategories(req.resolvedCompanyId!, String(req.params.tenantId), parsed.data.categoryIds);
     res.json({ categoryIds: parsed.data.categoryIds });
   } catch (err) {
     next(err);
@@ -151,13 +151,13 @@ export const updateTenantCategories = async (req: Request, res: Response, next: 
 
 export const getSupplierCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const supplier = await materialSuppliersRepo.findById(String(req.params.supplierId));
-    if (!supplier || supplier.companyId !== req.userCompanyId) {
+    const supplier = await materialSuppliersRepo.findByIdByCompanyId(req.resolvedCompanyId!, String(req.params.supplierId));
+    if (!supplier) {
       res.status(404).json({ error: 'Malzemeci bulunamadı', code: 'NOT_FOUND' });
       return;
     }
 
-    const categoryIds = await repo.findCategoriesBySupplierId(String(req.params.supplierId));
+    const categoryIds = await repo.findCategoriesBySupplierId(req.resolvedCompanyId!, String(req.params.supplierId));
     res.json({ categoryIds });
   } catch (err) {
     next(err);
@@ -175,17 +175,17 @@ export const updateSupplierCategories = async (req: Request, res: Response, next
       return;
     }
 
-    const supplier = await materialSuppliersRepo.findById(String(req.params.supplierId));
-    if (!supplier || supplier.companyId !== req.userCompanyId) {
+    const supplier = await materialSuppliersRepo.findByIdByCompanyId(req.resolvedCompanyId!, String(req.params.supplierId));
+    if (!supplier) {
       res.status(404).json({ error: 'Malzemeci bulunamadı', code: 'NOT_FOUND' });
       return;
     }
-    if (!(await categoryIdsBelongToCompany(parsed.data.categoryIds, req.userCompanyId!))) {
+    if (!(await categoryIdsBelongToCompany(parsed.data.categoryIds, req.resolvedCompanyId!))) {
       res.status(400).json({ error: 'Geçersiz kategori', code: 'VALIDATION_ERROR' });
       return;
     }
 
-    await repo.replaceSupplierCategories(String(req.params.supplierId), parsed.data.categoryIds);
+    await repo.replaceSupplierCategories(req.resolvedCompanyId!, String(req.params.supplierId), parsed.data.categoryIds);
     res.json({ categoryIds: parsed.data.categoryIds });
   } catch (err) {
     next(err);
@@ -196,7 +196,7 @@ export const getTenantCategoriesBatch = async (req: Request, res: Response, next
   try {
     const param = String(req.query.tenantIds ?? '');
     const tenantIds = param.split(',').filter(Boolean);
-    const map = await repo.findCategoriesByTenantIds(tenantIds);
+    const map = await repo.findCategoriesByTenantIds(req.resolvedCompanyId!, tenantIds);
     res.json(map);
   } catch (err) {
     next(err);
@@ -207,7 +207,7 @@ export const getSupplierCategoriesBatch = async (req: Request, res: Response, ne
   try {
     const param = String(req.query.supplierIds ?? '');
     const supplierIds = param.split(',').filter(Boolean);
-    const map = await repo.findCategoriesBySupplierIds(supplierIds);
+    const map = await repo.findCategoriesBySupplierIds(req.resolvedCompanyId!, supplierIds);
     res.json(map);
   } catch (err) {
     next(err);
@@ -216,12 +216,12 @@ export const getSupplierCategoriesBatch = async (req: Request, res: Response, ne
 
 export const getTenantsByCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!(await ensureCategoryBelongsToCompany(String(req.params.categoryId), req.userCompanyId!))) {
+    if (!(await ensureCategoryBelongsToCompany(String(req.params.categoryId), req.resolvedCompanyId!))) {
       res.status(404).json({ error: 'Kategori bulunamadı', code: 'NOT_FOUND' });
       return;
     }
 
-    const tenantIds = await repo.findTenantsByCategory(String(req.params.categoryId));
+    const tenantIds = await repo.findTenantsByCategory(req.resolvedCompanyId!, String(req.params.categoryId));
     res.json({ tenantIds });
   } catch (err) {
     next(err);

@@ -6,6 +6,8 @@ import * as controller from './categories.controller';
 
 const router = Router();
 
+router.use(resolveCompany);
+
 router.get('/', requireAdminAccess, controller.getAll);
 router.get('/tenants/batch', requireAdminAccess, controller.getTenantCategoriesBatch);
 router.get('/suppliers/batch', requireAdminAccess, controller.getSupplierCategoriesBatch);
@@ -17,6 +19,6 @@ router.get('/:categoryId/tenants', requireAdminAccess, validateUUID('categoryId'
 router.get('/:id', requireAdminAccess, validateUUID(), controller.getById);
 router.post('/', requireAdminAccess, controller.create);
 router.put('/:id', requireAdminAccess, validateUUID(), controller.update);
-router.delete('/:id', requireAdminAccess, resolveCompany, validateUUID(), controller.remove);
+router.delete('/:id', requireAdminAccess, validateUUID(), controller.remove);
 
 export default router;

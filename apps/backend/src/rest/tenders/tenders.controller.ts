@@ -4,7 +4,7 @@ import * as categoriesRepo from '../categories/categories.repo';
 import { createTenderSchema, updateTenderSchema } from '../../models/tender.model';
 
 async function categoryBelongsToCompany(categoryId: string, companyId: string): Promise<boolean> {
-  const category = await categoriesRepo.findById(categoryId);
+  const category = await categoriesRepo.findById(categoryId, companyId);
   return !!category && category.companyId === companyId;
 }
 

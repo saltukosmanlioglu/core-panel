@@ -1,9 +1,7 @@
 import { z } from 'zod';
 
-export const paymentStatuses = ['draft', 'approved', 'paid', 'overdue'] as const;
+export const paymentStatuses = ['pending', 'approved', 'paid', 'overdue'] as const;
 export const expenseCategories = ['material', 'labor', 'equipment', 'other'] as const;
-export const paymentFrequencies = ['weekly', 'biweekly', 'monthly', 'custom', 'none'] as const;
-export const expenseStatuses = ['pending', 'paid'] as const;
 
 const nullableDateString = z.preprocess(
   (value) => (value === '' ? undefined : value),
@@ -13,46 +11,40 @@ const nullableDateString = z.preprocess(
 export const progressPaymentItemSchema = z.object({
   description: z.string().min(1),
   quantity: z.coerce.number().min(0).default(1),
-  unit: z.string().max(50).optional(),
   unitPrice: z.coerce.number().min(0).default(0),
-  amount: z.coerce.number().min(0).optional(),
+  totalPrice: z.coerce.number().min(0).optional(),
 });
 
 export const createProgressPaymentSchema = z.object({
   tenantId: z.string().min(1),
-  tenderId: z.string().uuid().optional().nullable(),
-  period: z.string().max(255).optional(),
+  title: z.string().min(1).max(255),
+  description: z.string().optional(),
   totalAmount: z.coerce.number().min(0),
   dueDate: nullableDateString,
-  paymentFrequency: z.enum(paymentFrequencies).default('none'),
-  note: z.string().optional(),
   items: z.array(progressPaymentItemSchema).default([]),
 });
 
 export const updateProgressPaymentSchema = z.object({
   status: z.enum(paymentStatuses).optional(),
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().optional().nullable(),
   totalAmount: z.coerce.number().min(0).optional(),
   paidAmount: z.coerce.number().min(0).optional(),
-  remainingAmount: z.coerce.number().min(0).optional(),
   dueDate: nullableDateString.nullable(),
-  paymentFrequency: z.enum(paymentFrequencies).optional(),
-  period: z.string().max(255).optional().nullable(),
-  note: z.string().optional().nullable(),
 });
 
 export const createPaymentTransactionSchema = z.object({
-  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   amount: z.coerce.number().positive(),
-  note: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 export const createGeneralExpenseSchema = z.object({
+  title: z.string().min(1).max(255),
   category: z.enum(expenseCategories).default('other'),
-  description: z.string().min(1),
+  description: z.string().optional(),
   amount: z.coerce.number().min(0),
-  paymentDate: nullableDateString,
-  status: z.enum(expenseStatuses).default('pending'),
-  note: z.string().optional(),
+  expenseDate: nullableDateString,
 });
 
 export const updateGeneralExpenseSchema = createGeneralExpenseSchema.partial();

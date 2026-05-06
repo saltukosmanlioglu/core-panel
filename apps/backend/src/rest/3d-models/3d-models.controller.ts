@@ -36,6 +36,14 @@ function withPublicModelUrl(req: Request, model: repo.ThreeDModelRecord): repo.T
   };
 }
 
+function log3dControllerContext(req: Request, action: string): void {
+  console.log('[3d-models.controller]', {
+    action,
+    resolvedCompanyId: req.resolvedCompanyId,
+    userCompanyId: req.userCompanyId,
+  });
+}
+
 async function ensureProjectExists(req: Request, res: Response): Promise<boolean> {
   const project = await projectsRepo.findById(req.resolvedCompanyId!, String(req.params.projectId));
 
@@ -49,6 +57,7 @@ async function ensureProjectExists(req: Request, res: Response): Promise<boolean
 
 export const generateImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'generateImage');
     if (!(await ensureProjectExists(req, res))) {
       return;
     }
@@ -76,6 +85,7 @@ export const generateImage = async (req: Request, res: Response, next: NextFunct
 
 export const createFromFloorPlanImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'createFromFloorPlanImage');
     if (!(await ensureProjectExists(req, res))) {
       return;
     }
@@ -108,6 +118,7 @@ export const createFromFloorPlanImage = async (req: Request, res: Response, next
 
 export const generate3d = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'generate3d');
     const parsed = generateThreeDModelFromImageSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -131,6 +142,7 @@ export const generate3d = async (req: Request, res: Response, next: NextFunction
 
 export const status = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'status');
     const model = await service.syncStatus(getTdb(req), String(req.params.id), req.userId!);
     res.json(withPublicModelUrl(req, model));
   } catch (error) {
@@ -140,6 +152,7 @@ export const status = async (req: Request, res: Response, next: NextFunction): P
 
 export const updateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'updateStatus');
     const parsed = updateThreeDModelStatusSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -167,6 +180,7 @@ export const updateStatus = async (req: Request, res: Response, next: NextFuncti
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'list');
     if (!(await ensureProjectExists(req, res))) {
       return;
     }
@@ -180,6 +194,7 @@ export const list = async (req: Request, res: Response, next: NextFunction): Pro
 
 export const remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    log3dControllerContext(req, 'remove');
     const model = await repo.remove(getTdb(req), String(req.params.id));
 
     if (!model) {

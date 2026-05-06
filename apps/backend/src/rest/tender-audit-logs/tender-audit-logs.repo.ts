@@ -26,7 +26,7 @@ export type TenderAuditLogRecord = ReturnType<typeof mapRow>;
 
 export async function findByTenderId(tdb: TenantDb, tenderId: string): Promise<TenderAuditLogRecord[]> {
   const { rows } = await tdb.query<TenderAuditLogRow>(
-    `SELECT logs.*, users.name AS created_by_name
+    `SELECT logs.*, users.email AS created_by_name
      FROM ${tdb.ref('tender_audit_logs')} logs
      LEFT JOIN "public"."users" users ON users.id = logs.created_by
      WHERE logs.tender_id = $1

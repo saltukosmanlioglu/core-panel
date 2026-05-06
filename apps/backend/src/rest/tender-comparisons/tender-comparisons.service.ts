@@ -515,18 +515,19 @@ export const runComparison = async (
     const parsedOffers: ParsedOffer[] = [];
 
     for (const offerFile of offerFiles) {
-      const tenantName = tenantMap[offerFile.tenantId] ?? offerFile.tenantName ?? offerFile.tenantId;
+      const fileIdentifier = offerFile.uploadedBy ?? offerFile.id;
+      const tenantName = tenantMap[fileIdentifier] ?? offerFile.originalName ?? fileIdentifier;
       const filePath = path.join(UPLOADS_DIR, offerFile.storedName);
 
       if (
         offerFile.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
         offerFile.mimeType === 'application/vnd.ms-excel'
       ) {
-        parsedOffers.push(parseXlsxOffer(filePath, offerFile.tenantId, tenantName));
+        parsedOffers.push(parseXlsxOffer(filePath, fileIdentifier, tenantName));
       } else if (offerFile.mimeType === 'application/pdf') {
-        parsedOffers.push(await parsePdfOffer(filePath, offerFile.tenantId, tenantName));
+        parsedOffers.push(await parsePdfOffer(filePath, fileIdentifier, tenantName));
       } else {
-        parsedOffers.push(createEmptyOffer(offerFile.tenantId, tenantName));
+        parsedOffers.push(createEmptyOffer(fileIdentifier, tenantName));
       }
     }
 

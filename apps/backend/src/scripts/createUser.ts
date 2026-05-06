@@ -64,7 +64,7 @@ async function run() {
     isActive: true,
   });
 
-  console.log(`  ✓ User created  id=${user.id}  role=${user.role}  companyId=${user.companyId}  tenantId=${user.tenantId}`);
+  console.log(`  ✓ User created  id=${user.id}  role=${user.role}  companyId=${user.companyId}`);
   console.log('\nUser must set up MFA on first login.');
 }
 

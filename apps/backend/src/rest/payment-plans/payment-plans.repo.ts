@@ -7,23 +7,23 @@ interface PlanRow {
   project_id: string;
   title: string | null;
   total_amount: string | number;
-  paid_amount: string | number;
-  remaining_amount: string | number;
-  status: string;
-  note: string | null;
+  currency: string;
+  notes: string | null;
   created_at: Date;
   updated_at: Date;
 }
 
 interface InstallmentRow {
   id: string;
-  plan_id: string;
-  due_date: Date | string;
+  payment_plan_id: string;
+  title: string | null;
+  due_date: Date | string | null;
   amount: string | number;
-  paid_date: Date | string | null;
+  paid_at: Date | string | null;
   status: string;
   receipt_path: string | null;
-  note: string | null;
+  receipt_original_name: string | null;
+  notes: string | null;
   created_at: Date;
 }
 
@@ -40,13 +40,15 @@ function toDateStr(v: Date | string | null): string | null {
 function mapInstallment(row: InstallmentRow) {
   return {
     id: row.id,
-    planId: row.plan_id,
-    dueDate: toDateStr(row.due_date)!,
+    planId: row.payment_plan_id,
+    title: row.title,
+    dueDate: toDateStr(row.due_date),
     amount: toNumber(row.amount),
-    paidDate: toDateStr(row.paid_date),
+    paidAt: toDateStr(row.paid_at),
     status: row.status,
     receiptPath: row.receipt_path,
-    note: row.note,
+    receiptOriginalName: row.receipt_original_name,
+    notes: row.notes,
     createdAt: row.created_at,
   };
 }
@@ -58,10 +60,8 @@ function mapPlan(row: PlanRow) {
     projectId: row.project_id,
     title: row.title,
     totalAmount: toNumber(row.total_amount),
-    paidAmount: toNumber(row.paid_amount),
-    remainingAmount: toNumber(row.remaining_amount),
-    status: row.status,
-    note: row.note,
+    currency: row.currency,
+    notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     installments: [] as ReturnType<typeof mapInstallment>[],
@@ -76,7 +76,7 @@ async function attachInstallments(tdb: TenantDb, plans: PaymentPlanRecord[]): Pr
   const ids = plans.map((p) => p.id);
   const { rows } = await tdb.query<InstallmentRow>(
     `SELECT * FROM ${tdb.ref('payment_plan_installments')}
-     WHERE plan_id = ANY($1::uuid[])
+     WHERE payment_plan_id = ANY($1::uuid[])
      ORDER BY due_date ASC`,
     [ids],
   );
@@ -113,8 +113,8 @@ export async function create(
 ): Promise<PaymentPlanRecord> {
   const { rows } = await tdb.query<PlanRow>(
     `INSERT INTO ${tdb.ref('payment_plans')}
-       (property_owner_id, project_id, title, total_amount, paid_amount, remaining_amount, note)
-     VALUES ($1, $2, $3, $4, 0, $4, $5)
+       (property_owner_id, project_id, title, total_amount, notes)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [ownerId, projectId, data.title ?? null, data.totalAmount, data.note ?? null],
   );
@@ -122,7 +122,7 @@ export async function create(
 
   for (const inst of data.installments) {
     await tdb.query(
-      `INSERT INTO ${tdb.ref('payment_plan_installments')} (plan_id, due_date, amount, note)
+      `INSERT INTO ${tdb.ref('payment_plan_installments')} (payment_plan_id, due_date, amount, notes)
        VALUES ($1, $2, $3, $4)`,
       [plan.id, inst.dueDate, inst.amount, inst.note ?? null],
     );
@@ -140,13 +140,8 @@ export async function update(
   const params: unknown[] = [];
 
   if (data.title !== undefined) { params.push(data.title); setClauses.push(`title = $${params.length}`); }
-  if (data.totalAmount !== undefined) {
-    params.push(data.totalAmount);
-    setClauses.push(`total_amount = $${params.length}`);
-    setClauses.push(`remaining_amount = GREATEST($${params.length} - paid_amount, 0)`);
-  }
-  if (data.note !== undefined) { params.push(data.note || null); setClauses.push(`note = $${params.length}`); }
-  if (data.status !== undefined) { params.push(data.status); setClauses.push(`status = $${params.length}`); }
+  if (data.totalAmount !== undefined) { params.push(data.totalAmount); setClauses.push(`total_amount = $${params.length}`); }
+  if (data.note !== undefined) { params.push(data.note || null); setClauses.push(`notes = $${params.length}`); }
 
   if (params.length === 0) return findById(tdb, id);
 
@@ -165,25 +160,6 @@ export async function remove(tdb: TenantDb, id: string): Promise<PaymentPlanReco
   return plan;
 }
 
-async function recalculatePlan(tdb: TenantDb, planId: string): Promise<void> {
-  await tdb.query(
-    `WITH paid AS (
-       SELECT COALESCE(SUM(amount), 0) AS total
-       FROM ${tdb.ref('payment_plan_installments')}
-       WHERE plan_id = $1 AND status = 'paid'
-     )
-     UPDATE ${tdb.ref('payment_plans')} pp
-     SET
-       paid_amount = paid.total,
-       remaining_amount = GREATEST(pp.total_amount - paid.total, 0),
-       status = CASE WHEN GREATEST(pp.total_amount - paid.total, 0) <= 0 THEN 'completed' ELSE pp.status END,
-       updated_at = NOW()
-     FROM paid
-     WHERE pp.id = $1`,
-    [planId],
-  );
-}
-
 export async function payInstallment(
   tdb: TenantDb,
   planId: string,
@@ -193,12 +169,10 @@ export async function payInstallment(
 ): Promise<PaymentPlanInstallmentRecord | null> {
   const { rows } = await tdb.query<InstallmentRow>(
     `UPDATE ${tdb.ref('payment_plan_installments')}
-     SET paid_date = $1, status = 'paid', receipt_path = COALESCE($2, receipt_path), note = COALESCE($3, note)
-     WHERE id = $4 AND plan_id = $5 AND status = 'pending'
+     SET paid_at = $1, status = 'paid', receipt_path = COALESCE($2, receipt_path), notes = COALESCE($3, notes)
+     WHERE id = $4 AND payment_plan_id = $5 AND status = 'pending'
      RETURNING *`,
     [data.paidDate, receiptPath ?? null, data.note ?? null, installmentId, planId],
   );
-  if (!rows[0]) return null;
-  await recalculatePlan(tdb, planId);
-  return mapInstallment(rows[0]);
+  return rows[0] ? mapInstallment(rows[0]) : null;
 }
