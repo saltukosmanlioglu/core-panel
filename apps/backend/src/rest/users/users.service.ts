@@ -21,6 +21,8 @@ export async function updateUser(id: string, data: UpdateUserRequest, requesting
 
   const updateData: usersRepo.UpdateUserData = {};
   if (data.name !== undefined) updateData.name = data.name;
+  if (data.firstName !== undefined) updateData.firstName = data.firstName;
+  if (data.lastName !== undefined) updateData.lastName = data.lastName;
   if (data.email !== undefined) updateData.email = data.email;
   if (data.role !== undefined) updateData.role = data.role;
   if (data.companyId !== undefined) updateData.companyId = data.companyId;

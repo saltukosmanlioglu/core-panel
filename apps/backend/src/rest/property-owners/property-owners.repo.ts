@@ -1,5 +1,5 @@
 import { TenantDb } from '../../lib/tenantDb';
-import type { CreatePropertyOwnerInput, UpdatePropertyOwnerInput } from '../../models/property-owner.model';
+import type { BulkPropertyOwnerInput, CreatePropertyOwnerInput, UpdatePropertyOwnerInput } from '../../models/property-owner.model';
 
 interface PropertyOwnerRow {
   id: string;
@@ -32,6 +32,9 @@ function mapRow(row: PropertyOwnerRow) {
     apartmentNumber: row.apartment_number,
     apartmentSizeSqm: toNumber(row.apartment_size_sqm),
     sharePercentage: toNumber(row.share_percentage),
+    idNumber: null,
+    apartmentCount: 1,
+    note: row.notes,
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -77,7 +80,7 @@ export async function create(
       data.apartmentNumber ?? null,
       data.apartmentSizeSqm ?? null,
       data.sharePercentage ?? null,
-      data.notes ?? null,
+      data.note ?? data.notes ?? null,
     ],
   );
   return mapRow(rows[0]!);
@@ -98,7 +101,10 @@ export async function update(
   if (data.apartmentNumber !== undefined) { params.push(data.apartmentNumber || null); setClauses.push(`apartment_number = $${params.length}`); }
   if (data.apartmentSizeSqm !== undefined) { params.push(data.apartmentSizeSqm ?? null); setClauses.push(`apartment_size_sqm = $${params.length}`); }
   if (data.sharePercentage !== undefined) { params.push(data.sharePercentage ?? null); setClauses.push(`share_percentage = $${params.length}`); }
-  if (data.notes !== undefined) { params.push(data.notes || null); setClauses.push(`notes = $${params.length}`); }
+  if (data.note !== undefined || data.notes !== undefined) {
+    params.push(data.note ?? data.notes ?? null);
+    setClauses.push(`notes = $${params.length}`);
+  }
 
   if (params.length === 0) return findById(tdb, id);
 
@@ -111,6 +117,48 @@ export async function update(
     params,
   );
   return rows[0] ? mapRow(rows[0]) : null;
+}
+
+export async function bulkUpsert(
+  tdb: TenantDb,
+  projectId: string,
+  owners: BulkPropertyOwnerInput[],
+): Promise<PropertyOwnerRecord[]> {
+  if (owners.length === 0) {
+    return [];
+  }
+
+  const values: string[] = [];
+  const params: unknown[] = [];
+
+  owners.forEach((owner) => {
+    const offset = params.length;
+    values.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6})`);
+    params.push(
+      projectId,
+      owner.name,
+      owner.floor_number ?? null,
+      owner.apartment_number ?? null,
+      owner.apartment_size_sqm ?? null,
+      owner.notes ?? null,
+    );
+  });
+
+  const { rows } = await tdb.query<PropertyOwnerRow>(
+    `INSERT INTO ${tdb.ref('property_owners')}
+       (project_id, name, floor_number, apartment_number, apartment_size_sqm, notes)
+     VALUES ${values.join(', ')}
+     ON CONFLICT (project_id, floor_number, apartment_number)
+     DO UPDATE SET
+       name = EXCLUDED.name,
+       apartment_size_sqm = EXCLUDED.apartment_size_sqm,
+       notes = EXCLUDED.notes,
+       updated_at = NOW()
+     RETURNING *`,
+    params,
+  );
+
+  return rows.map(mapRow);
 }
 
 export async function remove(tdb: TenantDb, id: string): Promise<PropertyOwnerRecord | null> {

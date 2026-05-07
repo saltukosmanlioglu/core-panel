@@ -10,18 +10,28 @@ export interface UserWithTenantResponse extends Omit<User, 'password'> {
 }
 
 // Request validation schemas
+const requiredNamePart = z.string().trim().min(1, 'Name is required').max(255);
+const optionalNamePart = z.string().trim().max(255).nullable();
+
 export const createUserSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(255),
+  name: requiredNamePart.optional(),
+  firstName: requiredNamePart.optional(),
+  lastName: optionalNamePart.optional(),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters').max(72, 'Password must be at most 72 characters'),
   role: z.literal(UserRole.COMPANY_ADMIN),
   companyId: z.string().uuid('Invalid company ID').nullable().optional(),
   tenantId: z.string().uuid('Invalid tenant ID').nullable().optional(),
   isActive: z.boolean().default(true),
+}).refine((data) => data.name !== undefined || data.firstName !== undefined, {
+  message: 'Name is required',
+  path: ['name'],
 });
 
 export const updateUserSchema = z.object({
-  name: z.string().min(1).max(255).optional(),
+  name: requiredNamePart.optional(),
+  firstName: requiredNamePart.optional(),
+  lastName: optionalNamePart.optional(),
   email: z.string().email().optional(),
   password: z.string().min(8).max(72).optional(),
   role: z.literal(UserRole.COMPANY_ADMIN).optional(),

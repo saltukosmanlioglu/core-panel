@@ -34,6 +34,8 @@ const tenantSchema = z.object({
 const userSchema = z.object({
   id: z.string(),
   email: z.string(),
+  firstName: z.string().nullable().optional(),
+  lastName: z.string().nullable().optional(),
   name: z.string().nullable(),
   role: z.string(),
   companyId: z.string().nullable().optional(),

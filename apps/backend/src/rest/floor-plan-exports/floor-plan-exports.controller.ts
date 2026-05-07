@@ -1,12 +1,20 @@
 import { NextFunction, Request, Response } from 'express';
 import { getTdb } from '../../lib/tenantDb';
-import { validateUUID } from '../../middleware/validateUUID';
 import * as repo from './floor-plan-exports.repo';
 
 export const list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const exports = await repo.findByProjectId(getTdb(req), String(req.params.projectId));
     res.json({ exports });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getLatest = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const floorPlanExport = await repo.findLatestByProjectId(getTdb(req), String(req.params.projectId));
+    res.json({ export: floorPlanExport });
   } catch (error) {
     next(error);
   }

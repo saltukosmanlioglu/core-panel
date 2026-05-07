@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
   name: string | null;
   role: string;
   companyId?: string | null;
@@ -12,4 +14,3 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
-

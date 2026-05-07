@@ -6,6 +6,8 @@ import { logoutApi } from '@/services/auth/api';
 export interface User {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
   name: string | null;
   role: string;
   companyId: string | null;

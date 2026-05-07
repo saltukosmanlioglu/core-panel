@@ -26,6 +26,8 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: varchar('email', { length: 255 }).unique().notNull(),
   password: varchar('password', { length: 255 }).notNull(),
+  firstName: varchar('first_name', { length: 255 }),
+  lastName: varchar('last_name', { length: 255 }),
   role: varchar('role', { length: 50 }).notNull().default('company_admin'),
   companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
   isActive: boolean('is_active').default(true).notNull(),

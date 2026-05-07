@@ -10,11 +10,48 @@ export type UserWithTenant = Omit<User, 'password' | 'mfaSecret'> & {
   companyId: string | null;
 };
 
+function normalizeNamePart(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function splitFullName(name: string | null | undefined): { firstName: string | null; lastName: string | null } {
+  const normalized = normalizeNamePart(name);
+  if (!normalized) return { firstName: null, lastName: null };
+
+  const [firstName, ...lastNameParts] = normalized.split(/\s+/);
+  return {
+    firstName: firstName ?? null,
+    lastName: lastNameParts.length > 0 ? lastNameParts.join(' ') : null,
+  };
+}
+
+function resolveNameFields(data: {
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}): { firstName?: string | null; lastName?: string | null } {
+  const fromFullName: { firstName?: string | null; lastName?: string | null } =
+    data.name !== undefined ? splitFullName(data.name) : {};
+
+  return {
+    firstName: data.firstName !== undefined ? normalizeNamePart(data.firstName) : fromFullName.firstName,
+    lastName: data.lastName !== undefined ? normalizeNamePart(data.lastName) : fromFullName.lastName,
+  };
+}
+
+function displayName(user: Pick<User, 'firstName' | 'lastName'>): string | null {
+  const parts = [user.firstName, user.lastName].map(normalizeNamePart).filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(' ') : null;
+}
+
 function publicUser(user: User): UserWithTenant {
   return {
     id: user.id,
     email: user.email,
-    name: null,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    name: displayName(user),
     role: user.role,
     companyId: user.companyId,
     tenantId: null,
@@ -76,6 +113,8 @@ export interface CreateUserData {
   email: string;
   password: string;
   name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   role: string;
   companyId?: string | null;
   tenantId?: string | null;
@@ -83,11 +122,15 @@ export interface CreateUserData {
 }
 
 export async function create(data: CreateUserData): Promise<User> {
+  const nameFields = resolveNameFields(data);
+
   const [user] = await db
     .insert(users)
     .values({
       email: data.email,
       password: data.password,
+      firstName: nameFields.firstName ?? null,
+      lastName: nameFields.lastName ?? null,
       role: data.role,
       companyId: data.companyId ?? null,
       isActive: data.isActive,
@@ -100,6 +143,8 @@ export interface UpdateUserData {
   email?: string;
   password?: string;
   name?: string;
+  firstName?: string | null;
+  lastName?: string | null;
   role?: string;
   companyId?: string | null;
   tenantId?: string | null;
@@ -112,9 +157,12 @@ export interface UpdateUserData {
 
 export async function update(id: string, data: UpdateUserData): Promise<User | null> {
   const updateData: Partial<typeof users.$inferInsert> = {};
+  const nameFields = resolveNameFields(data);
 
   if (data.email !== undefined) updateData.email = data.email;
   if (data.password !== undefined) updateData.password = data.password;
+  if (nameFields.firstName !== undefined) updateData.firstName = nameFields.firstName;
+  if (nameFields.lastName !== undefined) updateData.lastName = nameFields.lastName;
   if (data.role !== undefined) updateData.role = data.role;
   if (data.companyId !== undefined) updateData.companyId = data.companyId;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;

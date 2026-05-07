@@ -78,10 +78,13 @@ export const getExport = async (req: Request, res: Response, next: NextFunction)
 
     if (result.status === 'done' && result.url) {
       try {
+        const storedFloorPlanData = service.getStoredFloorPlanData(String(req.params.id));
         await floorPlanExportsRepo.upsert(getTdb(req), {
           projectId: String(req.params.id),
           floorplannerExportId: String(req.params.exportId),
           imageUrl: result.url,
+          fmlData: storedFloorPlanData?.fmlData ?? null,
+          planMetadata: storedFloorPlanData?.planMetadata ?? service.emptyFloorPlanMetadata(),
         });
       } catch {
         // Non-fatal: log but don't fail the response

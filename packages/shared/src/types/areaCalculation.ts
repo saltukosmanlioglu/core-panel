@@ -85,6 +85,7 @@ export interface CalculatedResults {
   max_insaat_alani: number | null;
   max_taban_oturumu_min: number | null;
   max_taban_oturumu_max: number | null;
+  taban_oturumu?: number | null;
   polygon_area_calculated: number | null;
   dedication_area: number | null;
   net_area_calculated: number | null;
@@ -105,6 +106,8 @@ export interface CalculatedResults {
   tapu_alani: number | null;
   terk_alani: number | null;
   kat_adedi: number | null;
+  floor_count?: number | null;
+  bodrum_alani?: number | null;
   bina_yuksekligi: number | null;
   insaat_nizami: string | null;
   kaks: number | null;

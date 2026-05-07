@@ -83,6 +83,12 @@ interface WizardValues {
   propertyType: PropertyType;
   totalArea: number;
   floorCount: number;
+  maxTabanOturumu: number | null;
+  onBahce: number | null;
+  yanBahce: number | null;
+  arkaBahce: number | null;
+  buildableArea: number | null;
+  kaks: number | null;
   bedrooms: number;
   bathrooms: number;
   kitchenType: KitchenType;
@@ -101,6 +107,12 @@ const initialValues: WizardValues = {
   propertyType: 'apartment',
   totalArea: 120,
   floorCount: 1,
+  maxTabanOturumu: null,
+  onBahce: null,
+  yanBahce: null,
+  arkaBahce: null,
+  buildableArea: null,
+  kaks: null,
   bedrooms: 2,
   bathrooms: 1,
   kitchenType: 'open',
@@ -136,6 +148,12 @@ const kitchenLabels: Record<KitchenType, string> = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function formatOptionalNumber(value: number | null | undefined, suffix = ''): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? `${value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}${suffix}`
+    : '—';
 }
 
 function CounterControl({
@@ -345,6 +363,12 @@ export function FloorPlanWizard() {
               ...state.values,
               ...(prefillArea != null ? { totalArea: Math.min(300, Math.max(40, Math.round(Number(prefillArea)))) } : {}),
               ...(prefillFloors != null ? { floorCount: Math.min(30, Math.max(1, Math.round(Number(prefillFloors)))) } : {}),
+              maxTabanOturumu: cr.max_taban_oturumu_min ?? cr.taban_oturumu ?? state.values.maxTabanOturumu,
+              onBahce: cr.on_bahce ?? state.values.onBahce,
+              yanBahce: cr.yan_bahce ?? state.values.yanBahce,
+              arkaBahce: cr.arka_bahce ?? state.values.arkaBahce,
+              buildableArea: cr.buildable_area_from_block_lines ?? cr.max_insaat_alani ?? state.values.buildableArea,
+              kaks: cr.kaks ?? state.values.kaks,
             },
           }));
         }
@@ -587,15 +611,12 @@ export function FloorPlanWizard() {
             {cr.net_alan != null && (
               <Chip label={`Net Alan: ${Number(cr.net_alan).toFixed(0)} m²`} size="small" color="info" />
             )}
-            {cr.on_bahce != null && (
-              <Chip label={`Ön Bahçe: ${cr.on_bahce} m`} size="small" />
-            )}
-            {cr.yan_bahce != null && (
-              <Chip label={`Yan Bahçe: ${cr.yan_bahce} m`} size="small" />
-            )}
-            {cr.arka_bahce != null && (
-              <Chip label={`Arka Bahçe: ${cr.arka_bahce} m`} size="small" />
-            )}
+            <Chip label={`Maks. Taban Oturumu: ${formatOptionalNumber(values.maxTabanOturumu, ' m²')}`} size="small" />
+            <Chip label={`Ön Bahçe: ${formatOptionalNumber(values.onBahce, ' m')}`} size="small" />
+            <Chip label={`Yan Bahçe: ${formatOptionalNumber(values.yanBahce, ' m')}`} size="small" />
+            <Chip label={`Arka Bahçe: ${formatOptionalNumber(values.arkaBahce, ' m')}`} size="small" />
+            <Chip label={`İnşaat Alanı: ${formatOptionalNumber(values.buildableArea, ' m²')}`} size="small" />
+            <Chip label={`KAKS: ${formatOptionalNumber(values.kaks)}`} size="small" />
             {cr.kat_adedi != null && (
               <Chip label={`Kat Adedi: ${cr.kat_adedi}`} size="small" color="info" />
             )}

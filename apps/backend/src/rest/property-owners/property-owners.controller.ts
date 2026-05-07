@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { TenantDb } from '../../lib/tenantDb';
-import { createPropertyOwnerSchema, updatePropertyOwnerSchema } from '../../models/property-owner.model';
+import { bulkUpsertPropertyOwnersSchema, createPropertyOwnerSchema, updatePropertyOwnerSchema } from '../../models/property-owner.model';
 import * as projectsRepo from '../projects/projects.repo';
 import * as repo from './property-owners.repo';
 
@@ -37,6 +37,25 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     if (!(await ensureProject(companyId, projectId, res))) return;
     const owner = await repo.create(new TenantDb(companyId), projectId, parsed.data);
     res.status(201).json({ owner });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const bulkUpsert = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const parsed = bulkUpsertPropertyOwnersSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' });
+      return;
+    }
+
+    const companyId = req.resolvedCompanyId!;
+    const projectId = String(req.params.projectId);
+    if (!(await ensureProject(companyId, projectId, res))) return;
+
+    const owners = await repo.bulkUpsert(new TenantDb(companyId), projectId, parsed.data.owners);
+    res.json({ owners });
   } catch (error) {
     next(error);
   }

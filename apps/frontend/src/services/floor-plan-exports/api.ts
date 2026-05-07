@@ -6,6 +6,11 @@ export async function getProjectFloorPlanExportsApi(projectId: string): Promise<
   return (res.data as { exports: FloorPlanExport[] }).exports;
 }
 
+export async function getLatestFloorPlanExportApi(projectId: string): Promise<FloorPlanExport | null> {
+  const res = await apiClient.get(`/api/projects/${projectId}/floor-plan-exports/latest`);
+  return (res.data as { export: FloorPlanExport | null }).export;
+}
+
 export async function getFloorPlanExportApi(id: string): Promise<FloorPlanExport> {
   const res = await apiClient.get(`/api/floor-plan-exports/${id}`);
   return (res.data as { export: FloorPlanExport }).export;

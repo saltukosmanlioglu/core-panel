@@ -1,3 +1,5 @@
+import type { FloorPlanMetadata } from './floorPlanExport';
+
 export enum ThreeDModelStatus {
   PENDING = 'PENDING',
   PROCESSING = 'PROCESSING',
@@ -32,6 +34,8 @@ export interface ThreeDModel {
   previewImageUrls: string[];
   originalImageUrls: string[];
   selectedImageUrl: string | null;
+  sourceFloorPlanId?: string | null;
+  planMetadata?: FloorPlanMetadata | null;
   imageTaskId: string | null;
   generationStep: GenerationStep;
   createdAt: string;

@@ -65,7 +65,7 @@ function StatCard({ label, value, icon, color }: { label: string; value: string 
 // ── owner form ────────────────────────────────────────────────────────────────
 
 const emptyForm = (): PropertyOwnerPayload => ({
-  fullName: '',
+  name: '',
   phone: '',
   email: '',
   idNumber: '',
@@ -105,7 +105,7 @@ function OwnerDialog({
     setForm((prev) => ({ ...prev, [k]: e.target.value === '' ? undefined : Number(e.target.value) }));
 
   const handleSave = async () => {
-    if (!form.fullName?.trim()) { setError('Ad Soyad zorunludur'); return; }
+    if (!form.name?.trim()) { setError('Ad Soyad zorunludur'); return; }
     setSaving(true);
     setError('');
     try {
@@ -124,7 +124,7 @@ function OwnerDialog({
       <DialogTitle>{initial ? 'Tapu Sahibi Düzenle' : 'Tapu Sahibi Ekle'}</DialogTitle>
       <DialogContent sx={{ pt: '16px !important' }}>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        <TextField label="Ad Soyad *" fullWidth value={form.fullName ?? ''} onChange={set('fullName')} sx={{ mb: 2 }} />
+        <TextField label="Ad Soyad *" fullWidth value={form.name ?? ''} onChange={set('name')} sx={{ mb: 2 }} />
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
           <TextField label="Telefon" value={form.phone ?? ''} onChange={set('phone')} />
           <TextField label="E-posta" value={form.email ?? ''} onChange={set('email')} />
@@ -382,7 +382,7 @@ function OwnerDrawer({
   return (
     <Drawer anchor="right" open={!!owner} onClose={onClose} PaperProps={{ sx: { width: 500, p: 3 } }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" fontWeight={700}>{owner.fullName}</Typography>
+        <Typography variant="h6" fontWeight={700}>{owner.name}</Typography>
         <IconButton onClick={onClose}><CloseIcon /></IconButton>
       </Box>
 
@@ -534,7 +534,7 @@ function OwnerCard({
     >
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-          <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ maxWidth: '70%' }}>{owner.fullName}</Typography>
+          <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ maxWidth: '70%' }}>{owner.name}</Typography>
           {owner.sharePercentage != null && (
             <Chip label={`%${owner.sharePercentage}`} size="small" sx={{ backgroundColor: '#e8f5e9', color: '#2D6A4F', fontWeight: 600 }} />
           )}
@@ -741,7 +741,7 @@ export default function PropertyOwnersPage({ params }: { params: Promise<{ id: s
       <OwnerDialog
         open={dialogOpen}
         initial={editTarget ? {
-          fullName: editTarget.fullName,
+          name: editTarget.name,
           phone: editTarget.phone ?? '',
           email: editTarget.email ?? '',
           idNumber: editTarget.idNumber ?? '',

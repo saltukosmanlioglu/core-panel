@@ -201,6 +201,7 @@ export default function ModelPage() {
         const model = await createThreeDModelFromFloorPlanApi(id, {
           imageUrl: floorExport.imageUrl,
           floorPlanExportId: floorExport.id,
+          planMetadata: floorExport.planMetadata ?? null,
         });
 
         if (!active) return;

@@ -2,6 +2,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { z } from 'zod';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/AppError';
+import type { FloorPlanFeature, FloorPlanMetadata, FloorPlanRoom } from '@core-panel/shared';
 import type {
   FloorplannerGenerateDrawingRequest,
   FloorplannerProvisionRequest,
@@ -46,6 +47,13 @@ interface FloorplannerResponse {
   project?: FloorplannerResponse;
 }
 
+interface StoredFloorPlanData {
+  fmlData: FloorplannerFmlJson;
+  planMetadata: FloorPlanMetadata;
+}
+
+const latestFloorPlanDataByProjectId = new Map<string, StoredFloorPlanData>();
+
 const coordinateSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -65,13 +73,13 @@ const fmlJsonSchema = z.object({
     width: z.number(),
     height: z.number(),
     rotation: z.number(),
-  })),
+  }).passthrough()),
   areas: z.array(z.unknown()).default([]),
   labels: z.array(z.object({
     text: z.string(),
     x: z.number(),
     y: z.number(),
-  })),
+  }).passthrough()),
 });
 
 export type FloorplannerFmlJson = z.infer<typeof fmlJsonSchema>;
@@ -89,6 +97,136 @@ export interface FloorplannerDrawingResult {
   floorplannerProjectId: string;
   fml: FloorplannerFmlJson;
   environment: 'sandbox' | 'production';
+}
+
+export function emptyFloorPlanMetadata(): FloorPlanMetadata {
+  return {
+    windows: [],
+    doors: [],
+    balconies: [],
+    rooms: [],
+    total_area: 0,
+    floor_count: 0,
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number') return String(value);
+  }
+  return null;
+}
+
+function itemKind(item: Record<string, unknown>): string {
+  return [
+    readString(item, ['type', 'itemType', 'item_type', 'kind', 'category']),
+    readString(item, ['id', 'name', 'label']),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(' ')
+    .toLowerCase();
+}
+
+function featureFromItem(item: Record<string, unknown>, type: string): FloorPlanFeature {
+  return {
+    ...item,
+    id: readString(item, ['id', 'name']) ?? undefined,
+    type,
+    x: asNumber(item.x) ?? undefined,
+    y: asNumber(item.y) ?? undefined,
+    width: asNumber(item.width) ?? undefined,
+    height: asNumber(item.height) ?? undefined,
+    rotation: asNumber(item.rotation) ?? undefined,
+  };
+}
+
+function roomFromArea(area: unknown, index: number): FloorPlanRoom | null {
+  const record = asRecord(area);
+  if (Object.keys(record).length === 0) return null;
+
+  const name = readString(record, ['name', 'label', 'text', 'room', 'title']) ?? `Alan ${index + 1}`;
+  return {
+    ...record,
+    name,
+    area: asNumber(record.area ?? record.size ?? record.area_sqm ?? record.grossArea ?? record.gross_area) ?? undefined,
+    floorNumber: asNumber(record.floorNumber ?? record.floor_number) ?? undefined,
+    unitNumber: readString(record, ['unitNumber', 'unit_number', 'apartmentNumber', 'apartment_number']) ?? undefined,
+  };
+}
+
+function roomFromLabel(label: unknown, index: number): FloorPlanRoom | null {
+  const record = asRecord(label);
+  const text = readString(record, ['text', 'name', 'label']);
+  if (!text) return null;
+
+  return {
+    ...record,
+    name: text,
+    text,
+    x: asNumber(record.x) ?? undefined,
+    y: asNumber(record.y) ?? undefined,
+    floorNumber: asNumber(record.floorNumber ?? record.floor_number) ?? undefined,
+    unitNumber: readString(record, ['unitNumber', 'unit_number', 'apartmentNumber', 'apartment_number']) ?? index + 1,
+  };
+}
+
+export function extractPlanMetadata(
+  fml: FloorplannerFmlJson | null | undefined,
+  input?: Partial<FloorplannerGenerateDrawingRequest>,
+): FloorPlanMetadata {
+  if (!fml) return emptyFloorPlanMetadata();
+
+  const windows: FloorPlanFeature[] = [];
+  const doors: FloorPlanFeature[] = [];
+  const balconies: FloorPlanFeature[] = [];
+
+  for (const rawItem of fml.items) {
+    const item = asRecord(rawItem);
+    const kind = itemKind(item);
+
+    if (kind.includes('window')) {
+      windows.push(featureFromItem(item, 'window'));
+    }
+    if (kind.includes('door')) {
+      doors.push(featureFromItem(item, 'door'));
+    }
+    if (kind.includes('balcony') || kind.includes('terrace')) {
+      balconies.push(featureFromItem(item, kind.includes('terrace') ? 'terrace' : 'balcony'));
+    }
+  }
+
+  const areaRooms = fml.areas
+    .map(roomFromArea)
+    .filter((room): room is FloorPlanRoom => room !== null);
+  const labelRooms = fml.labels
+    .map(roomFromLabel)
+    .filter((room): room is FloorPlanRoom => room !== null);
+  const rooms = areaRooms.length > 0 ? areaRooms : labelRooms;
+  const calculatedTotalArea = rooms.reduce((sum, room) => sum + (typeof room.area === 'number' ? room.area : 0), 0);
+
+  return {
+    windows,
+    doors,
+    balconies,
+    rooms,
+    total_area: input?.area ?? calculatedTotalArea,
+    floor_count: input?.floorCount ?? 0,
+  };
+}
+
+export function getStoredFloorPlanData(projectId: string): StoredFloorPlanData | null {
+  return latestFloorPlanDataByProjectId.get(projectId) ?? null;
 }
 
 function floorplannerApiBaseUrl(): string {
@@ -514,6 +652,10 @@ export async function generateAndSendDrawing(
   );
   const fml = await generateFmlWithClaude(input);
   await sendDrawingToFloorplanner(provisioned.projectId, fml);
+  latestFloorPlanDataByProjectId.set(projectId, {
+    fmlData: fml,
+    planMetadata: extractPlanMetadata(fml, input),
+  });
 
   return {
     floorplannerProjectId: provisioned.projectId,

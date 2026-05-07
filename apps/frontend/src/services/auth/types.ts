@@ -5,6 +5,8 @@ export type { LoginResponse, MfaSetupResponse, MfaVerifyResponse };
 export interface AuthUser {
   id: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
   name: string | null;
   role: string;
   companyId: string | null;

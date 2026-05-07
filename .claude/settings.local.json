@@ -122,7 +122,9 @@
       "Bash(echo \"PID: $!\")",
       "Bash([ -d \"/Users/saltuk/Desktop/saltuk/claude/core-panel/$dir\" ])",
       "Bash(echo \"Exit: $?\")",
-      "Bash(sort echo *)"
+      "Bash(sort echo *)",
+      "Bash(echo \"EXIT: $?\")",
+      "WebSearch"
     ]
   }
 }

@@ -1,6 +1,8 @@
 import rateLimit from 'express-rate-limit';
 import { AppError } from '../lib/AppError';
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
 // NOTE: Uses in-memory store — not safe for multi-process deployments.
 // For PM2 cluster or Kubernetes, replace with rate-limit-redis:
 // import RedisStore from 'rate-limit-redis';
@@ -55,10 +57,11 @@ export const mfaLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// General API limiter
+// General API limiter — only enforced in production
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100,
+  max: 300,
+  skip: () => !IS_PRODUCTION,
   message: {
     error: 'Too many requests, please slow down',
     code: 'RATE_LIMIT_EXCEEDED',

@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import type { FloorPlanMetadata } from '@core-panel/shared';
 import { getTdb } from '../../lib/tenantDb';
 import {
   generateThreeDModelFromImageSchema,
@@ -94,6 +95,7 @@ export const createFromFloorPlanImage = async (req: Request, res: Response, next
     const schema = z.object({
       imageUrl: z.string().url(),
       floorPlanExportId: z.string().optional(),
+      planMetadata: z.unknown().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
@@ -104,10 +106,10 @@ export const createFromFloorPlanImage = async (req: Request, res: Response, next
       return;
     }
 
-    const model = await repo.createFromFloorPlanImage(getTdb(req), {
-      projectId: String(req.params.projectId),
+    const model = await service.createFromFloorPlanImage(getTdb(req), String(req.params.projectId), {
       imageUrl: parsed.data.imageUrl,
       floorPlanExportId: parsed.data.floorPlanExportId,
+      planMetadata: parsed.data.planMetadata as FloorPlanMetadata | null | undefined,
     });
 
     res.status(201).json(withPublicModelUrl(req, model));

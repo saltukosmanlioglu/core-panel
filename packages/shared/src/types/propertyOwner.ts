@@ -1,7 +1,7 @@
 export interface PropertyOwner {
   id: string;
   projectId: string;
-  fullName: string;
+  name: string;
   phone: string | null;
   email: string | null;
   idNumber: string | null;
