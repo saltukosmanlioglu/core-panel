@@ -124,7 +124,8 @@
       "Bash(echo \"Exit: $?\")",
       "Bash(sort echo *)",
       "Bash(echo \"EXIT: $?\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git *)"
     ]
   }
 }

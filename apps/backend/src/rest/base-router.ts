@@ -25,6 +25,7 @@ import propertyOwnersRouter from './property-owners/property-owners.route';
 import paymentPlansRouter from './payment-plans/payment-plans.route';
 import areaCalculationsRouter from './area-calculations/area-calculations.route';
 import roughEstimatesRouter from './rough-estimates/rough-estimates.route';
+import parcelCalculationsRouter from './parcel-calculations/parcel-calculations.route';
 
 const baseRouter = Router();
 
@@ -50,6 +51,7 @@ baseRouter.use('/', verifyToken, checkIsActive, propertyOwnersRouter);
 baseRouter.use('/', verifyToken, checkIsActive, paymentPlansRouter);
 baseRouter.use('/', verifyToken, checkIsActive, areaCalculationsRouter);
 baseRouter.use('/', verifyToken, checkIsActive, roughEstimatesRouter);
+baseRouter.use('/', verifyToken, checkIsActive, parcelCalculationsRouter);
 baseRouter.use('/', verifyToken, checkIsActive, threeDModelsRouter);
 baseRouter.use('/', verifyToken, checkIsActive, priceListRouter);
 
