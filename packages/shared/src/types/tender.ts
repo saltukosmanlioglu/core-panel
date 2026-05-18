@@ -3,9 +3,6 @@ export interface Project {
   name: string;
   description: string | null;
   status: string;
-  floorplannerUserId: string | null;
-  floorplannerProjectId: string | null;
-  floorplannerSyncedAt: string | null;
   statusNote: string | null;
   statusUpdatedAt: string | null;
   statusUpdatedBy: string | null;

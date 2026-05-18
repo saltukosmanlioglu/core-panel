@@ -1,4 +1,4 @@
-import type { FloorPlanMetadata, GenerationStep, ThreeDModel } from '@core-panel/shared';
+import type { GenerationStep, ThreeDModel } from '@core-panel/shared';
 import { apiClient } from '../api-client';
 
 interface GenerateImagePayload {
@@ -23,15 +23,6 @@ export async function generateThreeDModelImagesApi(
 ): Promise<GenerateImageResponse> {
   const res = await apiClient.post(`/api/projects/${projectId}/3d-models`, data);
   return res.data as GenerateImageResponse;
-}
-
-export async function createThreeDModelFromFloorPlanApi(
-  projectId: string,
-  data: { imageUrl: string; floorPlanExportId?: string; planMetadata?: FloorPlanMetadata | null },
-): Promise<{ id: string; selectedImageUrl: string }> {
-  const res = await apiClient.post(`/api/projects/${projectId}/3d-models/from-floor-plan`, data);
-  const model = res.data as { id: string; selectedImageUrl: string };
-  return model;
 }
 
 export async function generateThreeDModelFromImageApi(

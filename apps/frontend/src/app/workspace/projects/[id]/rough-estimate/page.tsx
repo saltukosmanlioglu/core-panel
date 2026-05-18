@@ -8,7 +8,7 @@ import type { Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
-import type { FloorPlanExport, FloorPlanRoom, RoughEstimate, RoughEstimatePayload, RoughEstimateUnitPayload, RoughEstimateWithUnits, PropertyOwner } from '@core-panel/shared';
+import type { RoughEstimate, RoughEstimatePayload, RoughEstimateUnitPayload, RoughEstimateWithUnits, PropertyOwner } from '@core-panel/shared';
 import { OwnerType, UnitType } from '@core-panel/shared';
 import {
   Alert,
@@ -63,7 +63,6 @@ import {
   Undo as UndoIcon,
 } from '@mui/icons-material';
 import { getLatestAreaCalculationApi } from '@/services/area-calculations/api';
-import { getLatestFloorPlanExportApi } from '@/services/floor-plan-exports/api';
 import { bulkUpsertPropertyOwnersApi, getPropertyOwnersApi } from '@/services/property-owners/api';
 import { getProjectApi } from '@/services/workspace/api';
 import {
@@ -260,70 +259,6 @@ function paymentUnits(units: LocalUnit[]) {
   return units.filter((unit) => unit.hasPayment !== false);
 }
 
-function roomText(room: FloorPlanRoom, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = room[key];
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim();
-    }
-  }
-  return null;
-}
-
-function roomNumber(room: FloorPlanRoom, keys: string[]): number | null {
-  for (const key of keys) {
-    const value = room[key];
-    const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return null;
-}
-
-function floorLabel(floorNumber: number): string {
-  if (floorNumber < 0) return 'Bodrum Kat';
-  if (floorNumber === 0) return 'Zemin Kat';
-  return `${floorNumber}. Kat`;
-}
-
-function roomUnitType(room: FloorPlanRoom): UnitType {
-  const label = [roomText(room, ['type', 'unitType', 'unit_type']), room.name, room.label, room.text]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase('tr-TR');
-
-  if (label.includes('dükkan') || label.includes('dukkan') || label.includes('shop')) return UnitType.Shop;
-  if (label.includes('ortak') || label.includes('common')) return UnitType.Common;
-  if (label.includes('çatı') || label.includes('cati') || label.includes('roof')) return UnitType.Roof;
-  return UnitType.Apartment;
-}
-
-function unitsFromFloorPlanRooms(rooms: FloorPlanRoom[]): LocalUnit[] {
-  return rooms.map((room, index) => {
-    const floorNumber = Math.trunc(roomNumber(room, ['floorNumber', 'floor_number', 'floor', 'kat']) ?? 1);
-    const unitNumber = Math.trunc(roomNumber(room, ['unitNumber', 'unit_number', 'apartmentNumber', 'apartment_number', 'number', 'no']) ?? index + 1);
-    const unitType = roomUnitType(room);
-
-    return {
-      localId: localId(),
-      floorNumber,
-      floorLabel: roomText(room, ['floorLabel', 'floor_label']) ?? floorLabel(floorNumber),
-      unitNumber,
-      block: roomText(room, ['block', 'blok']) ?? '',
-      unitType,
-      ownerType: unitType === UnitType.Common ? OwnerType.Common : OwnerType.PropertyOwner,
-      ownerName: unitType === UnitType.Common ? 'Ortak Alan' : '',
-      propertyOwnerId: null,
-      grossArea: roomNumber(room, ['grossArea', 'gross_area', 'apartmentSizeSqm', 'apartment_size_sqm', 'area', 'sqm', 'm2']),
-      fireEscapeArea: roomNumber(room, ['fireEscapeArea', 'fire_escape_area']),
-      hasPayment: unitType !== UnitType.Common,
-      paymentAmount: null,
-      notes: roomText(room, ['name', 'label', 'text']),
-    };
-  });
-}
-
 const noNumberSpinnerSx = {
   '& input[type=number]': {
     MozAppearance: 'textfield',
@@ -348,7 +283,6 @@ export default function RoughEstimatePage() {
   const [units, setUnits] = useState<LocalUnit[]>([]);
   const [groundFloorType, setGroundFloorType] = useState<GroundFloorType>('apartment');
   const [propertyOwners, setPropertyOwners] = useState<PropertyOwner[]>([]);
-  const [latestFloorPlanExport, setLatestFloorPlanExport] = useState<FloorPlanExport | null>(null);
   const [estimates, setEstimates] = useState<RoughEstimate[]>([]);
   const [currentEstimateId, setCurrentEstimateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -431,17 +365,15 @@ export default function RoughEstimatePage() {
     async function load() {
       setLoading(true);
       try {
-        const [project, latestArea, owners, previous, latestFloorPlan] = await Promise.all([
+        const [project, latestArea, owners, previous] = await Promise.all([
           getProjectApi(projectId),
           getLatestAreaCalculationApi(projectId).catch(() => null),
           getPropertyOwnersApi(projectId).catch(() => []),
           getRoughEstimatesApi(projectId),
-          getLatestFloorPlanExportApi(projectId).catch(() => null),
         ]);
 
         if (!mounted) return;
         setPropertyOwners(owners);
-        setLatestFloorPlanExport(latestFloorPlan);
         setEstimates(previous);
         const results = latestArea?.calculatedResults;
         const extracted = latestArea?.extractedData;
@@ -587,48 +519,6 @@ export default function RoughEstimatePage() {
 
     setUnits(generated);
     markDirty();
-  }
-
-  async function importUnitsFromFloorPlan() {
-    try {
-      const floorPlanExport = await getLatestFloorPlanExportApi(projectId);
-      setLatestFloorPlanExport(floorPlanExport);
-      const rooms = floorPlanExport?.planMetadata?.rooms ?? [];
-
-      if (rooms.length === 0) {
-        setError('Kat planı verisi bulunamadı, manuel giriş yapın');
-        return;
-      }
-
-      const generated = unitsFromFloorPlanRooms(rooms);
-      if (generated.length === 0) {
-        setError('Kat planı verisi bulunamadı, manuel giriş yapın');
-        return;
-      }
-
-      const normalFloors = generated
-        .map((unit) => unit.floorNumber)
-        .filter((floorNumber) => floorNumber > 0);
-      const unitsPerFloor = generated.reduce<Record<number, number>>((acc, unit) => {
-        if (unit.floorNumber >= 0 && unit.unitType !== UnitType.Common) {
-          acc[unit.floorNumber] = (acc[unit.floorNumber] ?? 0) + 1;
-        }
-        return acc;
-      }, {});
-      const nextFloorCount = Math.max(...normalFloors, floorPlanExport?.planMetadata?.floor_count ?? 0, 1);
-      const nextUnitsPerFloor = Math.max(...Object.values(unitsPerFloor), 1);
-
-      setUnits(generated);
-      setForm((current) => ({
-        ...current,
-        floorCount: nextFloorCount,
-        unitsPerFloor: nextUnitsPerFloor,
-      }));
-      markDirty();
-      setSuccess(`${generated.length} birim kat planından alındı`);
-    } catch {
-      setError('Kat planı verisi alınamadı.');
-    }
   }
 
   async function transferUnitsToPropertyOwners() {
@@ -784,11 +674,6 @@ export default function RoughEstimatePage() {
             </TextField>
             <FormControlLabel control={<Switch checked={form.hasRoofUnit} onChange={(e) => updateForm('hasRoofUnit', e.target.checked)} />} label="Çatı Piyesi" />
             <Button variant="contained" onClick={generateRows}>Tablo Oluştur</Button>
-            {latestFloorPlanExport && (
-              <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => void importUnitsFromFloorPlan()}>
-                Kat Planından Al
-              </Button>
-            )}
             {form.hasRoofUnit && <NumberField label="Çatı Piyesi Alanı (m²)" value={form.roofUnitArea} onChange={(v) => updateForm('roofUnitArea', v ?? 0)} />}
           </Paper>
           <UnitsSummaryTable units={units} onEdit={openUnitDialog} />

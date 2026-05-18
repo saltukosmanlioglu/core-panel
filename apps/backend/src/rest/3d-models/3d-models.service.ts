@@ -7,7 +7,6 @@ import { UPLOADS_DIR } from '../../config/paths';
 import { AppError } from '../../lib/AppError';
 import { TenantDb } from '../../lib/tenantDb';
 import * as repo from './3d-models.repo';
-import type { FloorPlanFeature, FloorPlanMetadata } from '@core-panel/shared';
 
 const MESHY_TEXT_TO_IMAGE_URL = 'https://api.meshy.ai/openapi/v1/text-to-image';
 const MESHY_IMAGE_TO_3D_URL = 'https://api.meshy.ai/openapi/v1/image-to-3d';
@@ -144,65 +143,6 @@ function buildModelName(prompt: string): string {
   const trimmed = prompt.replace(/\s+/g, ' ').trim();
   const base = trimmed.length > 45 ? `${trimmed.slice(0, 45).trim()}...` : trimmed;
   return base || '3D Model';
-}
-
-function featurePosition(feature: FloorPlanFeature): string | null {
-  const x = typeof feature.x === 'number' ? feature.x : null;
-  const y = typeof feature.y === 'number' ? feature.y : null;
-
-  if (x === null && y === null) {
-    return null;
-  }
-
-  return `${x ?? 0},${y ?? 0}`;
-}
-
-function describeWindowPositions(windows: FloorPlanFeature[]): string {
-  const positions = windows
-    .map(featurePosition)
-    .filter((position): position is string => Boolean(position))
-    .slice(0, 4);
-
-  return positions.length > 0 ? positions.join(', ') : 'main facade';
-}
-
-export function buildFloorPlanMeshyPrompt(planMetadata?: FloorPlanMetadata | null): string {
-  if (!planMetadata) {
-    return 'Modern apartment building exterior, architectural visualization';
-  }
-
-  const floorCount = planMetadata.floor_count || 1;
-  const balconies = Array.isArray(planMetadata.balconies) ? planMetadata.balconies : [];
-  const windows = Array.isArray(planMetadata.windows) ? planMetadata.windows : [];
-  const balconyCount = balconies.length;
-  const windowPositions = describeWindowPositions(windows);
-
-  return [
-    `Modern apartment building, ${floorCount} floors`,
-    'architectural visualization',
-    `${balconyCount} balconies visible on facade`,
-    `large windows on ${windowPositions}`,
-    'photorealistic',
-    'high quality render',
-  ].join(', ');
-}
-
-export async function createFromFloorPlanImage(
-  tdb: TenantDb,
-  projectId: string,
-  data: {
-    imageUrl: string;
-    floorPlanExportId?: string;
-    planMetadata?: FloorPlanMetadata | null;
-  },
-): Promise<repo.ThreeDModelRecord> {
-  return repo.createFromFloorPlanImage(tdb, {
-    projectId,
-    imageUrl: data.imageUrl,
-    floorPlanExportId: data.floorPlanExportId,
-    planMetadata: data.planMetadata ?? null,
-    prompt: buildFloorPlanMeshyPrompt(data.planMetadata),
-  });
 }
 
 async function callMeshyCreate<TBody extends Record<string, unknown>>(
@@ -443,7 +383,6 @@ export async function generateModelFromImage(
       image_url: meshyImageUrl,
       enable_pbr: true,
       target_formats: ['glb'],
-      ...(model.planMetadata ? { prompt: buildFloorPlanMeshyPrompt(model.planMetadata) } : {}),
     },
     'image-to-3d create',
   );

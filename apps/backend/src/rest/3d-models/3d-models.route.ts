@@ -21,12 +21,6 @@ router.post(
   controller.generateImage,
 );
 router.post(
-  '/projects/:projectId/3d-models/from-floor-plan',
-  requireAdminAccess,
-  validateUUID('projectId'),
-  controller.createFromFloorPlanImage,
-);
-router.get(
   '/projects/:projectId/3d-models',
   requireAdminAccess,
   validateUUID('projectId'),

@@ -8,7 +8,6 @@ import {
   ArrowBack as ArrowBackIcon,
   Calculate as CalculateIcon,
   Gavel as GavelIcon,
-  GridOn as GridOnIcon,
   ListAlt as ListAltIcon,
   Payments as PaymentsIcon,
   People as PeopleIcon,
@@ -49,7 +48,6 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
             toggleOnly: true,
             children: [
               { label: 'İnşaat Alanı Hesaplama', icon: <CalculateIcon fontSize="small" />, href: `${projectBase}/area-calculation`, color: '#0ea5e9' },
-              { label: 'Kat Planı', icon: <GridOnIcon fontSize="small" />, href: `${projectBase}/floor-plan`, color: '#0ea5e9' },
               { label: '3D Modelleme', icon: <ViewInArIcon fontSize="small" />, href: `${projectBase}/3d-model`, color: '#0ea5e9' },
               { label: 'Tapu Sahipleri', icon: <PeopleIcon fontSize="small" />, href: `${projectBase}/property-owners`, color: '#0ea5e9' },
               { label: 'Kaba Hesap ve Teklif', icon: <CalculateIcon fontSize="small" />, href: `${projectBase}/rough-estimate`, color: '#0ea5e9' },

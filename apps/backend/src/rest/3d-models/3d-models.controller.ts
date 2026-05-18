@@ -1,5 +1,4 @@
 import { NextFunction, Request, Response } from 'express';
-import type { FloorPlanMetadata } from '@core-panel/shared';
 import { getTdb } from '../../lib/tenantDb';
 import {
   generateThreeDModelFromImageSchema,
@@ -79,40 +78,6 @@ export const generateImage = async (req: Request, res: Response, next: NextFunct
       imageTaskId: model.imageTaskId,
       imageUrls: model.previewImageUrls,
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const createFromFloorPlanImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    log3dControllerContext(req, 'createFromFloorPlanImage');
-    if (!(await ensureProjectExists(req, res))) {
-      return;
-    }
-
-    const { z } = await import('zod');
-    const schema = z.object({
-      imageUrl: z.string().url(),
-      floorPlanExportId: z.string().optional(),
-      planMetadata: z.unknown().optional(),
-    });
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası',
-        code: 'VALIDATION_ERROR',
-      });
-      return;
-    }
-
-    const model = await service.createFromFloorPlanImage(getTdb(req), String(req.params.projectId), {
-      imageUrl: parsed.data.imageUrl,
-      floorPlanExportId: parsed.data.floorPlanExportId,
-      planMetadata: parsed.data.planMetadata as FloorPlanMetadata | null | undefined,
-    });
-
-    res.status(201).json(withPublicModelUrl(req, model));
   } catch (error) {
     next(error);
   }

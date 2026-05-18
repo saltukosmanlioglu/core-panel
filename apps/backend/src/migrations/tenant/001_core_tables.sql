@@ -54,8 +54,6 @@ CREATE TABLE IF NOT EXISTS "{{schema}}".projects (
   status_note TEXT,
   status_updated_by UUID,
   status_updated_at TIMESTAMPTZ,
-  floorplanner_user_id VARCHAR(255),
-  floorplanner_project_id VARCHAR(255),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

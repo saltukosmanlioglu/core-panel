@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -43,7 +42,6 @@ import { Notification } from '@/components';
 import { ThreeDModelViewer } from '@/components/ThreeDModelViewer';
 import { useSnackbar } from '@/hooks/useSnackbar';
 import {
-  createThreeDModelFromFloorPlanApi,
   deleteThreeDModelApi,
   generateThreeDModelFromImageApi,
   generateThreeDModelImagesApi,
@@ -51,7 +49,6 @@ import {
   getThreeDModelStatusApi,
   updateThreeDModelStatusApi,
 } from '@/services/3d-models/api';
-import { getFloorPlanExportApi } from '@/services/floor-plan-exports/api';
 import { getErrorMessage } from '@/utils/getErrorMessage';
 
 const MAX_PROMPT_LENGTH = 600;
@@ -105,10 +102,7 @@ function isGenerating(model: ThreeDModel): boolean {
 
 export default function ModelPage() {
   const { id } = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
-  const fromFloorPlanExportId = searchParams.get('fromFloorPlan');
   const [activeStep, setActiveStep] = useState(0);
-  const [fromFloorPlan, setFromFloorPlan] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [models, setModels] = useState<ThreeDModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<ThreeDModel | null>(null);
@@ -187,45 +181,6 @@ export default function ModelPage() {
   }, [id, selectModel, selectedModel]);
 
   useEffect(() => {
-    if (!fromFloorPlanExportId) return;
-
-    let active = true;
-
-    const init = async () => {
-      try {
-        setLoading(true);
-        const floorExport = await getFloorPlanExportApi(fromFloorPlanExportId);
-
-        if (!active) return;
-
-        const model = await createThreeDModelFromFloorPlanApi(id, {
-          imageUrl: floorExport.imageUrl,
-          floorPlanExportId: floorExport.id,
-          planMetadata: floorExport.planMetadata ?? null,
-        });
-
-        if (!active) return;
-
-        setFromFloorPlan(true);
-        await loadModels(model.id);
-        setSelectedImageUrl(model.selectedImageUrl);
-        setActiveStep(1);
-      } catch (error) {
-        if (active) showError(getErrorMessage(error, 'Kat planı yüklenemedi'));
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    void init();
-
-    return () => { active = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromFloorPlanExportId]);
-
-  useEffect(() => {
-    if (fromFloorPlanExportId) return;
-
     let active = true;
 
     const load = async () => {
@@ -494,30 +449,12 @@ export default function ModelPage() {
 
     return (
       <Box sx={{ minHeight: 560, pb: 2 }}>
-        {fromFloorPlan ? (
-          <>
-            <Typography variant="h5" fontWeight={800} textAlign="center" sx={{ mb: 0.75 }}>
-              Kat planından 3D model oluştur
-            </Typography>
-            <Typography textAlign="center" color="text.secondary" sx={{ mb: 2 }}>
-              Kat planı görseli 3D modele dönüştürülecek
-            </Typography>
-            <Box sx={{ maxWidth: 480, mx: 'auto', mb: 3 }}>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Kat planınız hazır. Aşağıdaki butona tıklayarak 3D model oluşturun.
-              </Alert>
-            </Box>
-          </>
-        ) : (
-          <>
-            <Typography variant="h5" fontWeight={800} textAlign="center" sx={{ mb: 0.75 }}>
-              En iyi görseli seçin
-            </Typography>
-            <Typography textAlign="center" color="text.secondary" sx={{ mb: 3 }}>
-              Seçtiğiniz görsel 3D modele dönüştürülecek
-            </Typography>
-          </>
-        )}
+        <Typography variant="h5" fontWeight={800} textAlign="center" sx={{ mb: 0.75 }}>
+          En iyi görseli seçin
+        </Typography>
+        <Typography textAlign="center" color="text.secondary" sx={{ mb: 3 }}>
+          Seçtiğiniz görsel 3D modele dönüştürülecek
+        </Typography>
         <Box
           sx={{
             display: 'grid',
@@ -634,8 +571,6 @@ export default function ModelPage() {
           >
             {modelStarting ? (
               <CircularProgress size={18} color="inherit" />
-            ) : fromFloorPlan ? (
-              'Bu kat planını 3D modele dönüştür →'
             ) : (
               '3D Modele Çevir →'
             )}

@@ -1,5 +1,4 @@
 import { TenantDb } from '../../lib/tenantDb';
-import type { FloorPlanMetadata } from '@core-panel/shared';
 
 export const GENERATION_STEP = {
   PENDING: 'PENDING',
@@ -24,8 +23,6 @@ interface ThreeDModelRow {
   preview_image_urls: unknown;
   original_image_urls: unknown;
   selected_image_url: string | null;
-  source_floor_plan_id: string | null;
-  plan_metadata: unknown | null;
   prompt: string | null;
   created_by: string | null;
   created_at: Date;
@@ -68,8 +65,6 @@ function mapRow(row: ThreeDModelRow) {
     previewImageUrls: toStringArray(row.preview_image_urls),
     originalImageUrls: toStringArray(row.original_image_urls),
     selectedImageUrl: row.selected_image_url,
-    sourceFloorPlanId: row.source_floor_plan_id,
-    planMetadata: row.plan_metadata as FloorPlanMetadata | null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -184,38 +179,6 @@ export async function updateGenerationStatus(
   );
 
   return rows[0] ? mapRow(rows[0]) : null;
-}
-
-export async function createFromFloorPlanImage(
-  tdb: TenantDb,
-  data: {
-    projectId: string;
-    imageUrl: string;
-    floorPlanExportId?: string;
-    planMetadata?: FloorPlanMetadata | null;
-    prompt?: string;
-  },
-): Promise<ThreeDModelRecord> {
-  const { rows } = await tdb.query<ThreeDModelRow>(
-    `INSERT INTO ${tdb.ref('project_3d_models')}
-       (project_id, name, status, meshy_task_id, preview_image_urls,
-        original_image_urls, generation_step, prompt, selected_image_url,
-        source_floor_plan_id, plan_metadata)
-     VALUES ($1, $2, $3, NULL, $4::jsonb, $4::jsonb, $3, $5, $6, $7, $8::jsonb)
-     RETURNING *`,
-    [
-      data.projectId,
-      'Kat Planı 3D',
-      GENERATION_STEP.IMAGE_DONE,
-      JSON.stringify([data.imageUrl]),
-      data.prompt ?? 'Kat planından 3D model',
-      data.imageUrl,
-      data.floorPlanExportId ?? null,
-      data.planMetadata === undefined ? null : JSON.stringify(data.planMetadata),
-    ],
-  );
-
-  return mapRow(rows[0]!);
 }
 
 export async function remove(tdb: TenantDb, id: string): Promise<ThreeDModelRecord | null> {
