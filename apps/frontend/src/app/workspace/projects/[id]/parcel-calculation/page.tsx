@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
   Alert,
   Box,
@@ -420,7 +420,6 @@ function SummaryCard({
 export default function ParcelCalculationPage() {
   const { id } = useParams<{ id: string }>();
   const projectId = String(id);
-  const router = useRouter();
   const { showSuccess, showError, notificationProps } = useSnackbar();
 
   const [calculations, setCalculations] = useState<ParcelCalculation[]>([]);
@@ -718,16 +717,6 @@ export default function ParcelCalculationPage() {
     } finally {
       setIsCalculating(false);
     }
-  };
-
-  const goToRoughEstimate = () => {
-    if (!currentCalc) return;
-
-    const params = new URLSearchParams({
-      netParcelArea: String(currentCalc.footprintArea),
-      totalBrutArea: String(currentCalc.totalConstructionArea),
-    });
-    router.push(`/workspace/projects/${projectId}/rough-estimate?${params.toString()}`);
   };
 
   const renderEdgeStep = () => (
@@ -1131,13 +1120,6 @@ export default function ParcelCalculationPage() {
           </Button>
           <Button startIcon={<SaveIcon />} variant="outlined" onClick={() => showSuccess('Hesaplama kaydedildi')}>
             Kaydet
-          </Button>
-          <Button
-            variant="contained"
-            onClick={goToRoughEstimate}
-            sx={{ backgroundColor: '#2D6A4F', fontWeight: 800, '&:hover': { backgroundColor: '#235c43' } }}
-          >
-            Kaba Hesaba Aktar
           </Button>
         </Box>
       </Box>

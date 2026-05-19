@@ -10,11 +10,8 @@ export interface ProjectStatusPayload {
 }
 
 export interface ProjectSummaryCounts {
-  areaCalculations: number;
-  models3d: number;
-  propertyOwners: number;
+  parcelCalculations: number;
   tenders: number;
-  payments: number;
 }
 
 export interface BoqItemPayload {

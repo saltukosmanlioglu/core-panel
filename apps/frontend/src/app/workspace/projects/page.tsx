@@ -372,11 +372,8 @@ export default function DashboardProjectsPage() {
 
   const deleteCountItems = deleteCounts
     ? [
-      { count: deleteCounts.areaCalculations, label: 'alan hesaplama kaydı' },
-      { count: deleteCounts.models3d, label: '3D model' },
-      { count: deleteCounts.propertyOwners, label: 'tapu sahibi ve ödeme planları' },
+      { count: deleteCounts.parcelCalculations, label: 'taban oturum hesabı' },
       { count: deleteCounts.tenders, label: 'ihale' },
-      { count: deleteCounts.payments, label: 'ödeme kaydı' },
     ].filter((item) => item.count > 0)
     : [];
 

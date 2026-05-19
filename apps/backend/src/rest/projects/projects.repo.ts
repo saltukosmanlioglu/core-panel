@@ -30,11 +30,8 @@ function mapRow(row: ProjectRow) {
 export type ProjectRecord = ReturnType<typeof mapRow>;
 
 export interface ProjectSummaryCounts {
-  areaCalculations: number;
-  models3d: number;
-  propertyOwners: number;
+  parcelCalculations: number;
   tenders: number;
-  payments: number;
 }
 
 export async function findAll(companyId: string): Promise<ProjectRecord[]> {
@@ -85,27 +82,16 @@ export async function getSummaryCounts(companyId: string, id: string): Promise<P
 
   const tdb = new TenantDb(companyId);
   const [
-    areaCalculations,
-    models3d,
-    propertyOwners,
+    parcelCalculations,
     tenders,
-    progressPayments,
-    generalExpenses,
   ] = await Promise.all([
-    countByProjectId(tdb, 'area_calculations', id),
-    countByProjectId(tdb, 'project_3d_models', id),
-    countByProjectId(tdb, 'property_owners', id),
+    countByProjectId(tdb, 'parcel_calculations', id),
     countByProjectId(tdb, 'tenders', id),
-    countByProjectId(tdb, 'progress_payments', id),
-    countByProjectId(tdb, 'general_expenses', id),
   ]);
 
   return {
-    areaCalculations,
-    models3d,
-    propertyOwners,
+    parcelCalculations,
     tenders,
-    payments: progressPayments + generalExpenses,
   };
 }
 
