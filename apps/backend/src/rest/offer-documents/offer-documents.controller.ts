@@ -163,8 +163,8 @@ export const getParcelArea = async (req: Request, res: Response, next: NextFunct
     const tdb = await ensureProject(req, res);
     if (!tdb) return;
 
-    const parcelArea = await repo.getParcelCalculationArea(tdb, String(req.params.projectId));
-    res.json({ parcelArea });
+    const result = await repo.getParcelCalculationArea(tdb, String(req.params.projectId));
+    res.json({ footprintArea: result.footprintArea, floorAreas: result.floorAreas });
   } catch (error) {
     next(error);
   }

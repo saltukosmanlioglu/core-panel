@@ -50,7 +50,8 @@ export default function OfferDocumentsPage() {
   const projectId = String(id);
   const { showSuccess, showError, notificationProps } = useSnackbar();
   const [offerDocuments, setOfferDocuments] = useState<OfferDocument[]>([]);
-  const [parcelArea, setParcelArea] = useState<number | null>(null);
+  const [footprintArea, setFootprintArea] = useState<number | null>(null);
+  const [floorAreas, setFloorAreas] = useState<Array<{ floorNumber: number; netArea: number }> | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -62,13 +63,14 @@ export default function OfferDocumentsPage() {
     async function load() {
       try {
         setLoading(true);
-        const [documents, area] = await Promise.all([
+        const [documents, areaResult] = await Promise.all([
           getOfferDocuments(projectId),
           getLatestParcelArea(projectId),
         ]);
         if (!active) return;
         setOfferDocuments(documents);
-        setParcelArea(area);
+        setFootprintArea(areaResult.footprintArea);
+        setFloorAreas(areaResult.floorAreas);
       } catch (error) {
         if (active) showError(getErrorMessage(error, 'Teklif dokümanları yüklenemedi'));
       } finally {
@@ -141,9 +143,21 @@ export default function OfferDocumentsPage() {
             {editingDocument ? 'Teklif Düzenle' : 'Yeni Teklif Oluştur'}
           </Typography>
         </Box>
+        {floorAreas ? (
+          <Box sx={{ p: 1.5, bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 1 }}>
+            <Typography sx={{ fontSize: 12, color: '#1e40af', fontWeight: 500 }}>
+              Çıkmalı katlarda net alan farklıdır:{' '}
+              {floorAreas.map((fa) => {
+                const label = fa.floorNumber === 1 ? 'Zemin' : `${fa.floorNumber}. Kat`;
+                return `${label} ${fa.netArea.toFixed(2)} m²`;
+              }).join(', ')}
+            </Typography>
+          </Box>
+        ) : null}
         <OfferForm
           initialDocument={editingDocument}
-          parcelArea={parcelArea}
+          parcelArea={footprintArea}
+          floorAreas={floorAreas}
           companyName={companyName}
           onCancel={() => setFormOpen(false)}
           onSave={saveDocument}

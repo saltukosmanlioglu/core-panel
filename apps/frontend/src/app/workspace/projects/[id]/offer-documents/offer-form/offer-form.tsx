@@ -6,6 +6,10 @@ import {
   Box,
   Button,
   Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControlLabel,
   IconButton,
@@ -19,10 +23,13 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import Grid from '@mui/material/GridLegacy';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import EditIcon from '@mui/icons-material/Edit';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import dynamic from 'next/dynamic';
 import type {
   BasementFloor,
@@ -36,9 +43,11 @@ import type {
 import { BuildingPreview } from './building-preview';
 import {
   calculateUnitM2,
+  computeGlobalNumbers,
   DEFAULT_PAGE2_HTML,
   defaultBuilding,
   emptyStreetLabels,
+  floorsAreIdentical,
   makeUnit,
 } from './building-utils';
 
@@ -52,6 +61,7 @@ const steps = ['Genel Bilgiler', 'Teklif İçeriği', 'Bina Yapısı', 'Önizlem
 interface OfferFormProps {
   initialDocument: OfferDocument | null;
   parcelArea: number | null;
+  floorAreas?: { floorNumber: number; netArea: number }[] | null;
   companyName: string;
   onCancel: () => void;
   onSave: (payload: OfferDocumentPayload, id?: string) => Promise<OfferDocument>;
@@ -63,8 +73,112 @@ function today(): string {
 }
 
 function cloneUnits(units: OfferUnit[]): OfferUnit[] {
-  return units.map((unit) => ({ ...unit }));
+  return units.map((unit) => ({
+    ...unit,
+    mergedWithIds: [...(unit.mergedWithIds ?? [])],
+  }));
 }
+
+function getBuildingUnits(building: OfferBuilding): OfferUnit[] {
+  return [
+    ...building.basementFloors.flatMap((floor) => floor.units),
+    ...(building.groundFloor.exists ? building.groundFloor.units : []),
+    ...building.normalFloors.flatMap((floor) => floor.units),
+    ...(building.roofFloor.exists ? building.roofFloor.units : []),
+  ];
+}
+
+function getNextUnitId(building: OfferBuilding, extraUnits: OfferUnit[] = []): number {
+  const maxId = [...getBuildingUnits(building), ...extraUnits].reduce((max, unit) => Math.max(max, unit.id), 0);
+  return maxId + 1;
+}
+
+function createUnitIdFactory(building: OfferBuilding): () => number {
+  let nextId = getNextUnitId(building);
+  return () => {
+    const id = nextId;
+    nextId += 1;
+    return id;
+  };
+}
+
+function cloneUnitsWithFreshIds(units: OfferUnit[], nextId: () => number): OfferUnit[] {
+  const idMap = new Map<number, number>();
+  units.forEach((unit) => idMap.set(unit.id, nextId()));
+
+  return units.map((unit) => ({
+    ...unit,
+    id: idMap.get(unit.id) ?? unit.id,
+    mergedWithIds: (unit.mergedWithIds ?? []).map((id) => idMap.get(id) ?? id),
+    isMergedInto: unit.isMergedInto === null ? null : (idMap.get(unit.isMergedInto) ?? unit.isMergedInto),
+    linkedUnitId: unit.linkedUnitId === null ? null : (idMap.get(unit.linkedUnitId) ?? unit.linkedUnitId),
+  }));
+}
+
+function normalizeBuildingUnitIds(building: OfferBuilding): OfferBuilding {
+  const usedIds = new Set<number>();
+  const preferredGlobalId = new Map<number, number>();
+  let nextId = getNextUnitId(building);
+
+  const assignIds = (units: OfferUnit[]): { units: OfferUnit[]; localIdMap: Map<number, number> } => {
+    const localIdMap = new Map<number, number>();
+    const assignedUnits = units.map((unit) => {
+      let id = unit.id;
+      if (usedIds.has(id)) {
+        id = nextId;
+        nextId += 1;
+      }
+      usedIds.add(id);
+      if (!preferredGlobalId.has(unit.id)) preferredGlobalId.set(unit.id, id);
+      localIdMap.set(unit.id, id);
+      return { ...unit, id, mergedWithIds: [...(unit.mergedWithIds ?? [])] };
+    });
+
+    return { units: assignedUnits, localIdMap };
+  };
+
+  const remapRelations = (units: OfferUnit[], localIdMap: Map<number, number>): OfferUnit[] =>
+    units.map((unit) => ({
+      ...unit,
+      mergedWithIds: (unit.mergedWithIds ?? []).map((id) => localIdMap.get(id) ?? id),
+      isMergedInto: unit.isMergedInto === null ? null : (localIdMap.get(unit.isMergedInto) ?? unit.isMergedInto),
+      linkedUnitId: unit.linkedUnitId === null ? null : (preferredGlobalId.get(unit.linkedUnitId) ?? unit.linkedUnitId),
+    }));
+
+  const groundResult = assignIds(building.groundFloor.units);
+  const normalResults = building.normalFloors.map((floor) => ({ floor, result: assignIds(floor.units) }));
+  const roofResult = assignIds(building.roofFloor.units);
+  const basementResults = building.basementFloors.map((floor) => ({ floor, result: assignIds(floor.units) }));
+
+  return {
+    ...building,
+    groundFloor: {
+      ...building.groundFloor,
+      units: remapRelations(groundResult.units, groundResult.localIdMap),
+    },
+    normalFloors: normalResults.map(({ floor, result }) => ({
+      ...floor,
+      units: remapRelations(result.units, result.localIdMap),
+    })),
+    roofFloor: {
+      ...building.roofFloor,
+      units: remapRelations(roofResult.units, roofResult.localIdMap),
+    },
+    basementFloors: basementResults.map(({ floor, result }) => ({
+      ...floor,
+      units: remapRelations(result.units, result.localIdMap),
+    })),
+  };
+}
+
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+type FloorDraft =
+  | { kind: 'basement'; index: number; floor: BasementFloor }
+  | { kind: 'ground'; units: OfferUnit[]; streetLabels: StreetLabels }
+  | { kind: 'normal'; index: number; floorNumber: number; units: OfferUnit[] };
 
 function buildPayloadFromDocument(
   document: OfferDocument | null,
@@ -78,7 +192,7 @@ function buildPayloadFromDocument(
       page2Content: document.page2Content,
       tcmbRate: document.tcmbRate,
       companyName: document.companyName,
-      building: document.building,
+      building: normalizeBuildingUnitIds(document.building),
     }
     : {
       parcelTitle: '',
@@ -94,6 +208,7 @@ function buildPayloadFromDocument(
 export function OfferForm({
   initialDocument,
   parcelArea,
+  floorAreas,
   companyName,
   onCancel,
   onSave,
@@ -104,15 +219,21 @@ export function OfferForm({
   const [savedDocument, setSavedDocument] = useState<OfferDocument | null>(initialDocument);
   const [parcelAreaOverride, setParcelAreaOverride] = useState(false);
   const [manualParcelArea, setManualParcelArea] = useState<string>(String(parcelArea ?? 0));
-  const [normalFloorsSame, setNormalFloorsSame] = useState(true);
+  const [normalFloorsSame, setNormalFloorsSame] = useState(() =>
+    floorsAreIdentical(buildPayloadFromDocument(initialDocument, parcelArea, companyName).building.normalFloors),
+  );
+  const [floorDraft, setFloorDraft] = useState<FloorDraft | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setPayload(buildPayloadFromDocument(initialDocument, parcelArea, companyName));
+    const newPayload = buildPayloadFromDocument(initialDocument, parcelArea, companyName);
+    setPayload(newPayload);
     setSavedDocument(initialDocument);
     setManualParcelArea(String(parcelArea ?? 0));
     setActiveStep(0);
+    setNormalFloorsSame(floorsAreIdentical(newPayload.building.normalFloors));
+    setFloorDraft(null);
   }, [initialDocument, parcelArea, companyName]);
 
   const tabanAlani = parcelAreaOverride
@@ -130,13 +251,14 @@ export function OfferForm({
   const addBasementFloor = () => {
     updateBuilding((building) => {
       const idx = building.basementFloors.length;
-      const m2 = calculateUnitM2(tabanAlani, building.staircaseDeduction, 2);
+      const m2 = calculateUnitM2(tabanAlani, 0, 2);
+      const nextId = createUnitIdFactory(building);
       const newFloor: BasementFloor = {
         label: `${idx + 1}. BODRUM KAT`,
         isCommonArea: true,
         commonAreaM2: tabanAlani || null,
         commonAreaLabel: 'ORTAK ALAN',
-        units: [makeUnit(1, m2, undefined, 'depo'), makeUnit(2, m2, undefined, 'depo')],
+        units: [makeUnit(nextId(), m2, undefined, 'depo'), makeUnit(nextId(), m2, undefined, 'depo')],
         streetLabels: emptyStreetLabels,
       };
       return { ...building, basementFloors: [...building.basementFloors, newFloor] };
@@ -156,7 +278,8 @@ export function OfferForm({
     updateBuilding((building) => {
       const idx = building.normalFloors.length;
       const templateUnits = building.normalFloors[0]?.units ?? [makeUnit(1), makeUnit(2)];
-      const newFloor = { floorNumber: idx + 1, units: cloneUnits(templateUnits) };
+      const nextId = createUnitIdFactory(building);
+      const newFloor = { floorNumber: idx + 1, units: cloneUnitsWithFreshIds(templateUnits, nextId) };
       return { ...building, normalFloors: [...building.normalFloors, newFloor] };
     });
   };
@@ -170,37 +293,58 @@ export function OfferForm({
     }));
   };
 
-  const applySameNormalFloors = (checked: boolean) => {
+  const handleNormalFloorsSameChange = (checked: boolean) => {
     setNormalFloorsSame(checked);
     if (!checked) return;
     updateBuilding((building) => {
       const templateUnits = building.normalFloors[0]?.units ?? [];
+      const nextId = createUnitIdFactory(building);
       return {
         ...building,
-        normalFloors: building.normalFloors.map((floor) => ({
+        normalFloors: building.normalFloors.map((floor, index) => ({
           floorNumber: floor.floorNumber,
-          units: cloneUnits(templateUnits),
+          units: index === 0 ? cloneUnits(templateUnits) : cloneUnitsWithFreshIds(templateUnits, nextId),
         })),
       };
     });
   };
 
-  const applyToAllNormalFloors = (
-    unitIndex: number,
-    field: 'brutM2' | 'paymentAmount',
-    value: number | null,
-  ) => {
-    updateBuilding((building) => ({
-      ...building,
-      normalFloors: building.normalFloors.map((floor) => ({
-        ...floor,
-        units: floor.units.map((u, i) =>
-          i === unitIndex
-            ? { ...u, [field]: value, ...(field === 'brutM2' ? { manualM2Override: true } : {}) }
-            : u,
-        ),
-      })),
-    }));
+  const openFloorEditor = (target: { kind: 'basement'; index: number } | { kind: 'ground' } | { kind: 'normal'; index: number }) => {
+    const b = payload.building;
+    if (target.kind === 'basement') {
+      const floor = b.basementFloors[target.index];
+      if (floor) setFloorDraft({ kind: 'basement', index: target.index, floor: deepClone(floor) });
+    } else if (target.kind === 'ground') {
+      setFloorDraft({ kind: 'ground', units: deepClone(b.groundFloor.units), streetLabels: deepClone(b.groundFloor.streetLabels) });
+    } else {
+      const floor = b.normalFloors[target.index];
+      if (floor) setFloorDraft({ kind: 'normal', index: target.index, floorNumber: floor.floorNumber, units: deepClone(floor.units) });
+    }
+  };
+
+  const saveFloorDraft = (draft: FloorDraft) => {
+    updateBuilding((building) => {
+      if (draft.kind === 'basement') {
+        const basementFloors = [...building.basementFloors];
+        basementFloors[draft.index] = draft.floor;
+        return { ...building, basementFloors };
+      }
+      if (draft.kind === 'ground') {
+        return { ...building, groundFloor: { ...building.groundFloor, units: draft.units, streetLabels: draft.streetLabels } };
+      }
+      if (draft.kind === 'normal') {
+        const nextId = createUnitIdFactory(building);
+        const normalFloors = normalFloorsSame
+          ? building.normalFloors.map((f, i) => ({
+            ...f,
+            units: i === draft.index ? draft.units : cloneUnitsWithFreshIds(draft.units, nextId),
+          }))
+          : building.normalFloors.map((f, i) => (i === draft.index ? { ...f, units: draft.units } : f));
+        return { ...building, normalFloors };
+      }
+      return building;
+    });
+    setFloorDraft(null);
   };
 
   const save = async (): Promise<OfferDocument | null> => {
@@ -229,6 +373,7 @@ export function OfferForm({
   };
 
   const previewBuilding = useMemo(() => payload.building, [payload.building]);
+  const previewNumberMap = useMemo(() => computeGlobalNumbers(payload.building), [payload.building]);
 
   return (
     <Stack spacing={3}>
@@ -249,21 +394,27 @@ export function OfferForm({
             onChange={(e) => setPayload((c) => ({ ...c, parcelTitle: e.target.value }))}
             fullWidth
           />
-          <TextField
-            label="Teklif tarihi"
-            type="date"
-            value={payload.offerDate}
-            onChange={(e) => setPayload((c) => ({ ...c, offerDate: e.target.value }))}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-          <TextField
-            label="TCMB dolar kuru"
-            value={payload.tcmbRate}
-            onChange={(e) => setPayload((c) => ({ ...c, tcmbRate: e.target.value }))}
-            fullWidth
-          />
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Grid container spacing={2} alignItems="stretch">
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Teklif tarihi"
+                type="date"
+                value={payload.offerDate}
+                onChange={(e) => setPayload((c) => ({ ...c, offerDate: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="TCMB dolar kuru"
+                value={payload.tcmbRate}
+                onChange={(e) => setPayload((c) => ({ ...c, tcmbRate: e.target.value }))}
+                fullWidth
+              />
+            </Grid>
+          </Grid>
+          <Box>
             <TextField
               label="Taban oturum alanı"
               value={parcelAreaOverride ? manualParcelArea : (tabanAlani === 0 ? '' : String(tabanAlani))}
@@ -275,19 +426,7 @@ export function OfferForm({
               }}
               helperText={parcelArea == null ? 'Kayıtlı taban oturum alanı bulunamadı' : 'Son hesaplamadan otomatik alındı'}
               inputProps={{ inputMode: 'decimal' }}
-            />
-            <TextField
-              label="Merdiven/asansör payı"
-              value={payload.building.staircaseDeduction === 0 ? '' : String(payload.building.staircaseDeduction)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setPayload((c) => ({ ...c, building: { ...c.building, staircaseDeduction: parseFloat(raw) || 0 } }));
-              }}
-              onBlur={(e) => {
-                const parsed = Math.max(0, parseFloat(e.target.value) || 0);
-                setPayload((c) => ({ ...c, building: { ...c.building, staircaseDeduction: parsed } }));
-              }}
-              inputProps={{ inputMode: 'decimal' }}
+              fullWidth
             />
           </Box>
           <FormControlLabel
@@ -313,29 +452,43 @@ export function OfferForm({
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 7fr) minmax(420px, 5fr)' }, gap: 3, alignItems: 'start' }}>
           <Stack spacing={2}>
 
-            {/* Bodrum katlar */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Bodrum Katlar</Typography>
-            {payload.building.basementFloors.map((floor, index) => (
-              <BasementFloorEditor
-                key={index}
-                floor={floor}
-                index={index}
-                tabanAlani={tabanAlani}
-                staircaseDeduction={payload.building.staircaseDeduction}
-                canRemove={payload.building.basementFloors.length > 1}
-                allFloors={payload.building}
-                companyName={companyName}
-                onRemove={() => removeBasementFloor(index)}
-                onChange={(nextFloor) => updateBuilding((building) => {
-                  const basementFloors = [...building.basementFloors];
-                  basementFloors[index] = nextFloor;
-                  return { ...building, basementFloors };
-                })}
+            {/* Normal katlar */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Normal Katlar</Typography>
+              <FormControlLabel
+                control={<Checkbox checked={normalFloorsSame} onChange={(e) => handleNormalFloorsSameChange(e.target.checked)} />}
+                label="Tüm katlar aynı"
+                sx={{ mr: 0 }}
               />
-            ))}
+            </Box>
+            {normalFloorsSame && payload.building.normalFloors.length > 1 ? (
+              <Alert severity="info" sx={{ py: 0.5, fontSize: 13 }}>
+                Tüm katlar senkronize — bir kattaki değişiklik diğer katlara yansır
+              </Alert>
+            ) : null}
+            {payload.building.normalFloors.length === 0 ? (
+              <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz normal kat eklenmedi.</Typography>
+            ) : null}
+            {[...payload.building.normalFloors].reverse().map((floor) => {
+              const index = payload.building.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
+              return (
+                <FloorCard
+                  key={floor.floorNumber}
+                  label={`${floor.floorNumber}. Normal Kat`}
+                  units={floor.units}
+                  tabanAlani={tabanAlani}
+                  isBasement={false}
+                  companyName={companyName}
+                  synced={normalFloorsSame && payload.building.normalFloors.length > 1}
+                  onEdit={() => openFloorEditor({ kind: 'normal', index })}
+                  onRemove={() => removeNormalFloor(index)}
+                  canRemove
+                />
+              );
+            })}
             <Box>
-              <Button startIcon={<AddIcon />} onClick={addBasementFloor} variant="outlined" size="small">
-                Bodrum Kat Ekle
+              <Button startIcon={<AddIcon />} onClick={addNormalFloor} variant="outlined" size="small">
+                Normal Kat Ekle
               </Button>
             </Box>
 
@@ -350,74 +503,39 @@ export function OfferForm({
               <Typography sx={{ fontWeight: 600 }}>Zemin Kat</Typography>
             </Box>
             {payload.building.groundFloor.exists ? (
-              <>
-                <UnitsEditor
-                  title="Zemin Kat"
-                  units={payload.building.groundFloor.units}
-                  tabanAlani={tabanAlani}
-                  staircaseDeduction={payload.building.staircaseDeduction}
-                  allFloors={payload.building}
-                  companyName={companyName}
-                  onChange={(units) => updateBuilding((b) => ({ ...b, groundFloor: { ...b.groundFloor, units } }))}
-                />
-                <StreetLabelsEditor
-                  labels={payload.building.groundFloor.streetLabels}
-                  onChange={(streetLabels) => updateBuilding((b) => ({ ...b, groundFloor: { ...b.groundFloor, streetLabels } }))}
-                />
-              </>
+              <FloorCard
+                label="Zemin Kat"
+                units={payload.building.groundFloor.units}
+                tabanAlani={tabanAlani}
+                isBasement={false}
+                companyName={companyName}
+                onEdit={() => openFloorEditor({ kind: 'ground' })}
+              />
             ) : null}
 
             <Divider />
 
-            {/* Normal katlar */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Normal Katlar</Typography>
-            <FormControlLabel
-              control={<Checkbox checked={normalFloorsSame} onChange={(e) => applySameNormalFloors(e.target.checked)} />}
-              label="Tüm normal katlar aynı mı?"
-            />
-            {normalFloorsSame && payload.building.normalFloors.length > 1 ? (
-              <Alert severity="info" sx={{ py: 0.5, fontSize: 13 }}>
-                Tüm katlar senkronize — bir kattaki değişiklik diğer katlara yansır
-              </Alert>
-            ) : null}
-            {payload.building.normalFloors.length === 0 ? (
-              <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz normal kat eklenmedi.</Typography>
-            ) : null}
-            {payload.building.normalFloors.map((floor, index) => (
-              <Box key={floor.floorNumber}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <Typography sx={{ fontWeight: 600, fontSize: 14 }}>{floor.floorNumber}. Normal Kat</Typography>
-                    {normalFloorsSame && payload.building.normalFloors.length > 1 ? (
-                      <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1 }}>🔄</Typography>
-                    ) : null}
-                  </Box>
-                  <Tooltip title="Katı kaldır">
-                    <IconButton size="small" color="error" onClick={() => removeNormalFloor(index)}>
-                      <CloseIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-                <UnitsEditor
-                  title={`${floor.floorNumber}. Normal Kat`}
-                  units={floor.units}
-                  tabanAlani={tabanAlani}
-                  staircaseDeduction={payload.building.staircaseDeduction}
-                  allFloors={payload.building}
-                  onApplyToAllFloors={applyToAllNormalFloors}
-                  companyName={companyName}
-                  onChange={(units) => updateBuilding((building) => {
-                    const normalFloors = normalFloorsSame
-                      ? building.normalFloors.map((item) => ({ ...item, units: cloneUnits(units) }))
-                      : building.normalFloors.map((item) => (item.floorNumber === floor.floorNumber ? { ...item, units } : item));
-                    return { ...building, normalFloors };
-                  })}
-                />
-              </Box>
+            {/* Bodrum katlar */}
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Bodrum Katlar</Typography>
+            {payload.building.basementFloors.map((floor, index) => (
+              <FloorCard
+                key={index}
+                label={floor.label}
+                units={floor.units}
+                isCommonArea={floor.isCommonArea}
+                commonAreaM2={floor.commonAreaM2}
+                commonAreaLabel={floor.commonAreaLabel}
+                tabanAlani={tabanAlani}
+                isBasement
+                companyName={companyName}
+                onEdit={() => openFloorEditor({ kind: 'basement', index })}
+                onRemove={() => removeBasementFloor(index)}
+                canRemove={payload.building.basementFloors.length > 1}
+              />
             ))}
             <Box>
-              <Button startIcon={<AddIcon />} onClick={addNormalFloor} variant="outlined" size="small">
-                Normal Kat Ekle
+              <Button startIcon={<AddIcon />} onClick={addBasementFloor} variant="outlined" size="small">
+                Bodrum Kat Ekle
               </Button>
             </Box>
 
@@ -436,15 +554,26 @@ export function OfferForm({
                 title="Çatı Katı"
                 units={payload.building.roofFloor.units}
                 tabanAlani={tabanAlani}
-                staircaseDeduction={payload.building.staircaseDeduction}
                 allFloors={payload.building}
+                numberMap={previewNumberMap}
                 companyName={companyName}
                 onChange={(units) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, units } }))}
               />
             ) : null}
           </Stack>
 
-          <BuildingPreview parcelTitle={payload.parcelTitle} building={previewBuilding} />
+          <BuildingPreview parcelTitle={payload.parcelTitle} building={previewBuilding} floorAreas={floorAreas} />
+
+          <FloorEditorModal
+            key={floorDraft ? `${floorDraft.kind}-${floorDraft.kind !== 'ground' ? (floorDraft as { index: number }).index : 0}` : 'closed'}
+            floorDraft={floorDraft}
+            building={payload.building}
+            tabanAlani={tabanAlani}
+            companyName={companyName}
+            normalFloorsSame={normalFloorsSame}
+            onSave={saveFloorDraft}
+            onCancel={() => setFloorDraft(null)}
+          />
         </Box>
       ) : null}
 
@@ -452,7 +581,7 @@ export function OfferForm({
       {activeStep === 3 ? (
         <Stack spacing={2}>
           <Alert severity="info">Teklif kaydedildikten sonra PDF oluşturulur. Eksik statik sayfa dosyası varsa PDF yalnızca ilk 3 sayfa olarak üretilecektir.</Alert>
-          <BuildingPreview parcelTitle={payload.parcelTitle} building={payload.building} />
+          <BuildingPreview parcelTitle={payload.parcelTitle} building={payload.building} floorAreas={floorAreas} />
           <Button variant="contained" onClick={() => void handleGeneratePdf()} disabled={isSaving}>
             PDF Oluştur
           </Button>
@@ -483,91 +612,312 @@ export function OfferForm({
   );
 }
 
-// ── BasementFloorEditor ──────────────────────────────────────────────────────
+// ── FloorCard ────────────────────────────────────────────────────────────────
 
-function BasementFloorEditor({
-  floor,
-  index,
+function FloorCard({
+  label,
+  units,
+  isCommonArea,
+  commonAreaM2,
+  commonAreaLabel,
   tabanAlani,
-  staircaseDeduction,
-  canRemove,
-  allFloors,
+  isBasement,
   companyName,
+  synced,
+  onEdit,
   onRemove,
-  onChange,
+  canRemove,
 }: {
-  floor: BasementFloor;
-  index: number;
+  label: string;
+  units: OfferUnit[];
+  isCommonArea?: boolean;
+  commonAreaM2?: number | null;
+  commonAreaLabel?: string | null;
   tabanAlani: number;
-  staircaseDeduction: number;
-  canRemove: boolean;
-  allFloors: OfferBuilding;
+  isBasement: boolean;
   companyName: string;
-  onRemove: () => void;
-  onChange: (floor: BasementFloor) => void;
+  synced?: boolean;
+  onEdit: () => void;
+  onRemove?: () => void;
+  canRemove?: boolean;
 }) {
+  const visibleUnits = units.filter((u) => !u.isMergedInto);
+  const totalM2 = visibleUnits.reduce((s, u) => s + u.brutM2, 0);
+  const tapuCount = visibleUnits.filter((u) => u.ownerType === 'tapu').length;
+  const milaCount = visibleUnits.filter((u) => u.ownerType === 'mila').length;
+  const nullCount = visibleUnits.filter((u) => u.ownerType === null).length;
+  const netAlan = tabanAlani;
+  const hasWarning =
+    !isCommonArea &&
+    visibleUnits.length > 0 &&
+    (isBasement ? totalM2 > tabanAlani : totalM2 > netAlan);
+
   return (
-    <Box sx={{ border: '1px solid #e5e7eb', borderRadius: 1, p: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{floor.label}</Typography>
-        {canRemove ? (
-          <Tooltip title="Bodrum katı kaldır">
+    <Box
+      sx={{
+        border: '1px solid #e5e7eb',
+        borderRadius: 1,
+        p: 1.5,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+      }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{label}</Typography>
+          {synced ? <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>🔄</Typography> : null}
+          {hasWarning ? (
+            <Tooltip
+              title={
+                isBasement
+                  ? `Toplam m² (${totalM2.toFixed(2)}) taban alanını (${tabanAlani}) aşıyor`
+                  : `Toplam m² (${totalM2.toFixed(2)}) net alanı (${netAlan.toFixed(2)}) aşıyor`
+              }
+            >
+              <WarningAmberIcon
+                sx={{ fontSize: 16, color: isBasement ? 'warning.main' : 'error.main' }}
+              />
+            </Tooltip>
+          ) : null}
+        </Box>
+        {isCommonArea ? (
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            Ortak Alan · {commonAreaM2 ?? 0} m² · {commonAreaLabel ?? 'ORTAK ALAN'}
+          </Typography>
+        ) : (
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            {visibleUnits.length} birim · {totalM2.toFixed(2)} m²
+            {tapuCount > 0 ? ` · Tapu(${tapuCount})` : ''}
+            {milaCount > 0 ? ` · ${companyName}(${milaCount})` : ''}
+            {nullCount > 0 ? ` · Diğer(${nullCount})` : ''}
+          </Typography>
+        )}
+      </Box>
+      <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+        <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>
+          Düzenle
+        </Button>
+        {canRemove && onRemove ? (
+          <Tooltip title="Katı kaldır">
             <IconButton size="small" color="error" onClick={onRemove}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         ) : null}
       </Box>
-      <Stack spacing={2}>
-        <TextField size="small" label="Kat etiketi" value={floor.label} onChange={(e) => onChange({ ...floor, label: e.target.value })} fullWidth />
-        <FormControlLabel
-          control={<Switch checked={floor.isCommonArea} onChange={(e) => onChange({ ...floor, isCommonArea: e.target.checked })} />}
-          label="Ortak Alan"
-        />
-        {floor.isCommonArea ? (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField
-              label="Alan m²"
-              size="small"
-              value={floor.commonAreaM2 ?? ''}
-              onChange={(e) => onChange({ ...floor, commonAreaM2: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
-              onBlur={(e) => {
-                if (e.target.value !== '') {
-                  onChange({ ...floor, commonAreaM2: Math.max(0, parseFloat(e.target.value) || 0) });
-                }
-              }}
-              inputProps={{ inputMode: 'decimal' }}
-            />
-            <TextField size="small" label="Alan etiketi" value={floor.commonAreaLabel ?? ''} onChange={(e) => onChange({ ...floor, commonAreaLabel: e.target.value })} />
-          </Box>
-        ) : (
-          <UnitsEditor
-            title={`${index + 1}. Bodrum Kat Birimleri`}
-            units={floor.units}
-            tabanAlani={tabanAlani}
-            staircaseDeduction={staircaseDeduction}
-            allFloors={allFloors}
-            linkedUnitScope="groundOnly"
-            isBasement
-            companyName={companyName}
-            onChange={(units) => onChange({ ...floor, units })}
-          />
-        )}
-        <StreetLabelsEditor labels={floor.streetLabels} onChange={(streetLabels) => onChange({ ...floor, streetLabels })} />
-      </Stack>
     </Box>
   );
 }
 
-// ── StreetLabelsEditor ───────────────────────────────────────────────────────
+function buildingWithDraft(building: OfferBuilding, draft: FloorDraft | null): OfferBuilding {
+  if (!draft) return building;
 
-function StreetLabelsEditor({ labels, onChange }: { labels: StreetLabels; onChange: (labels: StreetLabels) => void }) {
+  if (draft.kind === 'basement') {
+    const basementFloors = [...building.basementFloors];
+    basementFloors[draft.index] = draft.floor;
+    return { ...building, basementFloors };
+  }
+
+  if (draft.kind === 'ground') {
+    return { ...building, groundFloor: { ...building.groundFloor, units: draft.units, streetLabels: draft.streetLabels } };
+  }
+
+  return {
+    ...building,
+    normalFloors: building.normalFloors.map((floor, index) =>
+      index === draft.index ? { ...floor, units: draft.units } : floor,
+    ),
+  };
+}
+
+// ── FloorEditorModal ─────────────────────────────────────────────────────────
+
+function FloorEditorModal({
+  floorDraft,
+  building,
+  tabanAlani,
+  companyName,
+  normalFloorsSame,
+  onSave,
+  onCancel,
+}: {
+  floorDraft: FloorDraft | null;
+  building: OfferBuilding;
+  tabanAlani: number;
+  companyName: string;
+  normalFloorsSame: boolean;
+  onSave: (draft: FloorDraft) => void;
+  onCancel: () => void;
+}) {
+  const [localDraft, setLocalDraft] = useState<FloorDraft | null>(() =>
+    floorDraft ? deepClone(floorDraft) : null,
+  );
+
+  const open = floorDraft !== null;
+  const draftBuilding = buildingWithDraft(building, localDraft);
+  const draftNumberMap = computeGlobalNumbers(draftBuilding);
+
+  const title =
+    !localDraft ? '' :
+    localDraft.kind === 'basement' ? `${localDraft.floor.label} Düzenle` :
+    localDraft.kind === 'ground' ? 'Zemin Kat Düzenle' :
+    `${localDraft.floorNumber}. Normal Kat Düzenle`;
+
+  // Validation
+  let validationAlert: React.ReactNode = null;
+  if (localDraft?.kind === 'ground' || localDraft?.kind === 'normal') {
+    const visibleUnits = localDraft.units.filter((u) => !u.isMergedInto);
+    const totalM2 = visibleUnits.reduce((s, u) => s + u.brutM2, 0);
+    const netAlan = tabanAlani;
+    if (totalM2 > netAlan) {
+      validationAlert = (
+        <Alert severity="error">
+          Birim toplamı ({totalM2.toFixed(2)} m²) net alanı ({netAlan.toFixed(2)} m²) aşıyor.
+        </Alert>
+      );
+    }
+  } else if (localDraft?.kind === 'basement' && !localDraft.floor.isCommonArea) {
+    const visibleUnits = localDraft.floor.units.filter((u) => !u.isMergedInto);
+    const totalM2 = visibleUnits.reduce((s, u) => s + u.brutM2, 0);
+    if (totalM2 > tabanAlani) {
+      validationAlert = (
+        <Alert severity="warning">
+          Birim toplamı ({totalM2.toFixed(2)} m²) taban alanını ({tabanAlani} m²) aşıyor.
+        </Alert>
+      );
+    }
+  }
+
+  if (!localDraft) {
+    return <Dialog open={open} onClose={onCancel} maxWidth="lg" fullWidth><DialogContent /></Dialog>;
+  }
+
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1 }}>
-      <TextField size="small" label="Sol sokak" value={labels.left ?? ''} onChange={(e) => onChange({ ...labels, left: e.target.value || null })} />
-      <TextField size="small" label="Sağ sokak" value={labels.right ?? ''} onChange={(e) => onChange({ ...labels, right: e.target.value || null })} />
-      <TextField size="small" label="Alt sokak" value={labels.bottom ?? ''} onChange={(e) => onChange({ ...labels, bottom: e.target.value || null })} />
-    </Box>
+    <Dialog open={open} onClose={onCancel} maxWidth="lg" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        {title}
+        {localDraft.kind === 'normal' && normalFloorsSame && building.normalFloors.length > 1 ? (
+          <Typography component="span" sx={{ fontSize: 12, color: 'text.secondary', fontWeight: 400 }}>
+            (tüm katlara uygulanacak)
+          </Typography>
+        ) : null}
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          {validationAlert}
+
+          {localDraft.kind === 'basement' ? (
+            <>
+              <TextField
+                size="small"
+                label="Kat etiketi"
+                value={localDraft.floor.label}
+                onChange={(e) =>
+                  setLocalDraft({ ...localDraft, floor: { ...localDraft.floor, label: e.target.value } })
+                }
+                fullWidth
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={localDraft.floor.isCommonArea}
+                    onChange={(e) =>
+                      setLocalDraft({ ...localDraft, floor: { ...localDraft.floor, isCommonArea: e.target.checked } })
+                    }
+                  />
+                }
+                label="Ortak Alan"
+              />
+              {localDraft.floor.isCommonArea ? (
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                  <TextField
+                    label="Alan m²"
+                    size="small"
+                    value={localDraft.floor.commonAreaM2 ?? ''}
+                    onChange={(e) =>
+                      setLocalDraft({
+                        ...localDraft,
+                        floor: {
+                          ...localDraft.floor,
+                          commonAreaM2: e.target.value === '' ? null : parseFloat(e.target.value) || 0,
+                        },
+                      })
+                    }
+                    onBlur={(e) => {
+                      if (e.target.value !== '') {
+                        setLocalDraft({
+                          ...localDraft,
+                          floor: {
+                            ...localDraft.floor,
+                            commonAreaM2: Math.max(0, parseFloat(e.target.value) || 0),
+                          },
+                        });
+                      }
+                    }}
+                    inputProps={{ inputMode: 'decimal' }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Alan etiketi"
+                    value={localDraft.floor.commonAreaLabel ?? ''}
+                    onChange={(e) =>
+                      setLocalDraft({ ...localDraft, floor: { ...localDraft.floor, commonAreaLabel: e.target.value } })
+                    }
+                  />
+                </Box>
+              ) : (
+                <UnitsEditor
+                  title={`${localDraft.floor.label} Birimleri`}
+                  units={localDraft.floor.units}
+                  tabanAlani={tabanAlani}
+                  allFloors={draftBuilding}
+                  numberMap={draftNumberMap}
+                  isBasement
+                  companyName={companyName}
+                  onChange={(units) =>
+                    setLocalDraft({ ...localDraft, floor: { ...localDraft.floor, units } })
+                  }
+                />
+              )}
+            </>
+          ) : localDraft.kind === 'ground' ? (
+            <>
+              <UnitsEditor
+                title="Zemin Kat Birimleri"
+                units={localDraft.units}
+                tabanAlani={tabanAlani}
+                allFloors={draftBuilding}
+                numberMap={draftNumberMap}
+                companyName={companyName}
+                onChange={(units) => setLocalDraft({ ...localDraft, units })}
+              />
+            </>
+          ) : (
+            <>
+              {normalFloorsSame && building.normalFloors.length > 1 ? (
+                <Alert severity="info">Değişiklikler tüm normal katlara uygulanacak.</Alert>
+              ) : null}
+              <UnitsEditor
+                title={`${localDraft.floorNumber}. Normal Kat Birimleri`}
+                units={localDraft.units}
+                tabanAlani={tabanAlani}
+                allFloors={draftBuilding}
+                numberMap={draftNumberMap}
+                companyName={companyName}
+                onChange={(units) => setLocalDraft({ ...localDraft, units })}
+              />
+            </>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>İptal</Button>
+        <Button variant="contained" onClick={() => onSave(localDraft)}>
+          Kaydet
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -580,40 +930,64 @@ interface UnitRef {
   linkLabel?: string;  // stored as linkedUnitLabel on the unit
 }
 
-function collectAllUnits(building: OfferBuilding): UnitRef[] {
-  const refs: UnitRef[] = [];
-  building.basementFloors.forEach((floor) => {
-    if (!floor.isCommonArea) {
-      floor.units.forEach((u) => {
-        refs.push({ id: u.id, unitId: u.id, label: `${floor.label} - ${u.label ?? `Birim ${u.id}`}` });
-      });
-    }
-  });
-  if (building.groundFloor.exists) {
-    building.groundFloor.units.forEach((u) => {
-      const num = u.unitNumber ?? u.id;
-      refs.push({
-        id: u.id,
-        unitId: u.id,
-        label: `Zemin Kat - Daire #${num} (${u.ownerName})`,
-        linkLabel: `Zemin Kat Daire ${num}'e ait`,
-      });
-    });
-  }
-  return refs;
+function UnitNumberBadge({ value, reserveSpace = false }: { value?: string; reserveSpace?: boolean }) {
+  if (!value) return reserveSpace ? <Box sx={{ width: 44 }} /> : null;
+
+  return (
+    <Box
+      sx={{
+        minWidth: 36,
+        height: 32,
+        px: 0.75,
+        display: 'grid',
+        placeItems: 'center',
+        borderRadius: 1,
+        bgcolor: '#1B3A5C',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 800,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      #{value}
+    </Box>
+  );
 }
 
-function collectGroundFloorUnits(building: OfferBuilding): UnitRef[] {
-  if (!building.groundFloor.exists) return [];
-  return building.groundFloor.units.map((u) => {
-    const num = u.unitNumber ?? u.id;
-    return {
-      id: u.id,
-      unitId: u.id,
-      label: `Zemin Kat - Daire #${num} (${u.ownerName})`,
-      linkLabel: `Zemin Kat Daire ${num}'e ait`,
-    };
-  });
+function collectAboveGroundUnits(building: OfferBuilding): UnitRef[] {
+  const numMap = computeGlobalNumbers(building);
+  const refs: UnitRef[] = [];
+
+  const pushUnit = (floorLabel: string, unit: OfferUnit) => {
+    if (unit.isMergedInto || (unit.unitType !== 'daire' && unit.unitType !== 'dukkan')) return;
+    const globalNum = numMap.get(unit.id);
+    const typeLabel = unit.unitType === 'dukkan' ? 'Dükkan' : 'Daire';
+    const numberLabel = globalNum ?? String(unit.id);
+
+    refs.push({
+      id: unit.id,
+      unitId: unit.id,
+      label: `${floorLabel} - ${typeLabel} #${numberLabel} (${unit.ownerName})`,
+      linkLabel: `${floorLabel} ${typeLabel} ${numberLabel}'e ait`,
+    });
+  };
+
+  if (building.groundFloor.exists) {
+    building.groundFloor.units.forEach((unit) => pushUnit('Zemin Kat', unit));
+  }
+
+  building.normalFloors
+    .slice()
+    .sort((a, b) => a.floorNumber - b.floorNumber)
+    .forEach((floor) => {
+      floor.units.forEach((unit) => pushUnit(`${floor.floorNumber}. Normal Kat`, unit));
+    });
+
+  if (building.roofFloor.exists) {
+    building.roofFloor.units.forEach((unit) => pushUnit('Çatı Katı', unit));
+  }
+
+  return refs;
 }
 
 // ── UnitsEditor ──────────────────────────────────────────────────────────────
@@ -622,10 +996,8 @@ function UnitsEditor({
   title,
   units,
   tabanAlani,
-  staircaseDeduction,
   allFloors,
-  onApplyToAllFloors,
-  linkedUnitScope,
+  numberMap,
   isBasement,
   companyName,
   onChange,
@@ -633,21 +1005,18 @@ function UnitsEditor({
   title: string;
   units: OfferUnit[];
   tabanAlani: number;
-  staircaseDeduction: number;
   allFloors: OfferBuilding;
-  onApplyToAllFloors?: (unitIndex: number, field: 'brutM2' | 'paymentAmount', value: number | null) => void;
-  linkedUnitScope?: 'groundOnly';
+  numberMap?: Map<number, string>;
   isBasement?: boolean;
   companyName: string;
   onChange: (units: OfferUnit[]) => void;
 }) {
   const [mergingIdx, setMergingIdx] = useState<number | null>(null);
-  const [flash, setFlash] = useState<{ unitIndex: number; field: string } | null>(null);
 
-  const autoM2 = calculateUnitM2(tabanAlani, staircaseDeduction, Math.max(1, units.length));
-  const linkedRefs = linkedUnitScope === 'groundOnly'
-    ? collectGroundFloorUnits(allFloors)
-    : collectAllUnits(allFloors);
+  // Count only primary (non-merged-secondary) units for auto m² computation
+  const primaryCount = Math.max(1, units.filter((u) => !u.isMergedInto).length);
+  const autoM2 = calculateUnitM2(tabanAlani, 0, primaryCount);
+  const linkedRefs = collectAboveGroundUnits(allFloors);
 
   const updateUnit = (index: number, patch: Partial<OfferUnit>) => {
     onChange(units.map((unit, i) => (i === index ? { ...unit, ...patch } : unit)));
@@ -655,9 +1024,9 @@ function UnitsEditor({
 
   const addUnit = () => {
     const defaultUnitType: UnitType = isBasement ? 'depo' : 'daire';
-    const newUnit = makeUnit(units.length + 1, autoM2, undefined, defaultUnitType);
+    const newUnit = makeUnit(getNextUnitId(allFloors, units), autoM2, undefined, defaultUnitType);
     const recalc = [...units, newUnit].map((u) =>
-      u.manualM2Override ? u : { ...u, brutM2: calculateUnitM2(tabanAlani, staircaseDeduction, units.length + 1) },
+      u.manualM2Override ? u : { ...u, brutM2: calculateUnitM2(tabanAlani, 0, units.length + 1) },
     );
     onChange(recalc);
   };
@@ -665,7 +1034,7 @@ function UnitsEditor({
   const removeUnit = (index: number) => {
     if (units.length <= 1) return;
     const next = units.filter((_, i) => i !== index);
-    const recalcM2 = calculateUnitM2(tabanAlani, staircaseDeduction, Math.max(1, next.length));
+    const recalcM2 = calculateUnitM2(tabanAlani, 0, Math.max(1, next.length));
     onChange(next.map((u) => u.manualM2Override ? u : { ...u, brutM2: recalcM2 }));
   };
 
@@ -677,7 +1046,7 @@ function UnitsEditor({
       ? primary.brutM2
       : primary.brutM2 + secondary.brutM2;
     onChange(units.map((u, i) => {
-      if (i === primaryIdx) return { ...u, mergedWithIds: [...(u.mergedWithIds ?? []), secondaryId], brutM2: combinedM2 };
+      if (i === primaryIdx) return { ...u, mergedWithIds: [...(u.mergedWithIds ?? []), secondaryId], brutM2: combinedM2, manualM2Override: true };
       if (u.id === secondaryId) return { ...u, isMergedInto: primary.id };
       return u;
     }));
@@ -709,15 +1078,18 @@ function UnitsEditor({
       </Box>
       <Stack spacing={1.5}>
         {units.map((unit, index) => {
+          const globalNumber = numberMap?.get(unit.id);
+
           // Secondary (absorbed) unit — show collapsed indicator
           if (unit.isMergedInto != null) {
+            const mergedIntoNumber = numberMap?.get(unit.isMergedInto) ?? String(unit.isMergedInto);
             return (
               <Box
                 key={index}
                 sx={{ p: 1, bgcolor: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 1, opacity: 0.65 }}
               >
                 <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                  Birim #{unit.id} ({unit.ownerName}) — #{unit.isMergedInto} ile birleştirildi
+                  Birim {globalNumber ? `#${globalNumber}` : `#${unit.id}`} ({unit.ownerName}) — #{mergedIntoNumber} ile birleştirildi
                 </Typography>
               </Box>
             );
@@ -729,14 +1101,17 @@ function UnitsEditor({
           if (isBasement) {
             // ── Basement unit row ──────────────────────────────────────────────
             const unitType = unit.unitType ?? 'depo';
-            const showOwner = unitType === 'depo' || unitType === 'diger';
-            const showPayment = unitType === 'diger';
-            const showLinked = unitType === 'depo' || unitType === 'diger';
+            const isNumberedBasementUnit = unitType === 'daire' || unitType === 'dukkan';
+            const showOwner = isNumberedBasementUnit || unitType === 'depo' || unitType === 'diger';
+            const showPayment = (isNumberedBasementUnit || unitType === 'diger') && unit.ownerType === 'tapu';
+            const showLinked = isNumberedBasementUnit;
 
             const handleUnitTypeChange = (newType: UnitType) => {
               const isNullOwnerType = newType === 'ortak_alan' || newType === 'siginak';
               const newOwnerType = isNullOwnerType ? null : (unit.ownerType === null ? 'tapu' : unit.ownerType);
               const nameMap: Partial<Record<UnitType, string>> = {
+                daire: 'TAPU SAHİBİ',
+                dukkan: 'TAPU SAHİBİ',
                 depo: 'DEPO',
                 siginak: 'SIĞINAK',
                 ortak_alan: 'ORTAK ALAN',
@@ -752,6 +1127,10 @@ function UnitsEditor({
                 patch.linkedUnitId = null;
                 patch.linkedUnitLabel = null;
               }
+              if (newType !== 'daire' && newType !== 'dukkan') {
+                patch.linkedUnitId = null;
+                patch.linkedUnitLabel = null;
+              }
               if (newType === 'depo') patch.paymentAmount = null;
               updateUnit(index, patch);
             };
@@ -759,6 +1138,8 @@ function UnitsEditor({
             return (
               <Box key={index}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'start' }}>
+                  <UnitNumberBadge value={globalNumber} />
+
                   {/* Birim Tipi */}
                   <TextField
                     size="small"
@@ -768,13 +1149,15 @@ function UnitsEditor({
                     onChange={(e) => handleUnitTypeChange(e.target.value as UnitType)}
                     sx={{ width: 130 }}
                   >
+                    <MenuItem value="daire">Daire</MenuItem>
+                    <MenuItem value="dukkan">Dükkan</MenuItem>
                     <MenuItem value="depo">Depo</MenuItem>
                     <MenuItem value="siginak">Sığınak</MenuItem>
                     <MenuItem value="ortak_alan">Ortak Alan</MenuItem>
                     <MenuItem value="diger">Diğer</MenuItem>
                   </TextField>
 
-                  {/* Sahip (depo / diger only) */}
+                  {/* Sahip */}
                   {showOwner ? (
                     <TextField
                       size="small"
@@ -814,7 +1197,7 @@ function UnitsEditor({
                     />
                   </Box>
 
-                  {/* Bağlı Birim (depo / diger) */}
+                  {/* Bağlı Birim */}
                   {showLinked ? (
                     <TextField
                       size="small"
@@ -836,13 +1219,13 @@ function UnitsEditor({
                       sx={{ width: 200 }}
                     >
                       <MenuItem value="">— Bağlantı yok —</MenuItem>
-                      {linkedRefs.map((ref) => (
-                        <MenuItem key={ref.unitId} value={ref.unitId}>{ref.label}</MenuItem>
+                      {linkedRefs.filter((ref) => ref.unitId !== unit.id).map((ref) => (
+                        <MenuItem key={`${ref.unitId}-${ref.label}`} value={ref.unitId}>{ref.label}</MenuItem>
                       ))}
                     </TextField>
                   ) : null}
 
-                  {/* Ödeme (diger only) */}
+                  {/* Ödeme */}
                   {showPayment ? (
                     <TextField
                       size="small"
@@ -895,7 +1278,7 @@ function UnitsEditor({
                       sx={{ minWidth: 220 }} autoFocus
                     >
                       {mergeTargets.map((t) => (
-                        <MenuItem key={t.id} value={t.id}>{t.ownerName} (#{t.id})</MenuItem>
+                        <MenuItem key={t.id} value={t.id}>{t.ownerName} (#{numberMap?.get(t.id) ?? t.id})</MenuItem>
                       ))}
                     </TextField>
                     <Button size="small" onClick={() => setMergingIdx(null)}>İptal</Button>
@@ -909,8 +1292,10 @@ function UnitsEditor({
           return (
             <Box key={index}>
               <Box
-                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '120px 1fr 90px 130px 90px 80px 160px 80px 44px' }, gap: 1, alignItems: 'start' }}
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '44px 120px 1fr 90px 120px 90px 160px 80px 44px' }, gap: 1, alignItems: 'start' }}
               >
+                <UnitNumberBadge value={globalNumber} reserveSpace />
+
                 {/* Sahip tipi */}
                 <TextField
                   size="small"
@@ -934,82 +1319,38 @@ function UnitsEditor({
                 <TextField size="small" label="İsim" value={unit.ownerName} onChange={(e) => updateUnit(index, { ownerName: e.target.value })} />
 
                 {/* Brüt m² */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                  <TextField
-                    size="small"
-                    label="Brüt m²"
-                    value={unit.brutM2 === 0 && !unit.manualM2Override ? String(autoM2) : String(unit.brutM2)}
-                    onChange={(e) => updateUnit(index, { brutM2: parseFloat(e.target.value) || 0, manualM2Override: true })}
-                    onBlur={(e) => {
-                      const parsed = Math.max(0, parseFloat(e.target.value) || 0);
-                      updateUnit(index, { brutM2: parsed, manualM2Override: true });
-                    }}
-                    inputProps={{ inputMode: 'decimal' }}
-                  />
-                  {onApplyToAllFloors ? (
-                    <Button
-                      size="small"
-                      sx={{ fontSize: 10, py: 0.25, minHeight: 0, textTransform: 'none' }}
-                      onClick={() => {
-                        onApplyToAllFloors(index, 'brutM2', unit.brutM2);
-                        setFlash({ unitIndex: index, field: 'brutM2' });
-                        setTimeout(() => setFlash(null), 1500);
-                      }}
-                    >
-                      {flash?.unitIndex === index && flash.field === 'brutM2' ? '✓ Uygulandı' : '↓ Tüm katlara'}
-                    </Button>
-                  ) : null}
-                </Box>
+                <TextField
+                  size="small"
+                  label="Brüt m²"
+                  value={unit.brutM2 === 0 && !unit.manualM2Override ? String(autoM2) : String(unit.brutM2)}
+                  onChange={(e) => updateUnit(index, { brutM2: parseFloat(e.target.value) || 0, manualM2Override: true })}
+                  onBlur={(e) => {
+                    const parsed = Math.max(0, parseFloat(e.target.value) || 0);
+                    updateUnit(index, { brutM2: parsed, manualM2Override: true });
+                  }}
+                  inputProps={{ inputMode: 'decimal' }}
+                />
 
                 {/* Ödeme tutarı */}
                 {unit.ownerType === 'tapu' ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                    <TextField
-                      size="small"
-                      label="Ödeme (₺)"
-                      value={unit.paymentAmount ?? ''}
-                      onChange={(e) => updateUnit(index, { paymentAmount: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
-                      onBlur={(e) => {
-                        if (e.target.value !== '') {
-                          updateUnit(index, { paymentAmount: Math.max(0, parseFloat(e.target.value) || 0) });
-                        }
-                      }}
-                      inputProps={{ inputMode: 'decimal' }}
-                    />
-                    {onApplyToAllFloors ? (
-                      <Button
-                        size="small"
-                        sx={{ fontSize: 10, py: 0.25, minHeight: 0, textTransform: 'none' }}
-                        onClick={() => {
-                          onApplyToAllFloors(index, 'paymentAmount', unit.paymentAmount);
-                          setFlash({ unitIndex: index, field: 'paymentAmount' });
-                          setTimeout(() => setFlash(null), 1500);
-                        }}
-                      >
-                        {flash?.unitIndex === index && flash.field === 'paymentAmount' ? '✓ Uygulandı' : '↓ Tüm katlara'}
-                      </Button>
-                    ) : null}
-                  </Box>
+                  <TextField
+                    size="small"
+                    label="Ödeme (₺)"
+                    value={unit.paymentAmount ?? ''}
+                    onChange={(e) => updateUnit(index, { paymentAmount: e.target.value === '' ? null : (parseFloat(e.target.value) || 0) })}
+                    onBlur={(e) => {
+                      if (e.target.value !== '') {
+                        updateUnit(index, { paymentAmount: Math.max(0, parseFloat(e.target.value) || 0) });
+                      }
+                    }}
+                    inputProps={{ inputMode: 'decimal' }}
+                  />
                 ) : (
                   <TextField size="small" label="Ödeme (₺)" disabled value="" />
                 )}
 
                 {/* Etiket */}
                 <TextField size="small" label="Etiket" value={unit.label ?? ''} onChange={(e) => updateUnit(index, { label: e.target.value || null })} />
-
-                {/* Daire No */}
-                <TextField
-                  size="small"
-                  label="Daire No"
-                  value={unit.unitNumber ?? ''}
-                  onChange={(e) => updateUnit(index, { unitNumber: e.target.value === '' ? null : (parseInt(e.target.value, 10) || null) })}
-                  onBlur={(e) => {
-                    if (e.target.value !== '') {
-                      updateUnit(index, { unitNumber: parseInt(e.target.value, 10) || null });
-                    }
-                  }}
-                  inputProps={{ inputMode: 'numeric' }}
-                />
 
                 {/* Bağlı birim */}
                 <TextField
@@ -1031,8 +1372,8 @@ function UnitsEditor({
                   }}
                 >
                   <MenuItem value="">— Bağlantı yok —</MenuItem>
-                  {linkedRefs.map((ref) => (
-                    <MenuItem key={ref.unitId} value={ref.unitId}>{ref.label}</MenuItem>
+                  {linkedRefs.filter((ref) => ref.unitId !== unit.id).map((ref) => (
+                    <MenuItem key={`${ref.unitId}-${ref.label}`} value={ref.unitId}>{ref.label}</MenuItem>
                   ))}
                 </TextField>
 
@@ -1083,7 +1424,7 @@ function UnitsEditor({
                     autoFocus
                   >
                     {mergeTargets.map((t) => (
-                      <MenuItem key={t.id} value={t.id}>{t.ownerName} (#{t.id})</MenuItem>
+                      <MenuItem key={t.id} value={t.id}>{t.ownerName} (#{numberMap?.get(t.id) ?? t.id})</MenuItem>
                     ))}
                   </TextField>
                   <Button size="small" onClick={() => setMergingIdx(null)}>İptal</Button>

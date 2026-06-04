@@ -34,9 +34,18 @@ export async function deleteOfferDocument(projectId: string, id: string): Promis
   await apiClient.delete(`${basePath(projectId)}/${id}`);
 }
 
-export async function getLatestParcelArea(projectId: string): Promise<number | null> {
+export interface ParcelCalculationAreaResult {
+  footprintArea: number | null;
+  floorAreas: Array<{ floorNumber: number; netArea: number }> | null;
+}
+
+export async function getLatestParcelArea(projectId: string): Promise<ParcelCalculationAreaResult> {
   const res = await apiClient.get(`${basePath(projectId)}/parcel-area`);
-  return (res.data as { parcelArea: number | null }).parcelArea;
+  const data = res.data as { footprintArea?: number | null; floorAreas?: Array<{ floorNumber: number; netArea: number }> | null };
+  return {
+    footprintArea: data.footprintArea ?? null,
+    floorAreas: data.floorAreas ?? null,
+  };
 }
 
 export async function downloadOfferPdf(projectId: string, id: string): Promise<Blob> {

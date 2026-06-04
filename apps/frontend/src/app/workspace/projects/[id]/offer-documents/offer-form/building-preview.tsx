@@ -7,7 +7,6 @@ import type {
   OfferBuilding,
   OfferUnit,
   RoofFloor,
-  StreetLabels,
 } from '@/services/offer-documents/types';
 import { computeGlobalNumbers, formatTry } from './building-utils';
 
@@ -27,7 +26,7 @@ const LABEL_SX = {
   whiteSpace: 'normal',
 } as const;
 
-function UnitCell({ unit, globalNum }: { unit: OfferUnit; globalNum: number }) {
+function UnitCell({ unit, globalNum, overrideM2 }: { unit: OfferUnit; globalNum: string | undefined; overrideM2?: string }) {
   const isMila = unit.ownerType === 'mila';
   const isNullOwner = unit.ownerType === null;
   const flexGrow = 1 + (unit.mergedWithIds?.length ?? 0);
@@ -53,28 +52,31 @@ function UnitCell({ unit, globalNum }: { unit: OfferUnit; globalNum: number }) {
       }}
     >
       <Typography sx={{ fontSize: 11, fontWeight: 800, lineHeight: 1.2 }}>{unit.ownerName}</Typography>
-      <Typography sx={{ fontSize: 10 }}>Brüt: {unit.brutM2 || 0} m²</Typography>
+      <Typography sx={{ fontSize: 10 }}>Brüt: {overrideM2 ?? unit.brutM2} m²</Typography>
       {unit.ownerType === 'tapu' && unit.paymentAmount ? (
         <Typography sx={{ fontSize: 10 }}>{formatTry(unit.paymentAmount)}</Typography>
       ) : null}
       {unit.label ? <Typography sx={{ fontSize: 9, mt: 0.5 }}>{unit.label}</Typography> : null}
-      <Box
-        sx={{
-          position: 'absolute',
-          right: 4,
-          bottom: 4,
-          width: 18,
-          height: 18,
-          bgcolor: badgeBg,
-          color: badgeColor,
-          display: 'grid',
-          placeItems: 'center',
-          fontSize: 10,
-          fontWeight: 800,
-        }}
-      >
-        {globalNum}
-      </Box>
+      {globalNum !== undefined ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            right: 4,
+            bottom: 4,
+            minWidth: 18,
+            height: 18,
+            px: 0.5,
+            bgcolor: badgeBg,
+            color: badgeColor,
+            display: 'grid',
+            placeItems: 'center',
+            fontSize: 10,
+            fontWeight: 800,
+          }}
+        >
+          {globalNum}
+        </Box>
+      ) : null}
       {unit.linkedUnitLabel ? (
         <Typography sx={{ fontSize: 8, fontStyle: 'italic', mt: 0.25, lineHeight: 1.2 }}>
           {unit.linkedUnitLabel}
@@ -84,76 +86,59 @@ function UnitCell({ unit, globalNum }: { unit: OfferUnit; globalNum: number }) {
   );
 }
 
-function StreetLabelsView({ labels }: { labels?: StreetLabels }) {
-  if (!labels?.left && !labels?.right) return null;
-  return (
-    <>
-      {labels.left ? (
-        <Typography sx={{ position: 'absolute', left: -36, top: '45%', transform: 'rotate(-90deg)', fontSize: 10 }}>
-          {labels.left}
-        </Typography>
-      ) : null}
-      {labels.right ? (
-        <Typography sx={{ position: 'absolute', right: -36, top: '45%', transform: 'rotate(90deg)', fontSize: 10 }}>
-          {labels.right}
-        </Typography>
-      ) : null}
-    </>
-  );
-}
-
 function FloorRow({
   label,
+  sublabel,
   units,
   numMap,
-  streetLabels,
+  hasSideMargin,
+  overrideM2,
 }: {
   label: string;
+  sublabel?: string;
   units: OfferUnit[];
-  numMap: Map<number, number>;
-  streetLabels?: StreetLabels;
+  numMap: Map<number, string>;
+  hasSideMargin?: boolean;
+  overrideM2?: string;
 }) {
   const visibleUnits = units.filter((u) => !u.isMergedInto);
   return (
-    <>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: `1fr ${LABEL_COL}`,
-          minHeight: 70,
-          borderTop: `1px solid ${NAVY}`,
-          position: 'relative',
-        }}
-      >
-        <StreetLabelsView labels={streetLabels} />
-        <Box sx={{ display: 'flex', gap: 0.5, p: 0.5 }}>
-          {visibleUnits.length > 0
-            ? visibleUnits.map((unit) => (
-              <UnitCell
-                key={`${label}-${unit.id}`}
-                unit={unit}
-                globalNum={numMap.get(unit.id) ?? unit.id}
-              />
-            ))
-            : <Box sx={{ flex: 1, border: `1px solid ${NAVY}`, p: 1, fontSize: 12 }}>Birim eklenmedi</Box>}
-        </Box>
-        <Box sx={LABEL_SX}>{label}</Box>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: `1fr ${LABEL_COL}`,
+        minHeight: 70,
+        borderTop: `1px solid ${NAVY}`,
+        ...(hasSideMargin ? { ml: '40px', mr: '40px' } : {}),
+      }}
+    >
+      <Box sx={{ display: 'flex', gap: 0.5, p: 0.5 }}>
+        {visibleUnits.length > 0
+          ? visibleUnits.map((unit) => (
+            <UnitCell
+              key={`${label}-${unit.id}`}
+              unit={unit}
+              globalNum={numMap.get(unit.id)}
+              overrideM2={overrideM2}
+            />
+          ))
+          : <Box sx={{ flex: 1, border: `1px solid ${NAVY}`, p: 1, fontSize: 12 }}>Birim eklenmedi</Box>}
       </Box>
-      {streetLabels?.bottom ? (
-        <Typography sx={{ textAlign: 'center', fontSize: 10, mt: 0.3 }}>
-          {streetLabels.bottom}
-        </Typography>
-      ) : null}
-    </>
+      <Box sx={LABEL_SX}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+          {label}
+          {sublabel ? <Typography sx={{ fontSize: 9, fontWeight: 400 }}>{sublabel}</Typography> : null}
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
-function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<number, number> }) {
+function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<number, string> }) {
   const visibleUnits = floor.exists ? floor.units.filter((u) => !u.isMergedInto) : [];
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: `1fr ${LABEL_COL}` }}>
       <Box sx={{ p: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-        {/* Roof triangle using clip-path (full width, 50px tall) */}
         <Box
           sx={{
             width: '100%',
@@ -165,7 +150,7 @@ function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<number, numb
         {visibleUnits.length > 0 ? (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             {visibleUnits.map((unit) => (
-              <UnitCell key={unit.id} unit={unit} globalNum={numMap.get(unit.id) ?? unit.id} />
+              <UnitCell key={unit.id} unit={unit} globalNum={numMap.get(unit.id)} />
             ))}
           </Box>
         ) : null}
@@ -175,45 +160,56 @@ function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<number, numb
   );
 }
 
-function NormalFloorRow({ floor, numMap }: { floor: NormalFloor; numMap: Map<number, number> }) {
-  return <FloorRow label={`${floor.floorNumber}.NORMAL KAT`} units={floor.units} numMap={numMap} />;
+function NormalFloorRow({ floor, numMap, floorAreas }: { floor: NormalFloor; numMap: Map<number, string>; floorAreas?: { floorNumber: number; netArea: number }[] | null }) {
+  const visibleUnits = floor.units.filter((u) => !u.isMergedInto);
+  const visibleUnitCount = Math.max(1, visibleUnits.length);
+  const floorEntry = floorAreas?.find((fa) => fa.floorNumber === floor.floorNumber + 1);
+  const perUnitArea = floorEntry
+    ? (floorEntry.netArea / visibleUnitCount).toFixed(2)
+    : null;
+  const sublabel = floorEntry ? `${floorEntry.netArea.toFixed(2)} m²` : undefined;
+  return (
+    <FloorRow
+      label={`${floor.floorNumber}.NORMAL KAT`}
+      units={floor.units}
+      numMap={numMap}
+      sublabel={sublabel}
+      overrideM2={perUnitArea ?? undefined}
+    />
+  );
 }
 
-function BasementFloorRow({ floor, numMap }: { floor: BasementFloor; numMap: Map<number, number> }) {
+function BasementFloorRow({ floor, numMap, hasSideMargin }: { floor: BasementFloor; numMap: Map<number, string>; hasSideMargin?: boolean }) {
   if (floor.isCommonArea) {
     return (
-      <>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: `1fr ${LABEL_COL}`,
-            minHeight: 70,
-            borderTop: `1px solid ${NAVY}`,
-            position: 'relative',
-          }}
-        >
-          <StreetLabelsView labels={floor.streetLabels} />
-          <Box sx={{ display: 'grid', placeItems: 'center', border: `1px solid ${NAVY}`, m: 0.5, fontWeight: 800, color: NAVY }}>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 800 }}>{floor.commonAreaM2 ?? 0} m²</Typography>
-              <Typography sx={{ fontSize: 12 }}>{floor.commonAreaLabel ?? 'ORTAK ALAN'}</Typography>
-            </Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: `1fr ${LABEL_COL}`,
+          minHeight: 70,
+          borderTop: `1px solid ${NAVY}`,
+          ...(hasSideMargin ? { ml: '40px', mr: '40px' } : {}),
+        }}
+      >
+        <Box sx={{ display: 'grid', placeItems: 'center', border: `1px solid ${NAVY}`, m: 0.5, fontWeight: 800, color: NAVY }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 800 }}>{floor.commonAreaM2 ?? 0} m²</Typography>
+            <Typography sx={{ fontSize: 12 }}>{floor.commonAreaLabel ?? 'ORTAK ALAN'}</Typography>
           </Box>
-          <Box sx={LABEL_SX}>{floor.label}</Box>
         </Box>
-        {floor.streetLabels.bottom ? (
-          <Typography sx={{ textAlign: 'center', fontSize: 10, mt: 0.3 }}>
-            {floor.streetLabels.bottom}
-          </Typography>
-        ) : null}
-      </>
+        <Box sx={LABEL_SX}>{floor.label}</Box>
+      </Box>
     );
   }
-  return <FloorRow label={floor.label} units={floor.units} numMap={numMap} streetLabels={floor.streetLabels} />;
+  return <FloorRow label={floor.label} units={floor.units} numMap={numMap} hasSideMargin={hasSideMargin} />;
 }
 
-export function BuildingPreview({ parcelTitle, building }: { parcelTitle: string; building: OfferBuilding }) {
+export function BuildingPreview({ parcelTitle, building, floorAreas }: { parcelTitle: string; building: OfferBuilding; floorAreas?: { floorNumber: number; netArea: number }[] | null }) {
   const numMap = computeGlobalNumbers(building);
+  const groundFloorArea = floorAreas?.find((fa) => fa.floorNumber === 1)?.netArea;
+  const upperFloorArea = floorAreas?.find((fa) => fa.floorNumber === 2)?.netArea;
+  const hasOverhang = !!(groundFloorArea && upperFloorArea && upperFloorArea > groundFloorArea);
+
   return (
     <Box sx={{ border: '1px solid #d1d5db', borderRadius: 1, p: 1.5, bgcolor: '#fff', position: 'sticky', top: 16 }}>
       <Box sx={{ bgcolor: NAVY, color: '#fff', textAlign: 'center', fontWeight: 800, py: 1, px: 1, fontSize: 13 }}>
@@ -225,18 +221,28 @@ export function BuildingPreview({ parcelTitle, building }: { parcelTitle: string
       <Box sx={{ border: `2px solid ${NAVY}`, p: 1, mx: 3 }}>
         <RoofRow floor={building.roofFloor} numMap={numMap} />
         {building.normalFloors.slice().reverse().map((floor) => (
-          <NormalFloorRow key={floor.floorNumber} floor={floor} numMap={numMap} />
+          <NormalFloorRow
+            key={floor.floorNumber}
+            floor={floor}
+            numMap={numMap}
+            floorAreas={floorAreas}
+          />
         ))}
         {building.groundFloor.exists ? (
           <FloorRow
             label="ZEMİN KAT"
             units={building.groundFloor.units}
             numMap={numMap}
-            streetLabels={building.groundFloor.streetLabels}
+            hasSideMargin={hasOverhang}
           />
         ) : null}
         {building.basementFloors.map((floor, index) => (
-          <BasementFloorRow key={`${floor.label}-${index}`} floor={floor} numMap={numMap} />
+          <BasementFloorRow
+            key={`${floor.label}-${index}`}
+            floor={floor}
+            numMap={numMap}
+            hasSideMargin={hasOverhang}
+          />
         ))}
       </Box>
     </Box>

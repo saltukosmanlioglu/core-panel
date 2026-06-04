@@ -1,40 +1,75 @@
 import type {
+  NormalFloor,
   OfferBuilding,
   OfferUnit,
   StreetLabels,
   UnitType,
 } from '@/services/offer-documents/types';
 
-export function computeGlobalNumbers(building: OfferBuilding): Map<number, number> {
-  const map = new Map<number, number>();
+export function computeGlobalNumbers(building: OfferBuilding): Map<number, string> {
+  const map = new Map<number, string>();
+  const aboveGroundLinkCounts = new Map<number, number>();
 
-  // Above-ground: zemin → normal floors (ascending) → çatı, counter starts at 1
-  let n = 1;
+  let nextNumber = 1;
   const aboveGround: OfferUnit[] = [
     ...(building.groundFloor.exists ? building.groundFloor.units : []),
-    ...building.normalFloors.flatMap((f) => f.units),
+    ...building.normalFloors
+      .slice()
+      .sort((a, b) => a.floorNumber - b.floorNumber)
+      .flatMap((floor) => floor.units),
     ...(building.roofFloor.exists ? building.roofFloor.units : []),
   ];
-  for (const u of aboveGround) {
-    if (!u.isMergedInto) map.set(u.id, n++);
+
+  for (const unit of aboveGround) {
+    if (!unit.isMergedInto && (unit.unitType === 'daire' || unit.unitType === 'dukkan')) {
+      map.set(unit.id, String(nextNumber));
+      nextNumber += 1;
+    }
   }
 
-  // Basements: deepest (last index) → surface (index 0), separate counter from 1
-  let b = 1;
-  for (const floor of [...building.basementFloors].reverse()) {
-    if (!floor.isCommonArea) {
-      for (const u of floor.units) {
-        if (!u.isMergedInto) map.set(u.id, b++);
+  for (const floor of building.basementFloors) {
+    if (floor.isCommonArea) continue;
+
+    for (const unit of floor.units) {
+      if (unit.isMergedInto || (unit.unitType !== 'daire' && unit.unitType !== 'dukkan')) continue;
+
+      if (unit.linkedUnitId !== null) {
+        const linkedNumber = map.get(unit.linkedUnitId);
+        if (linkedNumber) {
+          const subNumber = (aboveGroundLinkCounts.get(unit.linkedUnitId) ?? 0) + 1;
+          aboveGroundLinkCounts.set(unit.linkedUnitId, subNumber);
+          map.set(unit.id, `${linkedNumber}.${subNumber}`);
+          continue;
+        }
       }
+
+      map.set(unit.id, String(nextNumber));
+      nextNumber += 1;
     }
   }
 
   return map;
 }
 
-export function calculateUnitM2(tabanAlani: number, merdivenPayi: number, unitCount: number): number {
+export function floorsAreIdentical(floors: NormalFloor[]): boolean {
+  if (floors.length <= 1) return true;
+  const ref = floors[0].units;
+  return floors.every(
+    (floor) =>
+      floor.units.length === ref.length &&
+      floor.units.every(
+        (u, i) =>
+          u.ownerType === ref[i].ownerType &&
+          u.ownerName === ref[i].ownerName &&
+          u.brutM2 === ref[i].brutM2 &&
+          u.unitType === ref[i].unitType,
+      ),
+  );
+}
+
+export function calculateUnitM2(tabanAlani: number, _merdivenPayi: number, unitCount: number): number {
   if (unitCount <= 0) return 0;
-  const netAlan = Math.max(0, tabanAlani - merdivenPayi);
+  const netAlan = tabanAlani;
   return Math.round((netAlan / unitCount + Number.EPSILON) * 100) / 100;
 }
 
@@ -73,16 +108,16 @@ export function makeUnit(id: number, brutM2 = 0, unitNumber?: number, unitType: 
 }
 
 export function defaultBuilding(tabanAlani = 0): OfferBuilding {
-  const brutM2 = calculateUnitM2(tabanAlani, 17.5, 2);
+  const brutM2 = calculateUnitM2(tabanAlani, 0, 2);
   return {
-    staircaseDeduction: 17.5,
+    staircaseDeduction: 0,
     basementFloors: [
       {
         label: '1. BODRUM KAT',
         isCommonArea: true,
         commonAreaM2: tabanAlani || null,
         commonAreaLabel: 'ORTAK ALAN',
-        units: [makeUnit(1, brutM2, undefined, 'depo'), makeUnit(2, brutM2, undefined, 'depo')],
+        units: [makeUnit(7, brutM2, undefined, 'depo'), makeUnit(8, brutM2, undefined, 'depo')],
         streetLabels: emptyStreetLabels,
       },
     ],
@@ -94,12 +129,12 @@ export function defaultBuilding(tabanAlani = 0): OfferBuilding {
     normalFloors: [
       {
         floorNumber: 1,
-        units: [makeUnit(1, brutM2), makeUnit(2, brutM2)],
+        units: [makeUnit(3, brutM2), makeUnit(4, brutM2)],
       },
     ],
     roofFloor: {
       exists: false,
-      units: [makeUnit(1, brutM2), makeUnit(2, brutM2)],
+      units: [makeUnit(5, brutM2), makeUnit(6, brutM2)],
     },
   };
 }

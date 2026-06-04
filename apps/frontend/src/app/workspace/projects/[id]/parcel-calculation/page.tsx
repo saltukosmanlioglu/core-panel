@@ -228,6 +228,26 @@ export default function ParcelCalculationPage() {
     [edgeRoles, edgeOverhangActive, edgeOverhangs],
   );
   const visualizationFootprintVertices = calculationResult?.footprintVertices ?? localFootprintVertices ?? undefined;
+  const perFloorOverhangVertices = useMemo(() => {
+    if (!visualizationFootprintVertices || visualizationFootprintVertices.length < 3) return [];
+    const overhangs = calculationResult?.overhangs ?? [];
+    const upperFloors = overhangs
+      .filter((o) => o.floor > 1 && (o.front > 0 || o.back > 0 || o.left > 0 || o.right > 0))
+      .slice(0, 3);
+    return upperFloors
+      .map((overhang, index) => {
+        const perEdge = edgeRoles.map((role) => {
+          if (role === 'front') return overhang.front;
+          if (role === 'back') return overhang.back;
+          if (role === 'side') return (overhang.left + overhang.right) / 2;
+          return 0;
+        });
+        const vertices = getOverhangVertices(visualizationFootprintVertices, perEdge);
+        const label = index < 2 ? `${overhang.floor}. Kat çıkma` : 'Üst kat çıkma';
+        return { floor: overhang.floor, label, vertices: vertices ?? [] };
+      })
+      .filter((item) => item.vertices.length >= 3);
+  }, [calculationResult, visualizationFootprintVertices, edgeRoles]);
   const maxOverhangs = useMemo(() => {
     const sideValues = effectiveOverhangs.filter((_, index) => edgeRoles[index] === 'side');
     return {
@@ -536,7 +556,10 @@ export default function ParcelCalculationPage() {
       };
       const saved = await createParcelCalculation(projectId, payload);
       setCalculationResult(saved);
-      setCalculations((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setCalculations((current) => {
+        const updated = [saved, ...current.filter((item) => item.id !== saved.id)];
+        return updated.slice(0, 3);
+      });
       showSuccess('Hesaplama kaydedildi');
     } catch (saveError) {
       showError(getErrorMessage(saveError, 'Hesaplama kaydedilemedi'));
@@ -742,6 +765,7 @@ export default function ParcelCalculationPage() {
           parcelVertices={parcelVertices}
           visualizationFootprintVertices={visualizationFootprintVertices}
           visualOverhangVertices={visualOverhangVertices}
+          perFloorOverhangVertices={perFloorOverhangVertices}
           setbacks={currentSetbacks}
           maxOverhangs={maxOverhangs}
           edgeRoles={edgeRoles}

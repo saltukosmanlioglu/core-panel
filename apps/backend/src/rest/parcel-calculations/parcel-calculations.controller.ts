@@ -427,6 +427,12 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     const projectId = String(req.params.projectId);
     if (!(await ensureProject(companyId, projectId, res))) return;
 
+    const existing = await repo.findByProjectId(companyId, projectId);
+    if (existing.length >= 3) {
+      const oldest = [...existing].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+      if (oldest) await repo.deleteById(companyId, oldest.id);
+    }
+
     const data = buildCalculationData(req.body as Record<string, unknown>, undefined, req.userId);
     const calculation = await repo.create(companyId, projectId, data);
     res.status(201).json({ calculation });

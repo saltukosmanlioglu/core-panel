@@ -2,10 +2,17 @@
 
 import type { Point } from '@/services/parcel-calculations/types';
 
+interface PerFloorOverhangPolygon {
+  floor: number;
+  label: string;
+  vertices: Point[];
+}
+
 interface ParcelVisualizationProps {
   parcelVertices: Point[];
   footprintVertices?: Point[];
   overhangVertices?: Point[];
+  perFloorOverhangVertices?: PerFloorOverhangPolygon[];
   width?: number;
   height?: number;
   showLabels?: boolean;
@@ -139,6 +146,7 @@ export function ParcelVisualization({
   parcelVertices,
   footprintVertices,
   overhangVertices,
+  perFloorOverhangVertices,
   width = 400,
   height = 400,
   showLabels = true,
@@ -157,6 +165,7 @@ export function ParcelVisualization({
     ...parcelVertices,
     ...(footprintVertices ?? []),
     ...(overhangVertices ?? []),
+    ...(perFloorOverhangVertices?.flatMap((f) => f.vertices) ?? []),
   ];
 
   if (allVertices.length === 0 || parcelVertices.length < 3) {
@@ -254,6 +263,58 @@ export function ParcelVisualization({
           strokeDasharray="4,4"
         />
       ) : null}
+
+      {perFloorOverhangVertices?.map(({ floor, label, vertices: pverts }) => {
+        if (pverts.length < 3) return null;
+        const base = pverts.map(toSvg);
+        const pts = rot !== 0 ? base.map((p) => rotatePt(p, cx, cy, rot)) : base;
+        if (pts.length < 3) return null;
+        const fpCx = footprintCentroid?.x ?? pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const fpCy = footprintCentroid?.y ?? pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const outermost = pts.reduce<{ x: number; y: number; d: number }>((best, p, i) => {
+          const next = pts[(i + 1) % pts.length]!;
+          const midX = (p.x + next.x) / 2;
+          const midY = (p.y + next.y) / 2;
+          const d = Math.sqrt((midX - fpCx) ** 2 + (midY - fpCy) ** 2);
+          return d > best.d ? { x: midX, y: midY, d } : best;
+        }, { x: fpCx, y: fpCy - 20, d: -Infinity });
+        const ovhPolygon = (
+          <polygon
+            points={polygonPoints(pts)}
+            fill="rgba(74,124,181,0.07)"
+            stroke="#4A7CB5"
+            strokeWidth={1.5}
+            strokeDasharray="6,3"
+            opacity={0.8}
+          />
+        );
+        if (outermost.d < 10) return <g key={`floor-overhang-${floor}`}>{ovhPolygon}</g>;
+        const outDx = outermost.x - fpCx;
+        const outDy = outermost.y - fpCy;
+        const outLen = Math.sqrt(outDx ** 2 + outDy ** 2) || 1;
+        const textX = outermost.x + (outDx / outLen) * 12;
+        const textY = outermost.y + (outDy / outLen) * 12;
+        return (
+          <g key={`floor-overhang-${floor}`}>
+            {ovhPolygon}
+            <text
+              x={textX}
+              y={textY}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={9}
+              fill="#4A7CB5"
+              fontWeight={600}
+              fontFamily="sans-serif"
+              paintOrder="stroke"
+              stroke="white"
+              strokeWidth={2}
+            >
+              {label}
+            </text>
+          </g>
+        );
+      })}
 
       {footprintPoints.length >= 3 ? (
         <polygon

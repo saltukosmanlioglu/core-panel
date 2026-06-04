@@ -362,17 +362,73 @@ export async function deleteById(tdb: TenantDb, projectId: string, id: string): 
   return rowCount > 0;
 }
 
-export async function getParcelCalculationArea(tdb: TenantDb, projectId: string): Promise<number | null> {
-  const { rows } = await tdb.query<{ footprint_area: string | number | null }>(
-    `SELECT footprint_area
+export interface FloorAreaEntry {
+  floorNumber: number;
+  netArea: number;
+}
+
+export interface ParcelCalculationAreaResult {
+  footprintArea: number | null;
+  floorAreas: FloorAreaEntry[] | null;
+}
+
+export async function getParcelCalculationArea(tdb: TenantDb, projectId: string): Promise<ParcelCalculationAreaResult> {
+  const { rows } = await tdb.query<{
+    footprint_area: string | number | null;
+    footprint_vertices: unknown;
+    overhangs: unknown;
+  }>(
+    `SELECT footprint_area, footprint_vertices, overhangs
      FROM ${tdb.ref('parcel_calculations')}
      WHERE project_id = $1 AND footprint_area IS NOT NULL
      ORDER BY created_at DESC
      LIMIT 1`,
     [projectId],
   );
-  const value = rows[0]?.footprint_area;
-  if (value === null || value === undefined) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+
+  const row = rows[0];
+  if (!row) return { footprintArea: null, floorAreas: null };
+
+  const rawFootprint = Number(row.footprint_area);
+  const footprintArea = Number.isFinite(rawFootprint) ? rawFootprint : null;
+  if (!footprintArea) return { footprintArea: null, floorAreas: null };
+
+  interface StoredOverhang { floor: number; front: number; back: number; left: number; right: number }
+  interface StoredPoint { x: number; y: number }
+
+  const overhangs = Array.isArray(row.overhangs) ? (row.overhangs as StoredOverhang[]) : [];
+  const footprintVertices = Array.isArray(row.footprint_vertices) ? (row.footprint_vertices as StoredPoint[]) : [];
+
+  const hasOverhangs = overhangs.some(
+    (o) => Number(o.front) > 0 || Number(o.back) > 0 || Number(o.left) > 0 || Number(o.right) > 0,
+  );
+
+  if (!hasOverhangs || footprintVertices.length < 3) {
+    return { footprintArea, floorAreas: null };
+  }
+
+  const CM = 100;
+  const SQ = 10000;
+  const minX = Math.min(...footprintVertices.map((v) => Number(v.x)));
+  const maxX = Math.max(...footprintVertices.map((v) => Number(v.x)));
+  const minY = Math.min(...footprintVertices.map((v) => Number(v.y)));
+  const maxY = Math.max(...footprintVertices.map((v) => Number(v.y)));
+
+  const floorAreas: FloorAreaEntry[] = overhangs.map((o) => {
+    const floor = Number(o.floor);
+    if (floor === 1) {
+      return { floorNumber: 1, netArea: Math.round(footprintArea * 100) / 100 };
+    }
+    const expMinX = minX - Number(o.left) * CM;
+    const expMaxX = maxX + Number(o.right) * CM;
+    const expMinY = minY - Number(o.back) * CM;
+    const expMaxY = maxY + Number(o.front) * CM;
+    const expanded = Math.max(0, expMaxX - expMinX) * Math.max(0, expMaxY - expMinY) / SQ;
+    return {
+      floorNumber: floor,
+      netArea: Math.round(expanded * 100) / 100,
+    };
+  });
+
+  return { footprintArea, floorAreas };
 }
