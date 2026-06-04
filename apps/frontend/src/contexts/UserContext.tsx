@@ -49,6 +49,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
 export function useUser(): UserContextType {
   const ctx = useContext(UserContext);
-  if (!ctx) throw new Error('useUser must be used within UserProvider');
+  if (!ctx) {
+    if (process.env.NODE_ENV !== 'production') {
+      throw new Error('useUser must be used within UserProvider');
+    }
+    return { user: null, setUser: () => {}, isLoading: false, setIsLoading: () => {}, logout: () => {} };
+  }
   return ctx;
 }

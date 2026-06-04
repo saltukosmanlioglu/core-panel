@@ -9,6 +9,7 @@ import { CrudModal } from '@/components/crud-modal';
 import { DataTable } from '@/components/data-table';
 import { PageHeader } from '@/components/page-header';
 import { getAdminUsersApi, deleteAdminUserApi, createAdminUserApi, updateAdminUserApi } from '@/services/admin/api';
+import type { CreateAdminUserPayload, UpdateAdminUserPayload } from '@/services/admin/types';
 import { UserRole, type User } from '@core-panel/shared';
 import { useSnackbar } from '@/hooks/useSnackbar';
 
@@ -72,12 +73,18 @@ export default function UsersPage() {
     }
     setSaving(true);
     try {
-      const payload: any = { name: formData.name, email: formData.email, role: formData.role };
-      if (formData.password) payload.password = formData.password;
-
       if (editingUser) {
+        const payload: UpdateAdminUserPayload = { name: formData.name, email: formData.email, role: formData.role };
+        if (formData.password) payload.password = formData.password;
         await updateAdminUserApi(editingUser.id, payload);
       } else {
+        const payload: CreateAdminUserPayload = {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role,
+          password: formData.password,
+          isActive: true,
+        };
         await createAdminUserApi(payload);
       }
       handleClose();

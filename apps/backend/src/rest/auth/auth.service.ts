@@ -89,7 +89,7 @@ export async function verifyMfaSetup(userId: string, otpCode: string): Promise<{
 
   await usersRepo.update(userId, { mfaEnabled: true });
 
-  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null);
+  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null, user.isActive);
   return { fullToken };
 }
 
@@ -114,7 +114,7 @@ export async function verifyMfa(userId: string, otpCode: string): Promise<{ full
 
   await usersRepo.update(userId, { lastLogin: new Date() });
 
-  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null);
+  const fullToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null, user.isActive);
   return { fullToken };
 }
 

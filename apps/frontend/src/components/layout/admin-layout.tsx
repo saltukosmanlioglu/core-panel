@@ -43,7 +43,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     if (!isAllowedRole) router.push('/workspace');
   }, [isLoading, user, isAllowedRole, router]);
 
-  const sidebarWidth = sidebarCollapsed ? 56 : 240;
+  const sidebarWidth = sidebarCollapsed ? 56 : 260;
   const companyLogoUrl = companyLogoPath ? `${API_URL}${companyLogoPath}` : null;
   const companyProfileIcon = companyLogoUrl ? (
     <Box
@@ -80,7 +80,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       items: [
         {
           label: 'Şirketim',
-          icon: <BusinessIcon sx={{ fontSize: 20 }} />,
+          icon: <BusinessIcon sx={{ fontSize: 18 }} />,
           href: '/admin/my-company',
           defaultOpen: true,
           toggleOnly: true,
@@ -97,8 +97,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     {
       label: 'Yönetim',
       items: [
-        { label: 'İnşaatlar', icon: <ApartmentIcon sx={{ fontSize: 20 }} />, href: '/admin/projects' },
-        { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 20 }} />, href: '/admin/tenders' },
+        { label: 'İnşaatlar', icon: <ApartmentIcon sx={{ fontSize: 18 }} />, href: '/admin/projects' },
+        { label: 'İhaleler', icon: <GavelIcon sx={{ fontSize: 18 }} />, href: '/admin/tenders' },
       ],
     },
   ];

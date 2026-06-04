@@ -24,7 +24,8 @@ export function errorHandler(
   }
 
   // Handle known Postgres errors before anything else
-  const pgCode = (err as unknown as Record<string, unknown>).code as string | undefined;
+  const errAsUnknown = err as unknown as Record<string, unknown>;
+  const pgCode = typeof errAsUnknown.code === 'string' ? errAsUnknown.code : undefined;
   if (pgCode && PG_ERRORS[pgCode]) {
     const pgError = PG_ERRORS[pgCode]!;
     console.error(`[${new Date().toISOString()}] PG Error ${pgCode} — ${req.method} ${req.path}`, err.message);

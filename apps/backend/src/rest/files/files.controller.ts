@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { TenantDb } from '../../lib/tenantDb';
 import {
@@ -216,15 +217,25 @@ export const deleteFile = async (req: Request, res: Response, next: NextFunction
     const tdb = new TenantDb(String(req.params.companyId));
     const table = tdb.ref('file_info');
 
-    const { rowCount } = await tdb.query(
-      `DELETE FROM ${table} WHERE id = $1`,
+    const { rows } = await tdb.query<FileRow>(
+      `DELETE FROM ${table} WHERE id = $1 RETURNING *`,
       [String(req.params.id)],
     );
 
-    if (rowCount === 0) {
+    if (rows.length === 0) {
       res.status(404).json({ error: 'File not found', code: 'NOT_FOUND' });
       return;
     }
+
+    const filePath = rows[0]!.file_path;
+    if (filePath) {
+      await fs.promises.unlink(filePath).catch((err: unknown) => {
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error(`[deleteFile] Failed to unlink ${filePath}:`, err);
+        }
+      });
+    }
+
     res.json({ status: 'ok' });
   } catch (err) {
     next(err);

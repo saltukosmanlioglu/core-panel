@@ -21,9 +21,11 @@ export default function WorkspacePage() {
   useEffect(() => {
     Promise.all([getProjectsApi(), getTendersApi()])
       .then(([projects, tenders]) => {
-        setProjectCount(projects.length);
-        setTenderCount(tenders.length);
-        setOpenTenderCount(tenders.filter((t) => t.status === 'open').length);
+        const safeProjects = Array.isArray(projects) ? projects : [];
+        const safeTenders = Array.isArray(tenders) ? tenders : [];
+        setProjectCount(safeProjects.length);
+        setTenderCount(safeTenders.length);
+        setOpenTenderCount(safeTenders.filter((t) => t.status === 'open').length);
       })
       .catch((err: unknown) => {
         const msg = axios.isAxiosError(err)

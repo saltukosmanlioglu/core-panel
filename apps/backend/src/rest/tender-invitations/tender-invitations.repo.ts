@@ -1,4 +1,5 @@
 import { pool } from '../../db/connection';
+import { AppError } from '../../lib/AppError';
 import { TenantDb } from '../../lib/tenantDb';
 
 interface TenderInvitationRow {
@@ -18,6 +19,18 @@ export async function findByTenderId(tdb: TenantDb, tenderId: string): Promise<s
 }
 
 export async function replaceAll(tdb: TenantDb, tenderId: string, tenantIds: string[]): Promise<void> {
+  if (tenantIds.length > 0) {
+    const { rows } = await tdb.query<{ id: string }>(
+      `SELECT id FROM ${tdb.ref('tenants')} WHERE id = ANY($1)`,
+      [tenantIds],
+    );
+    const foundIds = new Set(rows.map((r) => r.id));
+    const invalid = tenantIds.filter((id) => !foundIds.has(id));
+    if (invalid.length > 0) {
+      throw new AppError('Geçersiz taşeron ID(leri)', 400, 'INVALID_TENANT_IDS');
+    }
+  }
+
   const client = await pool.connect();
 
   try {

@@ -96,9 +96,6 @@ export async function findByEmail(email: string): Promise<User | null> {
   return result[0] ?? null;
 }
 
-export async function findAllByTenantId(_tenantId: string): Promise<UserWithTenant[]> {
-  return [];
-}
 
 export async function findAllByCompanyId(companyId: string): Promise<UserWithTenant[]> {
   const result = await db

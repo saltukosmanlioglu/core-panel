@@ -1,0 +1,79 @@
+export type OwnerType = 'mila' | 'tapu' | null;
+export type UnitType = 'daire' | 'dukkan' | 'depo' | 'siginak' | 'ortak_alan' | 'diger';
+
+export interface OfferUnit {
+  id: number;
+  ownerType: OwnerType;
+  ownerName: string;
+  unitType: UnitType;
+  brutM2: number;
+  paymentAmount: number | null;
+  label: string | null;
+  unitNumber: number | null;
+  linkedUnitId: number | null;
+  linkedUnitLabel: string | null;
+  manualM2Override: boolean;
+  mergedWithIds: number[];
+  isMergedInto: number | null;
+}
+
+export interface StreetLabels {
+  left: string | null;
+  right: string | null;
+  bottom: string | null;
+}
+
+export interface BasementFloor {
+  label: string;
+  isCommonArea: boolean;
+  commonAreaM2: number | null;
+  commonAreaLabel: string | null;
+  units: OfferUnit[];
+  streetLabels: StreetLabels;
+}
+
+export interface GroundFloor {
+  exists: boolean;
+  units: OfferUnit[];
+  streetLabels: StreetLabels;
+}
+
+export interface NormalFloor {
+  floorNumber: number;
+  units: OfferUnit[];
+}
+
+export interface RoofFloor {
+  exists: boolean;
+  units: OfferUnit[];
+}
+
+export interface OfferBuilding {
+  staircaseDeduction: number;
+  basementFloors: BasementFloor[];
+  groundFloor: GroundFloor;
+  normalFloors: NormalFloor[];
+  roofFloor: RoofFloor;
+}
+
+export interface OfferDocument {
+  id: string;
+  projectId: string;
+  parcelTitle: string;
+  offerDate: string;
+  page2Content: string;
+  tcmbRate: string;
+  companyName: string;
+  building: OfferBuilding;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OfferDocumentPayload {
+  parcelTitle: string;
+  offerDate: string;
+  page2Content: string;
+  tcmbRate: string;
+  companyName: string;
+  building: OfferBuilding;
+}

@@ -25,6 +25,7 @@ export function verifyToken(req: Request, res: Response, next: NextFunction): vo
     req.userRole = payload.role;
     req.userCompanyId = payload.companyId ?? null;
     req.userTenantId = payload.tenantId ?? null;
+    req.userIsActive = payload.isActive ?? true;
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token', code: 'TOKEN_INVALID' });

@@ -11,6 +11,7 @@ export interface TokenPayload {
   role?: string;
   companyId?: string | null;
   tenantId?: string | null;
+  isActive?: boolean;
   jti?: string;
 }
 
@@ -37,9 +38,9 @@ export const generateMfaToken = (userId: string, email: string): string => {
 };
 
 // Full session token (1h) — includes jti for revocation
-export const generateFullToken = (userId: string, email: string, role: string, companyId: string | null, tenantId: string | null = null): string => {
+export const generateFullToken = (userId: string, email: string, role: string, companyId: string | null, tenantId: string | null = null, isActive = true): string => {
   return jwt.sign(
-    { userId, email, role, companyId, tenantId, stage: 'full', jti: uuidv4() },
+    { userId, email, role, companyId, tenantId, isActive, stage: 'full', jti: uuidv4() },
     env.JWT_SECRET,
     {
       algorithm: 'HS256',

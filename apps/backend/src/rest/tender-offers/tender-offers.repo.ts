@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { TenantDb } from '../../lib/tenantDb';
 
 interface OfferRow {
@@ -45,11 +46,11 @@ function mapOffer(row: OfferRow) {
 }
 
 function mapOfferItem(row: OfferItemRow) {
-  const qty = parseFloat(row.quantity);
-  const mat = parseFloat(row.material_unit_price);
-  const lab = parseFloat(row.labor_unit_price);
-  const unitPrice = mat + lab;
-  const tutar = qty * unitPrice;
+  const qty = new Decimal(row.quantity);
+  const mat = new Decimal(row.material_unit_price);
+  const lab = new Decimal(row.labor_unit_price);
+  const unitPrice = mat.plus(lab);
+  const tutar = qty.times(unitPrice);
   return {
     id: row.id,
     offerId: row.offer_id,

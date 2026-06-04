@@ -6,32 +6,47 @@ import { NextFunction, Request, Response } from 'express';
 import { UPLOADS_DIR } from '../../config/paths';
 import { AppError } from '../../lib/AppError';
 import * as projectsRepo from '../projects/projects.repo';
+import * as tkgmService from '../../services/tkgm.service';
 import * as repo from './parcel-calculations.repo';
 import {
   calculateFootprint,
-  calculateOverhangArea,
   calculatePolygonArea,
   calculateVertices,
-  extractSetbacksFromDocument,
+  extractFullZoningInfo,
+  extractParcelDocumentByType,
+  extractSetbacksFromDocuments,
+  type EdgeRole,
   type Edge,
   type Overhang,
+  type ParcelDocumentType,
+  type Point,
   type Setbacks,
 } from './parcel-calculations.service';
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const DOCUMENT_MIME_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-] as const;
+const MIME_TO_EXTENSIONS: Record<string, string[]> = {
+  'application/pdf': ['pdf'],
+  'image/jpeg': ['jpg', 'jpeg'],
+  'image/png': ['png'],
+  'image/webp': ['webp'],
+  'image/gif': ['gif'],
+  'application/msword': ['doc'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['docx'],
+};
+
+function mimeMatchesExtension(mime: string, filename: string): boolean {
+  const allowedExts = MIME_TO_EXTENSIONS[mime];
+  if (!allowedExts) return false;
+  const ext = path.extname(filename).replace('.', '').toLowerCase();
+  return allowedExts.includes(ext);
+}
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    cb(null, UPLOADS_DIR);
+    fs.promises.mkdir(UPLOADS_DIR, { recursive: true })
+      .then(() => cb(null, UPLOADS_DIR))
+      .catch((err: unknown) => cb(err as Error, UPLOADS_DIR));
   },
   filename: (_req, file, cb) => {
     cb(null, `${uuidv4()}${path.extname(file.originalname)}`);
@@ -41,19 +56,15 @@ const storage = multer.diskStorage({
 export const upload = multer({
   storage,
   fileFilter: (_req, file, cb) => {
-    const allowed = DOCUMENT_MIME_TYPES.includes(file.mimetype as (typeof DOCUMENT_MIME_TYPES)[number])
-      || /\.(pdf|png|jpe?g|webp|gif)$/i.test(file.originalname);
-
-    if (!allowed) {
-      cb(new AppError('Geçersiz dosya türü. PDF veya görsel yükleyin', 400, 'INVALID_FILE_TYPE'));
+    if (!mimeMatchesExtension(file.mimetype, file.originalname)) {
+      cb(new AppError('Geçersiz dosya türü. PDF, Word veya görsel yükleyin', 400, 'INVALID_FILE_TYPE'));
       return;
     }
-
     cb(null, true);
   },
   limits: {
     fileSize: 25 * 1024 * 1024,
-    files: 1,
+    files: 2,
   },
 });
 
@@ -80,6 +91,10 @@ function nonNegativeNumber(value: unknown, fallback = 0): number {
   return Math.max(0, numberFrom(value, fallback));
 }
 
+function roundArea(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 function integerInRange(value: unknown, fallback: number, min: number, max: number): number {
   const parsed = Math.trunc(numberFrom(value, fallback));
   return Math.min(max, Math.max(min, parsed));
@@ -89,6 +104,30 @@ function textOrDefault(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function requiredText(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new AppError(`${fieldName} zorunludur`, 400, 'VALIDATION_ERROR');
+  }
+
+  return value.trim();
+}
+
+function optionalText(value: unknown, fallback: string | null): string | null {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function positiveInteger(value: unknown, fieldName: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new AppError(`${fieldName} geçersiz`, 400, 'VALIDATION_ERROR');
+  }
+
+  return parsed;
 }
 
 function normalizeEdges(value: unknown, fallback: Edge[] = []): Edge[] {
@@ -158,6 +197,28 @@ function validateEdges(edges: Edge[]): void {
   }
 }
 
+function documentExtractedOrDefault(
+  value: unknown,
+  fallback: repo.ParcelDocumentExtracted | null,
+): repo.ParcelDocumentExtracted | null {
+  if (value === undefined) return fallback;
+  if (value === null) return null;
+
+  const record = asRecord(value);
+  const entries = Object.entries(record)
+    .map(([key, item]) => {
+      if (item === null || typeof item === 'string' || typeof item === 'number') {
+        return [key, item] as const;
+      }
+      return null;
+    })
+    .filter((entry): entry is readonly [string, string | number | null] => entry !== null);
+
+  return entries.length > 0
+    ? Object.fromEntries(entries)
+    : null;
+}
+
 function buildCalculationData(
   body: Record<string, unknown>,
   existing?: repo.ParcelCalculation,
@@ -173,7 +234,10 @@ function buildCalculationData(
     : { front: 0, back: 0, left: 0, right: 0 };
 
   const edges = body.edges !== undefined ? normalizeEdges(body.edges, existing?.edges ?? []) : existing?.edges ?? [];
-  validateEdges(edges);
+  const hasDirectParcelVertices = Array.isArray(body.parcelVertices) && body.parcelVertices.length >= 3;
+  if (!hasDirectParcelVertices) {
+    validateEdges(edges);
+  }
 
   const floorCount = integerInRange(body.floorCount, existing?.floorCount ?? 4, 1, 30);
   const setbackSource = body.setbackSource === 'document' || body.setbackSource === 'manual'
@@ -181,15 +245,30 @@ function buildCalculationData(
     : existing?.setbackSource ?? 'manual';
   const setbacks = normalizeSetbacks(body.setbacks ?? body, fallbackSetbacks);
   const overhangs = normalizeOverhangs(body.overhangs, floorCount, existing?.overhangs);
-  const parcelVertices = calculateVertices(edges);
+  const parcelVertices: Point[] =
+    hasDirectParcelVertices
+      ? (body.parcelVertices as Point[])
+      : calculateVertices(edges);
+  const activeEdges: boolean[] | undefined =
+    Array.isArray(body.activeEdges) ? (body.activeEdges as boolean[]) : undefined;
   const parcelArea = calculatePolygonArea(parcelVertices);
-  const frontEdgeIndex = integerInRange(body.frontEdgeIndex, 0, 0, Math.max(0, edges.length - 1));
-  const footprintVertices = calculateFootprint(parcelVertices, setbacks, frontEdgeIndex);
+  const edgeRoles: EdgeRole[] = Array.isArray(body.edgeRoles)
+    ? (body.edgeRoles as EdgeRole[])
+    : [];
+  const resolvedEdgeRoles: EdgeRole[] = edgeRoles.length > 0
+    ? edgeRoles
+    : parcelVertices.map((_, index) => {
+      const edgeCount = parcelVertices.length;
+      const frontEdgeIndex = typeof body.frontEdgeIndex === 'number' ? body.frontEdgeIndex : 0;
+      const relativeIndex = ((index - frontEdgeIndex) % edgeCount + edgeCount) % edgeCount;
+      if (relativeIndex === 0) return 'front';
+      if (relativeIndex === 2) return 'back';
+      return 'side';
+    });
+  const footprintVertices = calculateFootprint(parcelVertices, setbacks, resolvedEdgeRoles, activeEdges);
   const footprintArea = calculatePolygonArea(footprintVertices);
-  const totalConstructionArea = overhangs.reduce(
-    (sum, overhang) => sum + calculateOverhangArea(footprintVertices, overhang),
-    0,
-  );
+  const kaks = typeof body.kaks === 'number' && body.kaks > 0 ? body.kaks : 1.5;
+  const totalConstructionArea = roundArea(parcelArea * 1.3 * kaks);
 
   return {
     name: textOrDefault(body.name, existing?.name ?? 'Hesaplama'),
@@ -204,11 +283,15 @@ function buildCalculationData(
     setbackDocumentPath: typeof body.setbackDocumentPath === 'string' ? body.setbackDocumentPath : existing?.setbackDocumentPath ?? null,
     setbackDocumentName: typeof body.setbackDocumentName === 'string' ? body.setbackDocumentName : existing?.setbackDocumentName ?? null,
     setbackRawText: typeof body.setbackRawText === 'string' ? body.setbackRawText : existing?.setbackRawText ?? null,
+    planNotlariFileUrl: optionalText(body.planNotlariFileUrl, existing?.planNotlariFileUrl ?? null),
+    planNotlariExtracted: documentExtractedOrDefault(body.planNotlariExtracted, existing?.planNotlariExtracted ?? null),
+    imarDurumuFileUrl: optionalText(body.imarDurumuFileUrl, existing?.imarDurumuFileUrl ?? null),
+    imarDurumuExtracted: documentExtractedOrDefault(body.imarDurumuExtracted, existing?.imarDurumuExtracted ?? null),
     footprintArea,
     footprintVertices,
     floorCount,
     overhangs,
-    totalConstructionArea: Math.round((totalConstructionArea + Number.EPSILON) * 100) / 100,
+    totalConstructionArea,
     status: textOrDefault(body.status, existing?.status ?? 'completed'),
     createdBy: existing?.createdBy ?? userId ?? null,
   };
@@ -225,6 +308,118 @@ function safeUnlink(filePath?: string | null): void {
     }
   }
 }
+
+type SetbackUploadField = 'file' | 'planNotes' | 'zoningDocument' | 'document' | 'imarDurumu';
+type SetbackUploadFiles = Partial<Record<SetbackUploadField, Express.Multer.File[]>>;
+
+function uploadedSetbackFiles(req: Request): SetbackUploadFiles {
+  if (!req.files || Array.isArray(req.files)) return {};
+  return req.files as SetbackUploadFiles;
+}
+
+function safeUnlinkMany(files: Array<Express.Multer.File | undefined>): void {
+  files.forEach((file) => safeUnlink(file?.path));
+}
+
+function allUploadedSetbackFiles(files: SetbackUploadFiles): Express.Multer.File[] {
+  return Object.values(files).flatMap((fieldFiles) => fieldFiles ?? []);
+}
+
+function documentTypeFrom(value: unknown): ParcelDocumentType | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (value === 'plan_notlari' || value === 'imar_durumu') return value;
+
+  throw new AppError('Belge tipi geçersiz', 400, 'VALIDATION_ERROR');
+}
+
+function fileForDocumentType(
+  files: SetbackUploadFiles,
+  documentType: ParcelDocumentType,
+): Express.Multer.File | undefined {
+  if (files.file?.[0]) return files.file[0];
+  if (files.document?.[0]) return files.document[0];
+
+  return documentType === 'plan_notlari'
+    ? files.planNotes?.[0]
+    : files.imarDurumu?.[0] ?? files.zoningDocument?.[0];
+}
+
+function isWordDocument(file: Express.Multer.File): boolean {
+  return file.mimetype === 'application/msword'
+    || file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+}
+
+function uploadedFileUrl(file: Express.Multer.File): string {
+  return `/uploads/${file.filename}`;
+}
+
+function tkgmError(error: unknown): AppError {
+  if (error instanceof AppError) return error;
+  const message = error instanceof Error ? error.message : 'TKGM sorgusu başarısız oldu';
+  return new AppError(message, 502, 'TKGM_REQUEST_FAILED');
+}
+
+export const getTkgmProvinces = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await tkgmService.getProvinceList();
+    res.json({ data });
+  } catch (error) {
+    next(tkgmError(error));
+  }
+};
+
+export const getTkgmDistricts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const provinceId = positiveInteger(req.params.provinceId, 'İl');
+    const data = await tkgmService.getDistrictList(provinceId);
+    res.json({ data });
+  } catch (error) {
+    next(tkgmError(error));
+  }
+};
+
+export const getTkgmNeighborhoods = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const districtId = positiveInteger(req.params.districtId, 'İlçe');
+    const data = await tkgmService.getNeighborhoodList(districtId);
+    res.json({ data });
+  } catch (error) {
+    next(tkgmError(error));
+  }
+};
+
+export const fetchFromTkgm = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const companyId = req.resolvedCompanyId!;
+    const projectId = String(req.params.projectId);
+    if (!(await ensureProject(companyId, projectId, res))) return;
+
+    const body = asRecord(req.body);
+    const neighborhoodId = positiveInteger(body.neighborhoodId, 'Mahalle');
+    const blockNo = requiredText(body.blockNo, 'Ada no');
+    const parcelNo = requiredText(body.parcelNo, 'Parsel no');
+    let parcel: tkgmService.ParcelResult;
+    try {
+      parcel = await tkgmService.fetchParcel(neighborhoodId, blockNo, parcelNo);
+    } catch (error) {
+      throw tkgmError(error);
+    }
+
+    const parcelArea = parcel.area || calculatePolygonArea(parcel.vertices);
+
+    res.json({
+      id: '',
+      area: parcelArea,
+      info: parcel.info,
+      edges: parcel.edges,
+      parcelVertices: parcel.vertices,
+      vertices: parcel.vertices,
+      coordinates: parcel.coordinates,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -299,25 +494,80 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
 };
 
 export const extractSetbacks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const file = req.file;
+  const files = uploadedSetbackFiles(req);
+  const planNotes = files.planNotes?.[0] ?? files.document?.[0];
+  const zoningDocument = files.zoningDocument?.[0];
+  const uploadedFiles = allUploadedSetbackFiles(files);
 
   try {
     const companyId = req.resolvedCompanyId!;
     const projectId = String(req.params.projectId);
     if (!(await ensureProject(companyId, projectId, res))) {
-      safeUnlink(file?.path);
+      safeUnlinkMany(uploadedFiles);
       return;
     }
 
-    if (!file) {
+    if (!planNotes && !zoningDocument) {
       res.status(400).json({ error: 'Belge yükleyin', code: 'FILE_REQUIRED' });
       return;
     }
 
-    const setbacks = await extractSetbacksFromDocument(file.path);
-    res.json(setbacks);
+    const result = await extractSetbacksFromDocuments(planNotes?.path, zoningDocument?.path);
+    res.json(result);
   } catch (error) {
-    safeUnlink(file?.path);
+    safeUnlinkMany(uploadedFiles);
+    next(error);
+  }
+};
+
+export const extractZoning = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const files = uploadedSetbackFiles(req);
+  const imarDurumu = files.imarDurumu?.[0] ?? files.zoningDocument?.[0] ?? files.document?.[0];
+  const planNotes = files.planNotes?.[0];
+  const uploadedFiles = allUploadedSetbackFiles(files);
+
+  try {
+    const body = asRecord(req.body);
+    const documentType = documentTypeFrom(body.documentType);
+    const companyId = req.resolvedCompanyId!;
+    const projectId = String(req.params.projectId);
+    if (!(await ensureProject(companyId, projectId, res))) {
+      safeUnlinkMany(uploadedFiles);
+      return;
+    }
+
+    if (documentType) {
+      const documentFile = fileForDocumentType(files, documentType);
+      if (!documentFile) {
+        safeUnlinkMany(uploadedFiles);
+        res.status(400).json({ error: 'Belge yükleyin', code: 'FILE_REQUIRED' });
+        return;
+      }
+
+      if (documentType === 'imar_durumu' && isWordDocument(documentFile)) {
+        throw new AppError('İmar Durumu için PDF veya görsel yükleyin', 400, 'INVALID_FILE_TYPE');
+      }
+
+      const result = await extractParcelDocumentByType(documentFile.path, documentType);
+      res.json({
+        documentType,
+        fields: result.fields,
+        zoningInfo: result.zoningInfo,
+        fileUrl: uploadedFileUrl(documentFile),
+        originalName: documentFile.originalname,
+      });
+      return;
+    }
+
+    if (!imarDurumu && !planNotes) {
+      res.status(400).json({ error: 'Belge yükleyin', code: 'FILE_REQUIRED' });
+      return;
+    }
+
+    const result = await extractFullZoningInfo(imarDurumu?.path, planNotes?.path);
+    res.json(result);
+  } catch (error) {
+    safeUnlinkMany(uploadedFiles);
     next(error);
   }
 };

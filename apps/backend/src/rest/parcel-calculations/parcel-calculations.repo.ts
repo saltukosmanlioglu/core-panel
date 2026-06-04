@@ -1,6 +1,8 @@
 import { TenantDb } from '../../lib/tenantDb';
 import type { Edge, Overhang, Point } from './parcel-calculations.service';
 
+export type ParcelDocumentExtracted = Record<string, string | number | null>;
+
 export interface ParcelCalculation {
   id: string;
   projectId: string;
@@ -16,6 +18,10 @@ export interface ParcelCalculation {
   setbackDocumentPath: string | null;
   setbackDocumentName: string | null;
   setbackRawText: string | null;
+  planNotlariFileUrl: string | null;
+  planNotlariExtracted: ParcelDocumentExtracted | null;
+  imarDurumuFileUrl: string | null;
+  imarDurumuExtracted: ParcelDocumentExtracted | null;
   footprintArea: number;
   footprintVertices: Point[];
   floorCount: number;
@@ -42,6 +48,10 @@ interface ParcelCalculationRow {
   setback_document_path: string | null;
   setback_document_name: string | null;
   setback_raw_text: string | null;
+  plan_notlari_file_url: string | null;
+  plan_notlari_extracted: unknown;
+  imar_durumu_file_url: string | null;
+  imar_durumu_extracted: unknown;
   footprint_area: string | number | null;
   footprint_vertices: unknown;
   floor_count: number | null;
@@ -66,6 +76,10 @@ export interface ParcelCalculationInput {
   setbackDocumentPath?: string | null;
   setbackDocumentName?: string | null;
   setbackRawText?: string | null;
+  planNotlariFileUrl?: string | null;
+  planNotlariExtracted?: ParcelDocumentExtracted | null;
+  imarDurumuFileUrl?: string | null;
+  imarDurumuExtracted?: ParcelDocumentExtracted | null;
   footprintArea?: number;
   footprintVertices?: Point[];
   floorCount?: number;
@@ -88,6 +102,10 @@ const UPDATE_COLUMNS = [
   ['setbackDocumentPath', 'setback_document_path', false],
   ['setbackDocumentName', 'setback_document_name', false],
   ['setbackRawText', 'setback_raw_text', false],
+  ['planNotlariFileUrl', 'plan_notlari_file_url', false],
+  ['planNotlariExtracted', 'plan_notlari_extracted', 'nullableJson'],
+  ['imarDurumuFileUrl', 'imar_durumu_file_url', false],
+  ['imarDurumuExtracted', 'imar_durumu_extracted', 'nullableJson'],
   ['footprintArea', 'footprint_area', false],
   ['footprintVertices', 'footprint_vertices', true],
   ['floorCount', 'floor_count', false],
@@ -95,7 +113,7 @@ const UPDATE_COLUMNS = [
   ['totalConstructionArea', 'total_construction_area', false],
   ['status', 'status', false],
   ['createdBy', 'created_by', false],
-] as const satisfies ReadonlyArray<readonly [keyof ParcelCalculationInput, string, boolean]>;
+] as const satisfies ReadonlyArray<readonly [keyof ParcelCalculationInput, string, boolean | 'nullableJson']>;
 
 function toNumber(value: string | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -109,6 +127,12 @@ function toDateString(value: Date | string): string {
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value as T[] : [];
+}
+
+function asDocumentExtracted(value: unknown): ParcelDocumentExtracted | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as ParcelDocumentExtracted
+    : null;
 }
 
 function mapRow(row: ParcelCalculationRow): ParcelCalculation {
@@ -127,6 +151,10 @@ function mapRow(row: ParcelCalculationRow): ParcelCalculation {
     setbackDocumentPath: row.setback_document_path,
     setbackDocumentName: row.setback_document_name,
     setbackRawText: row.setback_raw_text,
+    planNotlariFileUrl: row.plan_notlari_file_url,
+    planNotlariExtracted: asDocumentExtracted(row.plan_notlari_extracted),
+    imarDurumuFileUrl: row.imar_durumu_file_url,
+    imarDurumuExtracted: asDocumentExtracted(row.imar_durumu_extracted),
     footprintArea: toNumber(row.footprint_area),
     footprintVertices: asArray<Point>(row.footprint_vertices),
     floorCount: row.floor_count ?? 4,
@@ -142,9 +170,15 @@ function mapRow(row: ParcelCalculationRow): ParcelCalculation {
 function definedEntries(data: ParcelCalculationInput): Array<[string, unknown, boolean]> {
   return UPDATE_COLUMNS
     .filter(([key]) => data[key] !== undefined)
-    .map(([key, column, isJson]) => {
+    .map(([key, column, jsonMode]) => {
       const value = data[key];
-      return [column, isJson ? JSON.stringify(value ?? []) : value, isJson];
+      const isJson = jsonMode !== false;
+      const normalizedValue = jsonMode === true
+        ? JSON.stringify(value ?? [])
+        : jsonMode === 'nullableJson' && value !== null && value !== undefined
+          ? JSON.stringify(value)
+          : value;
+      return [column, normalizedValue, isJson];
     });
 }
 

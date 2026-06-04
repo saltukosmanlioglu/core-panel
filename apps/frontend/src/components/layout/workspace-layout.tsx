@@ -7,6 +7,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Calculate as CalculateIcon,
   CropFree as CropFreeIcon,
+  Description as DescriptionIcon,
   Gavel as GavelIcon,
 } from '@mui/icons-material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -35,20 +36,21 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
     ? [
       {
         items: [
-          { label: 'İnşaatlara Dön', icon: <ArrowBackIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects', exact: true },
+          { label: 'İnşaatlara Dön', icon: <ArrowBackIcon sx={{ fontSize: 18 }} />, href: '/workspace/projects', exact: true },
           {
             label: 'Proje Araçları',
-            icon: <CalculateIcon sx={{ fontSize: 20 }} />,
+            icon: <CalculateIcon sx={{ fontSize: 18 }} />,
             href: `${projectBase}/tools`,
             defaultOpen: true,
             toggleOnly: true,
             children: [
               { label: 'Taban Oturum Alanı', icon: <CropFreeIcon fontSize="small" />, href: `${projectBase}/parcel-calculation`, color: '#0ea5e9' },
+              { label: 'Teklif Oluştur', icon: <DescriptionIcon fontSize="small" />, href: `${projectBase}/offer-documents`, color: '#1B3A5C' },
             ],
           },
           {
             label: 'İhale',
-            icon: <GavelIcon sx={{ fontSize: 20 }} />,
+            icon: <GavelIcon sx={{ fontSize: 18 }} />,
             href: `${projectBase}/procurement`,
             defaultOpen: true,
             toggleOnly: true,
@@ -63,8 +65,8 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
       {
         label: 'Hızlı Erişim',
         items: [
-          { label: 'Çalışma Alanı', icon: <DashboardIcon sx={{ fontSize: 20 }} />, href: '/workspace', exact: true },
-          { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 20 }} />, href: '/workspace/projects' },
+          { label: 'Çalışma Alanı', icon: <DashboardIcon sx={{ fontSize: 18 }} />, href: '/workspace', exact: true },
+          { label: 'İnşaatlar', icon: <AssignmentIcon sx={{ fontSize: 18 }} />, href: '/workspace/projects' },
         ],
       },
     ];
@@ -76,7 +78,7 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
     if (!user) router.push('/login');
   }, [isLoading, user, router]);
 
-  const sidebarWidth = sidebarCollapsed ? 56 : 240;
+  const sidebarWidth = sidebarCollapsed ? 56 : 260;
 
   if (isLoading || !user) {
     return (

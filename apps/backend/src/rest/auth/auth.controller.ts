@@ -13,6 +13,11 @@ import * as usersRepo from '../users/users.repo';
 
 const isProduction = env.NODE_ENV === 'production';
 
+// CSRF posture: cookies are httpOnly (JS cannot read them) and sameSite 'strict'
+// in development. In production sameSite 'none' is required for cross-origin
+// deployments; this relaxes same-site but the API only accepts JSON bodies and
+// all state-changing routes require a valid JWT in the cookie — browser-initiated
+// cross-site requests without a preflight cannot forge these automatically.
 const cookieOptions = {
   httpOnly: true,
   secure: isProduction,
@@ -151,7 +156,7 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
       return;
     }
 
-    const newAccessToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null);
+    const newAccessToken = generateFullToken(user.id, user.email, user.role, user.companyId ?? null, null, user.isActive);
     setCookieToken(res, newAccessToken);
     res.json({ status: 'ok' });
   } catch (err) {

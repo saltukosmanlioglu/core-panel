@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import mammoth from 'mammoth';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/AppError';
 
@@ -21,6 +22,8 @@ export interface Setbacks {
   right: number;
 }
 
+export type EdgeRole = 'front' | 'side' | 'back' | 'inactive';
+
 export interface Overhang {
   floor: number;
   front: number;
@@ -29,30 +32,162 @@ export interface Overhang {
   right: number;
 }
 
+export interface SetbackExtraction {
+  front: number;
+  back: number;
+  left: number;
+  right: number;
+}
+
+type SetbackSide = keyof SetbackExtraction;
+type SetbackSource = 'planNotes' | 'zoningDocument' | 'default';
+type DocumentSetbackExtraction = Record<SetbackSide, number | null>;
+
+export interface SetbackExtractionResult {
+  final: SetbackExtraction;
+  fromPlanNotes: DocumentSetbackExtraction | null;
+  fromZoningDocument: DocumentSetbackExtraction | null;
+  hasConflict: boolean;
+  sources: Record<SetbackSide, SetbackSource>;
+}
+
+export interface ZoningExtractionResult {
+  setbacks: {
+    front: number | null;
+    back: number | null;
+    left: number | null;
+    right: number | null;
+  };
+  taks: number | null;
+  kaks: number | null;
+  floorCount: number | null;
+  buildingHeight: number | null;
+  constructionOrder: string | null;
+  buildingDepth: number | null;
+  notes: string | null;
+}
+
+export interface FullExtractionResult {
+  fromImarDurumu: ZoningExtractionResult | null;
+  fromPlanNotes: ZoningExtractionResult | null;
+  merged: ZoningExtractionResult;
+  hasConflict: boolean;
+}
+
+export type ParcelDocumentType = 'plan_notlari' | 'imar_durumu';
+export type ExtractedDocumentFieldValue = string | number | null;
+export type ExtractedDocumentFields = Record<string, ExtractedDocumentFieldValue>;
+
+export interface ParcelDocumentExtractionResult {
+  documentType: ParcelDocumentType;
+  fields: ExtractedDocumentFields;
+  zoningInfo: ZoningExtractionResult;
+}
+
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const CM_PER_METER = 100;
 const SQ_CM_PER_SQ_M = 10000;
 
-const SETBACK_SYSTEM_PROMPT = `You are an expert at reading Turkish construction permit documents.
-Extract garden setback (bahçe çekme) distances in meters.
-Return JSON only:
-{ front: number, back: number, left: number, right: number }
-Field names in Turkish documents:
-- Ön bahçe çekmesi = front
-- Arka bahçe çekmesi = back
-- Yan bahçe çekmesi = left AND right (unless specified separately)
-- Sol yan bahçe = left
-- Sağ yan bahçe = right
-Return 0 for any value not found.`;
+const IMAR_DURUMU_PROMPT = `You are an expert at reading Turkish zoning status documents (imar durumu belgesi).
+Extract ALL construction parameters. Return JSON only, no explanation:
+{
+  "setbacks": {
+    "front": number | null,
+    "back": number | null,
+    "left": number | null,
+    "right": number | null
+  },
+  "taks": number | null,
+  "kaks": number | null,
+  "floorCount": number | null,
+  "buildingHeight": number | null,
+  "constructionOrder": string | null,
+  "buildingDepth": number | null,
+  "notes": string | null
+}
+Turkish terms:
+- Ön bahçe = front setback
+- Arka bahçe = back setback
+- Yan bahçe = left AND right setback (unless sol/sağ specified)
+- Sol yan = left, Sağ yan = right
+- T.A.K.S. = taks (decimal, e.g. 0.40)
+- K.A.K.S. or KAKS = kaks (decimal, e.g. 1.50)
+- Kat adedi = floorCount (integer)
+- Bina yüksekliği = buildingHeight (meters)
+- İnşaat nizamı = constructionOrder (A=Ayrık, B=Bitişik, BA=Blok Ayrık etc.)
+- Bina derinliği = buildingDepth (meters)
+Return null for any value not found.`;
+
+const PLAN_NOTES_PROMPT = `You are an expert at reading Turkish urban planning notes (plan notları/imar planı notları).
+Extract ALL construction parameters that apply. Return JSON only, no explanation:
+{
+  "setbacks": {
+    "front": number | null,
+    "back": number | null,
+    "left": number | null,
+    "right": number | null
+  },
+  "taks": number | null,
+  "kaks": number | null,
+  "floorCount": number | null,
+  "buildingHeight": number | null,
+  "constructionOrder": string | null,
+  "buildingDepth": number | null,
+  "notes": string | null
+}
+Same Turkish terms as above. Return null for any value not found.`;
+
+const PLAN_NOTLARI_FIELDS_PROMPT = `You are an expert at reading Turkish urban planning notes (plan notları/imar planı notları).
+Extract fields that apply to parcel calculation. Return JSON only, no explanation:
+{
+  "plan_notu": string | null,
+  "yapi_yuksekligi": number | null,
+  "taks": number | null,
+  "kaks": number | null,
+  "emsal": number | null,
+  "kat_adedi": number | null,
+  "setbacks": {
+    "front": number | null,
+    "back": number | null,
+    "left": number | null,
+    "right": number | null
+  }
+}
+Use meters for distances and decimal numbers for TAKS/KAKS/emsal. Return null for any value not found.`;
+
+const IMAR_DURUMU_FIELDS_PROMPT = `You are an expert at reading Turkish zoning status documents (imar durumu belgesi).
+Extract fields that apply to parcel calculation. Return JSON only, no explanation:
+{
+  "imar_durumu": string | null,
+  "zona_tipi": string | null,
+  "yapilasma_kosullari": string | null,
+  "parsel_alani": number | null,
+  "ada_no": string | null,
+  "parsel_no": string | null,
+  "taks": number | null,
+  "kaks": number | null,
+  "kat_adedi": number | null,
+  "yapi_yuksekligi": number | null,
+  "setbacks": {
+    "front": number | null,
+    "back": number | null,
+    "left": number | null,
+    "right": number | null
+  }
+}
+Use meters for distances, square meters for parcel area, and decimal numbers for TAKS/KAKS. Return null for any value not found.`;
 
 type ClaudeImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+type ClaudeDocumentMediaType = 'application/pdf';
+type WordMediaType = 'application/msword' | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+type SupportedDocumentMediaType = ClaudeDocumentMediaType | ClaudeImageMediaType | WordMediaType;
 
 type ClaudeFileBlock =
   | {
     type: 'document';
     source: {
       type: 'base64';
-      media_type: 'application/pdf';
+      media_type: ClaudeDocumentMediaType;
       data: string;
     };
   }
@@ -159,18 +294,18 @@ function normalizedInwardNormal(start: Point, end: Point, clockwise: boolean): P
     : { x: -edge.y, y: edge.x };
 }
 
-function getSetbackForEdgeIndex(
+function getSetbackForEdgeRole(
   edgeIndex: number,
-  frontEdgeIndex: number,
-  edgeCount: number,
+  edgeRoles: EdgeRole[],
   setbacks: Setbacks,
+  activeEdges?: boolean[],
 ): number {
-  const relativeIndex = ((edgeIndex - frontEdgeIndex) % edgeCount + edgeCount) % edgeCount;
+  if (activeEdges && activeEdges[edgeIndex] === false) return 0;
 
-  if (relativeIndex === 0) return setbacks.front * CM_PER_METER;
-  if (relativeIndex === 1) return setbacks.right * CM_PER_METER;
-  if (relativeIndex === 2) return setbacks.back * CM_PER_METER;
-  if (relativeIndex === 3) return setbacks.left * CM_PER_METER;
+  const role = edgeRoles[edgeIndex] ?? 'side';
+  if (role === 'inactive') return 0;
+  if (role === 'front') return setbacks.front * CM_PER_METER;
+  if (role === 'back') return setbacks.back * CM_PER_METER;
 
   return ((setbacks.left + setbacks.right) / 2) * CM_PER_METER;
 }
@@ -243,29 +378,56 @@ function nearestPointOnPolygonBoundary(p: Point, poly: Point[]): Point {
   return nearest;
 }
 
-export function calculateFootprint(vertices: Point[], setbacks: Setbacks, frontEdgeIndex = 0): Point[] {
+export function calculateFootprint(
+  vertices: Point[],
+  setbacks: Setbacks,
+  edgeRoles: EdgeRole[],
+  activeEdges?: boolean[],
+): Point[] {
   if (vertices.length < 3) return [];
 
   const clockwise = signedArea(vertices) < 0;
-  const inset = vertices.map((curr, index) => {
+  const inset: Point[] = vertices.map((curr, index) => {
     const prev = vertices[(index - 1 + vertices.length) % vertices.length]!;
     const next = vertices[(index + 1) % vertices.length]!;
-    const prevNormal = normalizedInwardNormal(prev, curr, clockwise);
-    const nextNormal = normalizedInwardNormal(curr, next, clockwise);
     const prevEdgeIndex = (index - 1 + vertices.length) % vertices.length;
     const nextEdgeIndex = index;
-    const prevSetback = getSetbackForEdgeIndex(prevEdgeIndex, frontEdgeIndex, vertices.length, setbacks);
-    const nextSetback = getSetbackForEdgeIndex(nextEdgeIndex, frontEdgeIndex, vertices.length, setbacks);
+
+    const prevSetback = getSetbackForEdgeRole(prevEdgeIndex, edgeRoles, setbacks, activeEdges);
+    const nextSetback = getSetbackForEdgeRole(nextEdgeIndex, edgeRoles, setbacks, activeEdges);
+
+    if (prevSetback === 0 && nextSetback === 0) {
+      return { x: round(curr.x), y: round(curr.y) };
+    }
+
+    const prevNormal = normalizedInwardNormal(prev, curr, clockwise);
+    const nextNormal = normalizedInwardNormal(curr, next, clockwise);
     const prevDirection = normalizedEdgeVector(prev, curr);
     const nextDirection = normalizedEdgeVector(curr, next);
-    const prevOffset = {
-      x: prevNormal.x * prevSetback,
-      y: prevNormal.y * prevSetback,
-    };
-    const nextOffset = {
-      x: nextNormal.x * nextSetback,
-      y: nextNormal.y * nextSetback,
-    };
+
+    if (nextSetback === 0) {
+      const prevOffset = { x: prevNormal.x * prevSetback, y: prevNormal.y * prevSetback };
+      const offsetPrevStart = { x: prev.x + prevOffset.x, y: prev.y + prevOffset.y };
+      const dx = curr.x - offsetPrevStart.x;
+      const dy = curr.y - offsetPrevStart.y;
+      const dot = dx * prevDirection.x + dy * prevDirection.y;
+      return {
+        x: round(offsetPrevStart.x + prevDirection.x * dot),
+        y: round(offsetPrevStart.y + prevDirection.y * dot),
+      };
+    }
+
+    if (prevSetback === 0) {
+      const nextOffset = { x: nextNormal.x * nextSetback, y: nextNormal.y * nextSetback };
+      return {
+        x: round(curr.x + nextOffset.x),
+        y: round(curr.y + nextOffset.y),
+      };
+    }
+
+    const prevOffset = { x: prevNormal.x * prevSetback, y: prevNormal.y * prevSetback };
+    const nextOffset = { x: nextNormal.x * nextSetback, y: nextNormal.y * nextSetback };
+
     const miterPoint = lineIntersection(
       { x: prev.x + prevOffset.x, y: prev.y + prevOffset.y },
       prevDirection,
@@ -276,15 +438,46 @@ export function calculateFootprint(vertices: Point[], setbacks: Setbacks, frontE
       y: curr.y + prevOffset.y + nextOffset.y,
     };
 
-    const point = {
-      x: round(miterPoint.x),
-      y: round(miterPoint.y),
-    };
-
+    const point = { x: round(miterPoint.x), y: round(miterPoint.y) };
     return pointInPolygon(point, vertices)
       ? point
       : nearestPointOnPolygonBoundary(point, vertices);
   });
+
+  for (let i = 0; i < vertices.length; i++) {
+    if (edgeRoles[i] === 'inactive' || activeEdges?.[i] === false) {
+        const prevEdgeIdx = (i - 1 + vertices.length) % vertices.length;
+        const nextEdgeIdx = (i + 1) % vertices.length;
+
+        const prevSb = getSetbackForEdgeRole(prevEdgeIdx, edgeRoles, setbacks, activeEdges);
+        const nextSb = getSetbackForEdgeRole(nextEdgeIdx, edgeRoles, setbacks, activeEdges);
+
+        if (prevSb > 0 && nextSb > 0) {
+          const vPrevPrev = vertices[(i - 1 + vertices.length) % vertices.length]!;
+          const vPrev = vertices[i]!;
+          const vNext = vertices[(i + 1) % vertices.length]!;
+          const vNextNext = vertices[(i + 2) % vertices.length]!;
+
+          const prevNorm = normalizedInwardNormal(vPrevPrev, vPrev, clockwise);
+          const nextNorm = normalizedInwardNormal(vNext, vNextNext, clockwise);
+          const prevDir = normalizedEdgeVector(vPrevPrev, vPrev);
+          const nextDir = normalizedEdgeVector(vNext, vNextNext);
+
+          const prevOffsetPt = { x: vPrevPrev.x + prevNorm.x * prevSb, y: vPrevPrev.y + prevNorm.y * prevSb };
+          const nextOffsetPt = { x: vNext.x + nextNorm.x * nextSb, y: vNext.y + nextNorm.y * nextSb };
+
+          const intersection = lineIntersection(prevOffsetPt, prevDir, nextOffsetPt, nextDir);
+
+          if (intersection) {
+            const collapsePoint = pointInPolygon(intersection, vertices)
+              ? intersection
+              : nearestPointOnPolygonBoundary(intersection, vertices);
+            inset[i] = { x: round(collapsePoint.x), y: round(collapsePoint.y) };
+            inset[(i + 1) % vertices.length] = { x: round(collapsePoint.x), y: round(collapsePoint.y) };
+          }
+        }
+    }
+  }
 
   return inset.map((point) => ({ x: round(point.x), y: round(point.y) }));
 }
@@ -331,13 +524,24 @@ function isClaudeImageMediaType(value: string): value is ClaudeImageMediaType {
   return value === 'image/jpeg' || value === 'image/png' || value === 'image/webp' || value === 'image/gif';
 }
 
-function mediaTypeFromPath(filePath: string): 'application/pdf' | ClaudeImageMediaType {
+function mediaTypeFromPath(filePath: string): SupportedDocumentMediaType {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.pdf') return 'application/pdf';
+  if (ext === '.doc') return 'application/msword';
+  if (ext === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
   if (ext === '.webp') return 'image/webp';
   if (ext === '.gif') return 'image/gif';
   return 'image/png';
+}
+
+async function extractTextFromFile(filePath: string, mimeType: SupportedDocumentMediaType): Promise<string> {
+  if (mimeType.includes('word') || mimeType.includes('msword')) {
+    const result = await mammoth.extractRawText({ path: filePath });
+    return result.value;
+  }
+
+  return '';
 }
 
 async function buildClaudeFileBlock(filePath: string): Promise<ClaudeFileBlock> {
@@ -351,66 +555,281 @@ async function buildClaudeFileBlock(filePath: string): Promise<ClaudeFileBlock> 
     };
   }
 
-  return {
-    type: 'image',
-    source: { type: 'base64', media_type: isClaudeImageMediaType(mediaType) ? mediaType : 'image/png', data },
-  };
+  if (isClaudeImageMediaType(mediaType)) {
+    return {
+      type: 'image',
+      source: { type: 'base64', media_type: mediaType, data },
+    };
+  }
+
+  throw new AppError('Desteklenmeyen belge türü', 400, 'UNSUPPORTED_DOCUMENT_TYPE');
 }
 
-function numberOrZero(value: unknown): number {
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeSetbacks(value: unknown): Setbacks {
-  const record = value && typeof value === 'object' && !Array.isArray(value)
+function nullableText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function normalizeDocumentSetbacks(value: unknown): DocumentSetbackExtraction {
+  const record = asPlainRecord(value);
 
   return {
-    front: numberOrZero(record.front),
-    back: numberOrZero(record.back),
-    left: numberOrZero(record.left),
-    right: numberOrZero(record.right),
+    front: nullableNumber(record.front),
+    back: nullableNumber(record.back),
+    left: nullableNumber(record.left),
+    right: nullableNumber(record.right),
   };
 }
 
-export async function extractSetbacksFromDocument(filePath: string): Promise<Setbacks> {
+function normalizeZoningExtraction(value: unknown): ZoningExtractionResult {
+  const record = asPlainRecord(value);
+  const setbacks = asPlainRecord(record.setbacks);
+
+  return {
+    setbacks: {
+      front: nullableNumber(setbacks.front ?? record.front ?? record.on_bahce_cekme),
+      back: nullableNumber(setbacks.back ?? record.back ?? record.arka_bahce_cekme),
+      left: nullableNumber(setbacks.left ?? record.left ?? record.sol_bahce_cekme ?? record.yan_bahce_cekme),
+      right: nullableNumber(setbacks.right ?? record.right ?? record.sag_bahce_cekme ?? record.yan_bahce_cekme),
+    },
+    taks: nullableNumber(record.taks),
+    kaks: nullableNumber(record.kaks ?? record.emsal),
+    floorCount: nullableNumber(record.floorCount ?? record.kat_adedi),
+    buildingHeight: nullableNumber(record.buildingHeight ?? record.yapi_yuksekligi),
+    constructionOrder: nullableText(record.constructionOrder ?? record.zona_tipi ?? record.insaat_nizami),
+    buildingDepth: nullableNumber(record.buildingDepth),
+    notes: nullableText(record.notes ?? record.plan_notu ?? record.imar_durumu ?? record.yapilasma_kosullari),
+  };
+}
+
+function numberField(record: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = nullableNumber(record[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function textField(record: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = nullableText(record[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function normalizeExtractedDocumentFields(
+  documentType: ParcelDocumentType,
+  value: unknown,
+  zoningInfo: ZoningExtractionResult,
+): ExtractedDocumentFields {
+  const record = asPlainRecord(value);
+
+  if (documentType === 'plan_notlari') {
+    return {
+      plan_notu: textField(record, 'plan_notu', 'notes'),
+      yapi_yuksekligi: numberField(record, 'yapi_yuksekligi', 'buildingHeight') ?? zoningInfo.buildingHeight,
+      taks: numberField(record, 'taks') ?? zoningInfo.taks,
+      kaks: numberField(record, 'kaks') ?? zoningInfo.kaks,
+      emsal: numberField(record, 'emsal', 'kaks') ?? zoningInfo.kaks,
+      kat_adedi: numberField(record, 'kat_adedi', 'floorCount') ?? zoningInfo.floorCount,
+      on_bahce_cekme: zoningInfo.setbacks.front,
+      arka_bahce_cekme: zoningInfo.setbacks.back,
+      sol_bahce_cekme: zoningInfo.setbacks.left,
+      sag_bahce_cekme: zoningInfo.setbacks.right,
+    };
+  }
+
+  return {
+    imar_durumu: textField(record, 'imar_durumu', 'notes'),
+    zona_tipi: textField(record, 'zona_tipi', 'constructionOrder') ?? zoningInfo.constructionOrder,
+    yapilasma_kosullari: textField(record, 'yapilasma_kosullari', 'notes') ?? zoningInfo.notes,
+    parsel_alani: numberField(record, 'parsel_alani', 'parcelArea'),
+    ada_no: textField(record, 'ada_no', 'blockNo'),
+    parsel_no: textField(record, 'parsel_no', 'parcelNo'),
+    taks: numberField(record, 'taks') ?? zoningInfo.taks,
+    kaks: numberField(record, 'kaks') ?? zoningInfo.kaks,
+    kat_adedi: numberField(record, 'kat_adedi', 'floorCount') ?? zoningInfo.floorCount,
+    yapi_yuksekligi: numberField(record, 'yapi_yuksekligi', 'buildingHeight') ?? zoningInfo.buildingHeight,
+    on_bahce_cekme: zoningInfo.setbacks.front,
+    arka_bahce_cekme: zoningInfo.setbacks.back,
+    sol_bahce_cekme: zoningInfo.setbacks.left,
+    sag_bahce_cekme: zoningInfo.setbacks.right,
+  };
+}
+
+function promptForDocumentType(documentType: ParcelDocumentType): string {
+  return documentType === 'plan_notlari'
+    ? PLAN_NOTLARI_FIELDS_PROMPT
+    : IMAR_DURUMU_FIELDS_PROMPT;
+}
+
+async function extractSingleDocument<T>(
+  filePath: string,
+  systemPrompt: string,
+): Promise<T> {
   try {
     const Anthropic = require('@anthropic-ai/sdk').default as typeof import('@anthropic-ai/sdk').default;
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-    const fileBlock = await buildClaudeFileBlock(filePath);
+    const mimeType = mediaTypeFromPath(filePath);
+    const extractedText = await extractTextFromFile(filePath, mimeType);
+    const content = extractedText.trim()
+      ? `Aşağıdaki belgeden imar ve yapılaşma parametrelerini çıkar:\n\n${extractedText}`
+      : [
+        {
+          type: 'text' as const,
+          text: 'Bu belgeden imar ve yapılaşma parametrelerini çıkar. Return raw JSON only.',
+        },
+        await buildClaudeFileBlock(filePath),
+      ];
 
     const message = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: 1000,
       temperature: 0,
-      system: SETBACK_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Extract garden setback distances from this document. Return raw JSON only.',
-            },
-            fileBlock,
-          ],
+          content,
         },
       ],
     });
 
-    return normalizeSetbacks(extractJsonObject(getClaudeText(message)));
+    return extractJsonObject(getClaudeText(message)) as T;
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
     }
 
-    console.error('[Claude] Parcel setback extraction failed', { error });
+    console.error('[Claude] Parcel document extraction failed', { error });
     throw new AppError(
-      `Bahçe çekmeleri okunamadı: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
+      `Belge okunamadı: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
       502,
-      'CLAUDE_SETBACK_EXTRACTION_FAILED',
+      'CLAUDE_DOCUMENT_EXTRACTION_FAILED',
     );
   }
+}
+
+async function extractZoningDocument(filePath: string, systemPrompt: string): Promise<ZoningExtractionResult> {
+  return normalizeZoningExtraction(await extractSingleDocument<unknown>(filePath, systemPrompt));
+}
+
+export async function extractParcelDocumentByType(
+  filePath: string,
+  documentType: ParcelDocumentType,
+): Promise<ParcelDocumentExtractionResult> {
+  const raw = await extractSingleDocument<unknown>(filePath, promptForDocumentType(documentType));
+  const zoningInfo = normalizeZoningExtraction(raw);
+
+  return {
+    documentType,
+    fields: normalizeExtractedDocumentFields(documentType, raw, zoningInfo),
+    zoningInfo,
+  };
+}
+
+function hasValue(value: number | null | undefined): value is number {
+  return value !== null && value !== undefined && Number.isFinite(value);
+}
+
+export async function extractSetbacksFromDocuments(
+  planNotesPath?: string,
+  zoningDocumentPath?: string,
+): Promise<SetbackExtractionResult> {
+  const fromPlanNotes = planNotesPath
+    ? normalizeDocumentSetbacks((await extractZoningDocument(planNotesPath, PLAN_NOTES_PROMPT)).setbacks)
+    : null;
+  const fromZoningDocument = zoningDocumentPath
+    ? normalizeDocumentSetbacks((await extractZoningDocument(zoningDocumentPath, IMAR_DURUMU_PROMPT)).setbacks)
+    : null;
+  const sides: SetbackSide[] = ['front', 'back', 'left', 'right'];
+  const final = {} as SetbackExtraction;
+  const sources = {} as Record<SetbackSide, SetbackSource>;
+  let hasConflict = false;
+
+  sides.forEach((side) => {
+    const planNotesValue = fromPlanNotes?.[side] ?? null;
+    const zoningDocumentValue = fromZoningDocument?.[side] ?? null;
+
+    if (hasValue(planNotesValue) && hasValue(zoningDocumentValue) && Math.abs(planNotesValue - zoningDocumentValue) > 0.001) {
+      hasConflict = true;
+    }
+
+    if (hasValue(planNotesValue)) {
+      final[side] = planNotesValue;
+      sources[side] = 'planNotes';
+      return;
+    }
+
+    if (hasValue(zoningDocumentValue)) {
+      final[side] = zoningDocumentValue;
+      sources[side] = 'zoningDocument';
+      return;
+    }
+
+    final[side] = 3;
+    sources[side] = 'default';
+  });
+
+  return {
+    final,
+    fromPlanNotes,
+    fromZoningDocument,
+    hasConflict,
+    sources,
+  };
+}
+
+export async function extractFullZoningInfo(
+  imarDurumuPath?: string,
+  planNotesPath?: string,
+): Promise<FullExtractionResult> {
+  const fromImarDurumu = imarDurumuPath
+    ? await extractZoningDocument(imarDurumuPath, IMAR_DURUMU_PROMPT)
+    : null;
+
+  const fromPlanNotes = planNotesPath
+    ? await extractZoningDocument(planNotesPath, PLAN_NOTES_PROMPT)
+    : null;
+
+  const merged: ZoningExtractionResult = {
+    setbacks: {
+      front: fromImarDurumu?.setbacks.front ?? fromPlanNotes?.setbacks.front ?? null,
+      back: fromImarDurumu?.setbacks.back ?? fromPlanNotes?.setbacks.back ?? null,
+      left: fromImarDurumu?.setbacks.left ?? fromPlanNotes?.setbacks.left ?? null,
+      right: fromImarDurumu?.setbacks.right ?? fromPlanNotes?.setbacks.right ?? null,
+    },
+    taks: fromImarDurumu?.taks ?? fromPlanNotes?.taks ?? null,
+    kaks: fromImarDurumu?.kaks ?? fromPlanNotes?.kaks ?? null,
+    floorCount: fromImarDurumu?.floorCount ?? fromPlanNotes?.floorCount ?? null,
+    buildingHeight: fromImarDurumu?.buildingHeight ?? fromPlanNotes?.buildingHeight ?? null,
+    constructionOrder: fromImarDurumu?.constructionOrder ?? fromPlanNotes?.constructionOrder ?? null,
+    buildingDepth: fromImarDurumu?.buildingDepth ?? fromPlanNotes?.buildingDepth ?? null,
+    notes: [fromImarDurumu?.notes, fromPlanNotes?.notes].filter(Boolean).join(' | ') || null,
+  };
+
+  const hasConflict = !!(
+    fromImarDurumu && fromPlanNotes && (
+      (fromImarDurumu.setbacks.front !== null && fromPlanNotes.setbacks.front !== null
+        && fromImarDurumu.setbacks.front !== fromPlanNotes.setbacks.front)
+      || (fromImarDurumu.taks !== null && fromPlanNotes.taks !== null
+        && fromImarDurumu.taks !== fromPlanNotes.taks)
+    )
+  );
+
+  return { fromImarDurumu, fromPlanNotes, merged, hasConflict };
 }

@@ -101,7 +101,7 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false, show
   return (
     <Box
       sx={{
-        width: collapsed ? 56 : 240,
+        width: collapsed ? 56 : 260,
         height: '100%',
         backgroundColor: '#FFFFFF',
         display: 'flex',
@@ -149,7 +149,7 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false, show
               </Typography>
             ) : null}
             {collapsed && group.label ? <Box sx={{ pt: 2 }} /> : null}
-            <List disablePadding sx={{ px: collapsed ? 0.5 : 1 }}>
+            <List disablePadding sx={{ px: collapsed ? 0.5 : 0.75 }}>
               {group.items.map((item) => {
                 const hasChildren = !!item.children?.length;
                 const childActive = item.children?.some((child) => isActive(child)) ?? false;
@@ -170,8 +170,8 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false, show
                           }}
                           sx={{
                             borderRadius: '8px',
-                            px: collapsed ? 1 : 2,
-                            py: '10px',
+                            px: collapsed ? 1 : 1.5,
+                            py: '8px',
                             justifyContent: collapsed ? 'center' : 'flex-start',
                             backgroundColor: active ? '#EEF2FF' : 'transparent',
                             '&:hover': {
@@ -185,7 +185,7 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false, show
                             className="nav-icon"
                             sx={{
                               color: active ? '#0A2463' : '#6B7280',
-                              minWidth: collapsed ? 'unset' : 36,
+                              minWidth: collapsed ? 'unset' : 32,
                               transition: 'color 0.15s',
                             }}
                           >
@@ -197,13 +197,13 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false, show
                                 primary={item.label}
                                 className="nav-text"
                                 primaryTypographyProps={{
-                                  fontSize: '14px',
+                                  fontSize: '13px',
                                   fontWeight: active ? 600 : 500,
                                   color: active ? '#0A2463' : '#374151',
                                   sx: { transition: 'color 0.15s' },
                                 }}
                               />
-                              {hasChildren ? (open ? <ExpandLess sx={{ fontSize: 20 }} /> : <ExpandMore sx={{ fontSize: 20 }} />) : null}
+                              {hasChildren ? (open ? <ExpandLess sx={{ fontSize: 18 }} /> : <ExpandMore sx={{ fontSize: 18 }} />) : null}
                             </>
                           )}
                         </ListItemButton>
@@ -238,13 +238,13 @@ export function Sidebar({ title, groups, user, onLogout, collapsed = false, show
                                   },
                                 }}
                               >
-                                <ListItemIcon sx={{ color, minWidth: 36 }}>
+                                <ListItemIcon sx={{ color, minWidth: 32 }}>
                                   {child.icon}
                                 </ListItemIcon>
                                 <ListItemText
                                   primary={child.label}
                                   primaryTypographyProps={{
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: subActive ? 600 : 500,
                                     color: subActive ? '#111827' : '#374151',
                                   }}
