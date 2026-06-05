@@ -23,7 +23,6 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import Grid from '@mui/material/GridLegacy';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -239,6 +238,8 @@ export function OfferForm({
   const tabanAlani = parcelAreaOverride
     ? (parseFloat(manualParcelArea) || 0)
     : (parcelArea ?? (parseFloat(manualParcelArea) || 0));
+  const floorNetArea = (fa: typeof floorAreas, floorNumber: number) =>
+    fa?.find((f) => f.floorNumber === floorNumber + 1)?.netArea ?? tabanAlani;
 
   const canSave = payload.parcelTitle.trim() && payload.offerDate && payload.page2Content.trim();
 
@@ -394,8 +395,8 @@ export function OfferForm({
             onChange={(e) => setPayload((c) => ({ ...c, parcelTitle: e.target.value }))}
             fullWidth
           />
-          <Grid container spacing={2} alignItems="stretch">
-            <Grid item xs={12} sm={6}>
+          <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
+            <Box sx={{ flex: 1 }}>
               <TextField
                 label="Teklif tarihi"
                 type="date"
@@ -404,16 +405,16 @@ export function OfferForm({
                 InputLabelProps={{ shrink: true }}
                 fullWidth
               />
-            </Grid>
-            <Grid item xs={12} sm={6}>
+            </Box>
+            <Box sx={{ flex: 1 }}>
               <TextField
                 label="TCMB dolar kuru"
                 value={payload.tcmbRate}
                 onChange={(e) => setPayload((c) => ({ ...c, tcmbRate: e.target.value }))}
                 fullWidth
               />
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
           <Box>
             <TextField
               label="Taban oturum alanı"
@@ -449,118 +450,122 @@ export function OfferForm({
 
       {/* ── Step 2: Bina Yapısı ── */}
       {activeStep === 2 ? (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 7fr) minmax(420px, 5fr)' }, gap: 3, alignItems: 'start' }}>
-          <Stack spacing={2}>
-
+        <Stack spacing={3}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              gap: 2,
+              alignItems: 'flex-start',
+              width: '100%',
+            }}
+          >
             {/* Normal katlar */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Normal Katlar</Typography>
+            <Box sx={{ flex: 1, minWidth: 0, width: { xs: '100%', md: 0 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <FormControlLabel
                 control={<Checkbox checked={normalFloorsSame} onChange={(e) => handleNormalFloorsSameChange(e.target.checked)} />}
                 label="Tüm katlar aynı"
                 sx={{ mr: 0 }}
               />
+              {normalFloorsSame && payload.building.normalFloors.length > 1 ? (
+                <Alert severity="info" sx={{ py: 0.5, fontSize: 13 }}>
+                  Tüm katlar senkronize — bir kattaki değişiklik diğer katlara yansır
+                </Alert>
+              ) : null}
+              <Box>
+                <Button startIcon={<AddIcon />} onClick={addNormalFloor} variant="outlined" size="small">
+                  Normal Kat Ekle
+                </Button>
+              </Box>
+              {payload.building.normalFloors.length === 0 ? (
+                <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz normal kat eklenmedi.</Typography>
+              ) : null}
+              {[...payload.building.normalFloors].reverse().map((floor) => {
+                const index = payload.building.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
+                return (
+                  <FloorCard
+                    key={floor.floorNumber}
+                    label={`${floor.floorNumber}. Normal Kat`}
+                    units={floor.units}
+                    tabanAlani={tabanAlani}
+                    isBasement={false}
+                    companyName={companyName}
+                    synced={normalFloorsSame && payload.building.normalFloors.length > 1}
+                    onEdit={() => openFloorEditor({ kind: 'normal', index })}
+                    onRemove={() => removeNormalFloor(index)}
+                    canRemove
+                  />
+                );
+              })}
             </Box>
-            {normalFloorsSame && payload.building.normalFloors.length > 1 ? (
-              <Alert severity="info" sx={{ py: 0.5, fontSize: 13 }}>
-                Tüm katlar senkronize — bir kattaki değişiklik diğer katlara yansır
-              </Alert>
-            ) : null}
-            {payload.building.normalFloors.length === 0 ? (
-              <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz normal kat eklenmedi.</Typography>
-            ) : null}
-            {[...payload.building.normalFloors].reverse().map((floor) => {
-              const index = payload.building.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
-              return (
+
+            {/* Zemin kat + bodrum katlar + çatı katı */}
+            <Box sx={{ flex: 1, minWidth: 0, width: { xs: '100%', md: 0 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Switch
+                  checked={payload.building.groundFloor.exists}
+                  onChange={(e) => updateBuilding((b) => ({ ...b, groundFloor: { ...b.groundFloor, exists: e.target.checked } }))}
+                />
+                <Typography sx={{ fontWeight: 600 }}>Zemin Kat</Typography>
+              </Box>
+              {payload.building.groundFloor.exists ? (
                 <FloorCard
-                  key={floor.floorNumber}
-                  label={`${floor.floorNumber}. Normal Kat`}
-                  units={floor.units}
+                  label="Zemin Kat"
+                  units={payload.building.groundFloor.units}
                   tabanAlani={tabanAlani}
                   isBasement={false}
                   companyName={companyName}
-                  synced={normalFloorsSame && payload.building.normalFloors.length > 1}
-                  onEdit={() => openFloorEditor({ kind: 'normal', index })}
-                  onRemove={() => removeNormalFloor(index)}
-                  canRemove
+                  onEdit={() => openFloorEditor({ kind: 'ground' })}
                 />
-              );
-            })}
-            <Box>
-              <Button startIcon={<AddIcon />} onClick={addNormalFloor} variant="outlined" size="small">
-                Normal Kat Ekle
-              </Button>
+              ) : null}
+
+              <Divider />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'text.secondary' }}>Bodrum Katlar</Typography>
+                <Button startIcon={<AddIcon />} onClick={addBasementFloor} variant="outlined" size="small">
+                  Bodrum Kat Ekle
+                </Button>
+              </Box>
+              {payload.building.basementFloors.map((floor, index) => (
+                <FloorCard
+                  key={index}
+                  label={floor.label}
+                  units={floor.units}
+                  isCommonArea={floor.isCommonArea}
+                  commonAreaM2={floor.commonAreaM2}
+                  commonAreaLabel={floor.commonAreaLabel}
+                  tabanAlani={tabanAlani}
+                  isBasement
+                  companyName={companyName}
+                  onEdit={() => openFloorEditor({ kind: 'basement', index })}
+                  onRemove={() => removeBasementFloor(index)}
+                  canRemove={payload.building.basementFloors.length > 1}
+                />
+              ))}
+
+              <Divider />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Switch
+                  checked={payload.building.roofFloor.exists}
+                  onChange={(e) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, exists: e.target.checked } }))}
+                />
+                <Typography sx={{ fontWeight: 600 }}>Çatı Katı</Typography>
+              </Box>
+              {payload.building.roofFloor.exists ? (
+                <UnitsEditor
+                  title="Çatı Katı"
+                  units={payload.building.roofFloor.units}
+                  tabanAlani={tabanAlani}
+                  allFloors={payload.building}
+                  numberMap={previewNumberMap}
+                  companyName={companyName}
+                  onChange={(units) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, units } }))}
+                />
+              ) : null}
             </Box>
-
-            <Divider />
-
-            {/* Zemin kat */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Switch
-                checked={payload.building.groundFloor.exists}
-                onChange={(e) => updateBuilding((b) => ({ ...b, groundFloor: { ...b.groundFloor, exists: e.target.checked } }))}
-              />
-              <Typography sx={{ fontWeight: 600 }}>Zemin Kat</Typography>
-            </Box>
-            {payload.building.groundFloor.exists ? (
-              <FloorCard
-                label="Zemin Kat"
-                units={payload.building.groundFloor.units}
-                tabanAlani={tabanAlani}
-                isBasement={false}
-                companyName={companyName}
-                onEdit={() => openFloorEditor({ kind: 'ground' })}
-              />
-            ) : null}
-
-            <Divider />
-
-            {/* Bodrum katlar */}
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Bodrum Katlar</Typography>
-            {payload.building.basementFloors.map((floor, index) => (
-              <FloorCard
-                key={index}
-                label={floor.label}
-                units={floor.units}
-                isCommonArea={floor.isCommonArea}
-                commonAreaM2={floor.commonAreaM2}
-                commonAreaLabel={floor.commonAreaLabel}
-                tabanAlani={tabanAlani}
-                isBasement
-                companyName={companyName}
-                onEdit={() => openFloorEditor({ kind: 'basement', index })}
-                onRemove={() => removeBasementFloor(index)}
-                canRemove={payload.building.basementFloors.length > 1}
-              />
-            ))}
-            <Box>
-              <Button startIcon={<AddIcon />} onClick={addBasementFloor} variant="outlined" size="small">
-                Bodrum Kat Ekle
-              </Button>
-            </Box>
-
-            <Divider />
-
-            {/* Çatı katı */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Switch
-                checked={payload.building.roofFloor.exists}
-                onChange={(e) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, exists: e.target.checked } }))}
-              />
-              <Typography sx={{ fontWeight: 600 }}>Çatı Katı</Typography>
-            </Box>
-            {payload.building.roofFloor.exists ? (
-              <UnitsEditor
-                title="Çatı Katı"
-                units={payload.building.roofFloor.units}
-                tabanAlani={tabanAlani}
-                allFloors={payload.building}
-                numberMap={previewNumberMap}
-                companyName={companyName}
-                onChange={(units) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, units } }))}
-              />
-            ) : null}
-          </Stack>
+          </Box>
 
           <BuildingPreview parcelTitle={payload.parcelTitle} building={previewBuilding} floorAreas={floorAreas} />
 
@@ -568,13 +573,13 @@ export function OfferForm({
             key={floorDraft ? `${floorDraft.kind}-${floorDraft.kind !== 'ground' ? (floorDraft as { index: number }).index : 0}` : 'closed'}
             floorDraft={floorDraft}
             building={payload.building}
-            tabanAlani={tabanAlani}
+            tabanAlani={floorDraft?.kind === 'normal' ? floorNetArea(floorAreas, floorDraft.floorNumber) : tabanAlani}
             companyName={companyName}
             normalFloorsSame={normalFloorsSame}
             onSave={saveFloorDraft}
             onCancel={() => setFloorDraft(null)}
           />
-        </Box>
+        </Stack>
       ) : null}
 
       {/* ── Step 3: Önizleme ── */}

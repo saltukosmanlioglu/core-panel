@@ -301,8 +301,52 @@ export async function findById(tdb: TenantDb, projectId: string, id: string): Pr
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
+function getTenantSchemaName(tdb: TenantDb): string | null {
+  const match = /^"([^"]+)"\."offer_documents"$/.exec(tdb.ref('offer_documents'));
+  return match?.[1] ?? null;
+}
+
+async function hasOfferDocumentsColumn(tdb: TenantDb, columnName: string): Promise<boolean> {
+  const schemaName = getTenantSchemaName(tdb);
+  if (!schemaName) return false;
+
+  const { rows } = await tdb.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = $1
+         AND table_name = 'offer_documents'
+         AND column_name = $2
+     ) AS exists`,
+    [schemaName, columnName],
+  );
+
+  return rows[0]?.exists === true;
+}
+
 export async function create(tdb: TenantDb, projectId: string, data: OfferDocumentInput): Promise<OfferDocument> {
   const companyName = data.companyName ?? '';
+  const buildingJson = JSON.stringify(normalizeBuilding(data.building, companyName));
+  const hasCompanyNameColumn = await hasOfferDocumentsColumn(tdb, 'company_name');
+
+  if (!hasCompanyNameColumn) {
+    const { rows } = await tdb.query<OfferDocumentRow>(
+      `INSERT INTO ${tdb.ref('offer_documents')}
+         (project_id, parcel_title, offer_date, page2_content, tcmb_rate, building)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       RETURNING *`,
+      [
+        projectId,
+        data.parcelTitle,
+        data.offerDate,
+        data.page2Content,
+        data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
+        buildingJson,
+      ],
+    );
+    return mapRow(rows[0]!);
+  }
+
   const { rows } = await tdb.query<OfferDocumentRow>(
     `INSERT INTO ${tdb.ref('offer_documents')}
        (project_id, parcel_title, offer_date, page2_content, tcmb_rate, company_name, building)
@@ -315,7 +359,7 @@ export async function create(tdb: TenantDb, projectId: string, data: OfferDocume
       data.page2Content,
       data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
       companyName,
-      JSON.stringify(normalizeBuilding(data.building, companyName)),
+      buildingJson,
     ],
   );
   return mapRow(rows[0]!);
@@ -328,6 +372,33 @@ export async function update(
   data: OfferDocumentInput,
 ): Promise<OfferDocument | null> {
   const companyName = data.companyName ?? '';
+  const buildingJson = JSON.stringify(normalizeBuilding(data.building, companyName));
+  const hasCompanyNameColumn = await hasOfferDocumentsColumn(tdb, 'company_name');
+
+  if (!hasCompanyNameColumn) {
+    const { rows } = await tdb.query<OfferDocumentRow>(
+      `UPDATE ${tdb.ref('offer_documents')}
+       SET parcel_title = $3,
+           offer_date = $4,
+           page2_content = $5,
+           tcmb_rate = $6,
+           building = $7::jsonb,
+           updated_at = NOW()
+       WHERE project_id = $1 AND id = $2
+       RETURNING *`,
+      [
+        projectId,
+        id,
+        data.parcelTitle,
+        data.offerDate,
+        data.page2Content,
+        data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
+        buildingJson,
+      ],
+    );
+    return rows[0] ? mapRow(rows[0]) : null;
+  }
+
   const { rows } = await tdb.query<OfferDocumentRow>(
     `UPDATE ${tdb.ref('offer_documents')}
      SET parcel_title = $3,
@@ -347,7 +418,7 @@ export async function update(
       data.page2Content,
       data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
       companyName,
-      JSON.stringify(normalizeBuilding(data.building, companyName)),
+      buildingJson,
     ],
   );
   return rows[0] ? mapRow(rows[0]) : null;
@@ -377,8 +448,9 @@ export async function getParcelCalculationArea(tdb: TenantDb, projectId: string)
     footprint_area: string | number | null;
     footprint_vertices: unknown;
     overhangs: unknown;
+    floor_count: number | null;
   }>(
-    `SELECT footprint_area, footprint_vertices, overhangs
+    `SELECT footprint_area, footprint_vertices, overhangs, floor_count
      FROM ${tdb.ref('parcel_calculations')}
      WHERE project_id = $1 AND footprint_area IS NOT NULL
      ORDER BY created_at DESC
@@ -398,37 +470,27 @@ export async function getParcelCalculationArea(tdb: TenantDb, projectId: string)
 
   const overhangs = Array.isArray(row.overhangs) ? (row.overhangs as StoredOverhang[]) : [];
   const footprintVertices = Array.isArray(row.footprint_vertices) ? (row.footprint_vertices as StoredPoint[]) : [];
+  const floorCount = row.floor_count && row.floor_count > 0 ? row.floor_count : null;
 
-  const hasOverhangs = overhangs.some(
-    (o) => Number(o.front) > 0 || Number(o.back) > 0 || Number(o.left) > 0 || Number(o.right) > 0,
-  );
+  if (!floorCount) return { footprintArea, floorAreas: null };
 
-  if (!hasOverhangs || footprintVertices.length < 3) {
+  const upperOverhang = overhangs.find((o) => Number(o.floor) === 2);
+  const cikmaValue = upperOverhang ? Math.max(0, Number(upperOverhang.front)) : 0;
+
+  if (cikmaValue <= 0 || footprintVertices.length < 3) {
     return { footprintArea, floorAreas: null };
   }
 
-  const CM = 100;
-  const SQ = 10000;
-  const minX = Math.min(...footprintVertices.map((v) => Number(v.x)));
-  const maxX = Math.max(...footprintVertices.map((v) => Number(v.x)));
-  const minY = Math.min(...footprintVertices.map((v) => Number(v.y)));
-  const maxY = Math.max(...footprintVertices.map((v) => Number(v.y)));
+  const cikmaEtkisi = footprintVertices.reduce((sum, v, i) => {
+    const next = footprintVertices[(i + 1) % footprintVertices.length]!;
+    const lengthM = Math.sqrt((Number(next.x) - Number(v.x)) ** 2 + (Number(next.y) - Number(v.y)) ** 2) / 100;
+    return sum + lengthM * cikmaValue;
+  }, 0);
 
-  const floorAreas: FloorAreaEntry[] = overhangs.map((o) => {
-    const floor = Number(o.floor);
-    if (floor === 1) {
-      return { floorNumber: 1, netArea: Math.round(footprintArea * 100) / 100 };
-    }
-    const expMinX = minX - Number(o.left) * CM;
-    const expMaxX = maxX + Number(o.right) * CM;
-    const expMinY = minY - Number(o.back) * CM;
-    const expMaxY = maxY + Number(o.front) * CM;
-    const expanded = Math.max(0, expMaxX - expMinX) * Math.max(0, expMaxY - expMinY) / SQ;
-    return {
-      floorNumber: floor,
-      netArea: Math.round(expanded * 100) / 100,
-    };
-  });
+  const floorAreas: FloorAreaEntry[] = Array.from({ length: floorCount }, (_, i) => ({
+    floorNumber: i + 1,
+    netArea: Math.round((i === 0 ? footprintArea : footprintArea + cikmaEtkisi) * 100) / 100,
+  }));
 
   return { footprintArea, floorAreas };
 }

@@ -264,54 +264,21 @@ export function ParcelVisualization({
         />
       ) : null}
 
-      {perFloorOverhangVertices?.map(({ floor, label, vertices: pverts }) => {
+      {perFloorOverhangVertices?.map(({ floor, vertices: pverts }) => {
         if (pverts.length < 3) return null;
         const base = pverts.map(toSvg);
         const pts = rot !== 0 ? base.map((p) => rotatePt(p, cx, cy, rot)) : base;
         if (pts.length < 3) return null;
-        const fpCx = footprintCentroid?.x ?? pts.reduce((s, p) => s + p.x, 0) / pts.length;
-        const fpCy = footprintCentroid?.y ?? pts.reduce((s, p) => s + p.y, 0) / pts.length;
-        const outermost = pts.reduce<{ x: number; y: number; d: number }>((best, p, i) => {
-          const next = pts[(i + 1) % pts.length]!;
-          const midX = (p.x + next.x) / 2;
-          const midY = (p.y + next.y) / 2;
-          const d = Math.sqrt((midX - fpCx) ** 2 + (midY - fpCy) ** 2);
-          return d > best.d ? { x: midX, y: midY, d } : best;
-        }, { x: fpCx, y: fpCy - 20, d: -Infinity });
-        const ovhPolygon = (
-          <polygon
-            points={polygonPoints(pts)}
-            fill="rgba(74,124,181,0.07)"
-            stroke="#4A7CB5"
-            strokeWidth={1.5}
-            strokeDasharray="6,3"
-            opacity={0.8}
-          />
-        );
-        if (outermost.d < 10) return <g key={`floor-overhang-${floor}`}>{ovhPolygon}</g>;
-        const outDx = outermost.x - fpCx;
-        const outDy = outermost.y - fpCy;
-        const outLen = Math.sqrt(outDx ** 2 + outDy ** 2) || 1;
-        const textX = outermost.x + (outDx / outLen) * 12;
-        const textY = outermost.y + (outDy / outLen) * 12;
         return (
           <g key={`floor-overhang-${floor}`}>
-            {ovhPolygon}
-            <text
-              x={textX}
-              y={textY}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontSize={9}
-              fill="#4A7CB5"
-              fontWeight={600}
-              fontFamily="sans-serif"
-              paintOrder="stroke"
-              stroke="white"
-              strokeWidth={2}
-            >
-              {label}
-            </text>
+            <polygon
+              points={polygonPoints(pts)}
+              fill="rgba(74,124,181,0.07)"
+              stroke="#4A7CB5"
+              strokeWidth={1.5}
+              strokeDasharray="6,3"
+              opacity={0.8}
+            />
           </g>
         );
       })}
@@ -518,6 +485,37 @@ export function ParcelVisualization({
           })}
         </g>
       ) : null}
+
+      {perFloorOverhangVertices && perFloorOverhangVertices.length > 0 && footprintPoints.length >= 3 && (() => {
+        const firstFloor = perFloorOverhangVertices[0]!;
+        const base = firstFloor.vertices.map(toSvg);
+        const pts = rot !== 0 ? base.map((p) => rotatePt(p, cx, cy, rot)) : base;
+        if (pts.length !== footprintPoints.length) return null;
+        const elements = footprintPoints.map((fp, i) => {
+          const fpNext = footprintPoints[(i + 1) % footprintPoints.length]!;
+          const ohp = pts[i]!;
+          const ohpNext = pts[(i + 1) % pts.length]!;
+          const fpMid = { x: (fp.x + fpNext.x) / 2, y: (fp.y + fpNext.y) / 2 };
+          const ohMid = { x: (ohp.x + ohpNext.x) / 2, y: (ohp.y + ohpNext.y) / 2 };
+          const gapPx = Math.sqrt((ohMid.x - fpMid.x) ** 2 + (ohMid.y - fpMid.y) ** 2);
+          const ovhVal = edgeOverhangs?.[i] ?? 0;
+          if (gapPx < 15 || ovhVal <= 0) return null;
+          const lx = (fpMid.x + ohMid.x) / 2;
+          const ly = (fpMid.y + ohMid.y) / 2;
+          const dist = formatter.format(ovhVal) + ' m';
+          const lw = dist.length * 5.5 + 8;
+          return (
+            <g key={`cikma-dist-${i}`}>
+              <rect x={lx - lw / 2} y={ly - 8} width={lw} height={14} fill="white" rx={2} opacity={0.9} />
+              <text x={lx} y={ly + 2.5} textAnchor="middle" fontSize={9}
+                fill="#4A7CB5" fontWeight={600} fontFamily="sans-serif">
+                {dist}
+              </text>
+            </g>
+          );
+        });
+        return <g>{elements}</g>;
+      })()}
 
       {showLabels ? parcelPoints.map((point, index) => (
         <g key={`label-${index}`}>

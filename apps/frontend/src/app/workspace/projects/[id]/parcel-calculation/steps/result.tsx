@@ -19,7 +19,6 @@ import RotateLeftIcon from '@mui/icons-material/RotateLeft';
 import RotateRightIcon from '@mui/icons-material/RotateRight';
 import SaveIcon from '@mui/icons-material/Save';
 import type {
-  Overhang,
   ParcelCalculation,
   Point,
   Setbacks,
@@ -35,39 +34,22 @@ import { formatArea, numberFormatter } from '../utils';
 function computeFloorAreaBreakdown(
   footprintArea: number,
   footprintVertices: Point[],
-  overhangs: Overhang[],
-): Array<{ floorNumber: number; tabanAlani: number; cikmaEtkisi: number; netAlan: number }> | null {
-  const hasOverhangs = overhangs.some(
-    (o) => o.front > 0 || o.back > 0 || o.left > 0 || o.right > 0,
-  );
-  if (!hasOverhangs || footprintVertices.length < 3) return null;
-
-  const CM = 100;
-  const SQ = 10000;
-  const box = {
-    minX: Math.min(...footprintVertices.map((p) => p.x)),
-    maxX: Math.max(...footprintVertices.map((p) => p.x)),
-    minY: Math.min(...footprintVertices.map((p) => p.y)),
-    maxY: Math.max(...footprintVertices.map((p) => p.y)),
-  };
-
-  return overhangs.map((o) => {
-    if (o.floor === 1) {
-      return { floorNumber: 1, tabanAlani: footprintArea, cikmaEtkisi: 0, netAlan: footprintArea };
-    }
-    const expMinX = box.minX - o.left * CM;
-    const expMaxX = box.maxX + o.right * CM;
-    const expMinY = box.minY - o.back * CM;
-    const expMaxY = box.maxY + o.front * CM;
-    const expanded = Math.max(0, expMaxX - expMinX) * Math.max(0, expMaxY - expMinY) / SQ;
-    const extra = Math.max(0, Math.round((expanded - footprintArea) * 100) / 100);
-    return {
-      floorNumber: o.floor,
-      tabanAlani: footprintArea,
-      cikmaEtkisi: extra,
-      netAlan: Math.round((footprintArea + extra) * 100) / 100,
-    };
-  });
+  edgeOverhangValues: number[],
+  floorCount: number,
+): Array<{ floorNumber: number; netArea: number }> | null {
+  if (footprintVertices.length < 3) return null;
+  const cikmaEtkisi = footprintVertices.reduce((sum, v, i) => {
+    const next = footprintVertices[(i + 1) % footprintVertices.length]!;
+    const lengthM = Math.sqrt((next.x - v.x) ** 2 + (next.y - v.y) ** 2) / 100;
+    return sum + lengthM * (edgeOverhangValues[i] ?? 0);
+  }, 0);
+  if (cikmaEtkisi <= 0) return null;
+  return Array.from({ length: floorCount }, (_, i) => ({
+    floorNumber: i + 1,
+    netArea: i === 0
+      ? Math.round(footprintArea * 100) / 100
+      : Math.round((footprintArea + cikmaEtkisi) * 100) / 100,
+  }));
 }
 
 interface PerFloorOverhangPolygon {
@@ -144,18 +126,23 @@ export function Result({
       {calculationError ? <Alert severity="error" sx={{ fontSize: 12, py: 0.5 }}>{calculationError}</Alert> : null}
 
       {calculationResult && (() => {
+        const edgeOverhangValues = edgeOverhangs.map((value, index) =>
+          (edgeOverhangActive[index] ?? true) ? (parseFloat(String(value)) || 0) : 0,
+        );
         const breakdown = computeFloorAreaBreakdown(
           calculationResult.footprintArea,
           calculationResult.footprintVertices,
-          calculationResult.overhangs,
+          edgeOverhangValues,
+          calculationResult.floorCount,
         );
-        const totalExtra = breakdown
-          ? breakdown.filter((r) => r.floorNumber > 1).reduce((sum, r) => sum + r.cikmaEtkisi, 0)
-          : 0;
-        if (totalExtra <= 0) return null;
+        if (!breakdown) return null;
+        const upperFloor = breakdown.find((r) => r.floorNumber > 1);
+        if (!upperFloor) return null;
+        const extraArea = upperFloor.netArea - calculationResult.footprintArea;
+        if (extraArea <= 0) return null;
         return (
           <Typography sx={{ fontSize: 12, color: 'text.secondary', fontStyle: 'italic' }}>
-            Üst katlarda çıkma ile ek alan: {numberFormatter.format(totalExtra)} m²
+            Üst katlarda çıkma ile ek alan: {numberFormatter.format(extraArea)} m²
           </Typography>
         );
       })()}

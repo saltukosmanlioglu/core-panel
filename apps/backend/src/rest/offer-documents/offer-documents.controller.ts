@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { TenantDb } from '../../lib/tenantDb';
 import { AppError } from '../../lib/AppError';
-import { generateOfferPDF } from './pdf/pdf-generator';
+import { generateOfferPDF, generateCustomPDF } from './pdf/pdf-generator';
 import * as repo from './offer-documents.repo';
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -152,6 +152,49 @@ export const generatePdf = async (req: Request, res: Response, next: NextFunctio
     const pdf = await generateOfferPDF(offerDocument);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="teklif-${offerDocument.id}.pdf"`);
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const generateCustomPdf = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { parcelLine1, parcelLine2, date, bodyHtml, p2Header, p3Header, p3Subtitle } = req.body as Record<string, string>;
+
+    if (!parcelLine1?.trim()) {
+      res.status(400).json({ error: 'parcelLine1 zorunludur', code: 'VALIDATION_ERROR' });
+      return;
+    }
+    if (!date?.trim()) {
+      res.status(400).json({ error: 'date zorunludur', code: 'VALIDATION_ERROR' });
+      return;
+    }
+    if (!bodyHtml?.trim()) {
+      res.status(400).json({ error: 'bodyHtml zorunludur', code: 'VALIDATION_ERROR' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'floorPlanImage zorunludur', code: 'VALIDATION_ERROR' });
+      return;
+    }
+
+    const pdf = await generateCustomPDF({
+      parcelLine1: parcelLine1.trim(),
+      parcelLine2: parcelLine2?.trim(),
+      date: date.trim(),
+      p2Header: p2Header?.trim(),
+      bodyHtml: bodyHtml.trim(),
+      p3Header: p3Header?.trim(),
+      p3Subtitle: p3Subtitle?.trim(),
+      floorPlanImage: file.buffer,
+      floorPlanMimetype: file.mimetype,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="teklif.pdf"');
     res.send(pdf);
   } catch (error) {
     next(error);
