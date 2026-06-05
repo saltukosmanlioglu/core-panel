@@ -71,14 +71,21 @@ async function renderHtmlToPng(
     });
     const page = await ctx.newPage();
     await page.setContent(html, { waitUntil: 'networkidle' });
-    const buffer = await page.screenshot({ type: 'png' });
+    const buffer = await page.screenshot({ type: 'png', fullPage: true });
     return Buffer.from(buffer);
   } finally {
     await browser.close();
   }
 }
 
-// ── Public input type ─────────────────────────────────────────────────────────
+// ── Public input types ────────────────────────────────────────────────────────
+
+export interface BuildingPageInput {
+  header: string;
+  subtitle: string;
+  image: Buffer;
+  mimetype: string;
+}
 
 export interface CustomPdfInput {
   parcelLine1: string;
@@ -86,10 +93,7 @@ export interface CustomPdfInput {
   date: string;
   p2Header?: string;
   bodyHtml: string;
-  p3Header?: string;
-  p3Subtitle?: string;
-  floorPlanImage: Buffer;
-  floorPlanMimetype: string;
+  buildingPages: BuildingPageInput[];
 }
 
 // ── Core generator (coordinate-map overlay on template) ───────────────────────
@@ -98,7 +102,6 @@ export async function generateCustomPDF(input: CustomPdfInput): Promise<Buffer> 
   const templatePath = resolveAsset('template.pdf');
   if (!fs.existsSync(templatePath)) throw new Error(`Template PDF not found: ${templatePath}`);
 
-  // Render page-2 body HTML and load template in parallel
   const [templateBytes, bodyPng] = await Promise.all([
     fs.promises.readFile(templatePath),
     renderHtmlToPng(wrapBodyHtml(input.bodyHtml), 530, 568, 2),
@@ -106,9 +109,19 @@ export async function generateCustomPDF(input: CustomPdfInput): Promise<Buffer> 
 
   const pdfDoc = await PDFDocument.load(templateBytes);
   const { regular, bold } = await loadFonts(pdfDoc);
+
+  // Insert extra building pages (one per additional alternative beyond the first)
+  // Template layout: [cover(0), content(1), building_template(2), reference(3), corporate(4)]
+  const numExtras = Math.max(0, input.buildingPages.length - 1);
+  for (let i = 0; i < numExtras; i++) {
+    const extraDoc = await PDFDocument.load(templateBytes);
+    const [extraPage] = await pdfDoc.copyPages(extraDoc, [2]);
+    pdfDoc.insertPage(3 + i, extraPage);
+  }
+
   const pages = pdfDoc.getPages();
 
-  // ── Page 1: text overlays ─────────────────────────────────────────────────
+  // ── Page 1: cover ─────────────────────────────────────────────────────────
   const p1 = pages[0];
   if (p1) {
     if (input.parcelLine1) {
@@ -129,7 +142,7 @@ export async function generateCustomPDF(input: CustomPdfInput): Promise<Buffer> 
     });
   }
 
-  // ── Page 2: header text + clear body region + embed HTML render ───────────
+  // ── Page 2: content ────────────────────────────────────────────────────────
   const p2 = pages[1];
   if (p2) {
     if (input.p2Header) {
@@ -138,39 +151,38 @@ export async function generateCustomPDF(input: CustomPdfInput): Promise<Buffer> 
         size: 10, font: bold, color: NAVY,
       });
     }
-    // pdfY = PAGE_H - yTop - height = 842.25 - 79 - 568 = 195.25
     const bodyY = PAGE_H - 79 - 568;
     p2.drawRectangle({ x: 33.6, y: bodyY, width: 529.4, height: 568, color: rgb(1, 1, 1), borderWidth: 0 });
     const bodyImg = await pdfDoc.embedPng(bodyPng);
     p2.drawImage(bodyImg, { x: 33.6, y: bodyY, width: 529.4, height: 568 });
   }
 
-  // ── Page 3: header/subtitle text + clear diagram region + embed image ─────
-  const p3 = pages[2];
-  if (p3) {
-    if (input.p3Header) {
-      p3.drawText(input.p3Header, {
+  // ── Building diagram pages (page 3+, one per alternative) ─────────────────
+  const diagramY = PAGE_H - 100 - 650;
+  for (let i = 0; i < input.buildingPages.length; i++) {
+    const bp = input.buildingPages[i]!;
+    const pageObj = pages[2 + i];
+    if (!pageObj) continue;
+
+    if (bp.header) {
+      pageObj.drawText(bp.header, {
         x: 148.4, y: PAGE_H - 14.7,
         size: 13, font: bold, color: NAVY,
       });
     }
-    if (input.p3Subtitle) {
-      p3.drawText(input.p3Subtitle, {
+    if (bp.subtitle) {
+      pageObj.drawText(bp.subtitle, {
         x: 186.1, y: PAGE_H - 34.9,
         size: 13, font: regular, color: NAVY,
       });
     }
-    // pdfY = PAGE_H - yTop - height = 842.25 - 100 - 650 = 92.25
-    const diagramY = PAGE_H - 100 - 650;
-    p3.drawRectangle({ x: 30, y: diagramY, width: 530, height: 650, color: rgb(1, 1, 1), borderWidth: 0 });
-    const isJpeg = input.floorPlanMimetype === 'image/jpeg' || input.floorPlanMimetype === 'image/jpg';
+    pageObj.drawRectangle({ x: 30, y: diagramY, width: 530, height: 650, color: rgb(1, 1, 1), borderWidth: 0 });
+    const isJpeg = bp.mimetype === 'image/jpeg' || bp.mimetype === 'image/jpg';
     const floorImg = isJpeg
-      ? await pdfDoc.embedJpg(input.floorPlanImage)
-      : await pdfDoc.embedPng(input.floorPlanImage);
-    p3.drawImage(floorImg, { x: 30, y: diagramY, width: 530, height: 650 });
+      ? await pdfDoc.embedJpg(bp.image)
+      : await pdfDoc.embedPng(bp.image);
+    pageObj.drawImage(floorImg, { x: 30, y: diagramY, width: 530, height: 650 });
   }
-
-  // Pages 4-5 are already in the template — untouched.
 
   return Buffer.from(await pdfDoc.save());
 }
@@ -178,17 +190,33 @@ export async function generateCustomPDF(input: CustomPdfInput): Promise<Buffer> 
 // ── Adapter for existing OfferDocument-based generation ───────────────────────
 
 export async function generateOfferPDF(offerDocument: OfferDocument): Promise<Buffer> {
-  // Render building diagram from HTML template at A4 width, capturing full content height
-  const diagramPng = await renderHtmlToPng(page3Html(offerDocument), 795, 1000);
+  const alternatives = offerDocument.alternatives.length > 0
+    ? offerDocument.alternatives
+    : [{ id: '1', label: 'Alternatif 1', building: offerDocument.building }];
+
+  const diagramPngs = await Promise.all(
+    alternatives.map((alt) =>
+      renderHtmlToPng(
+        page3Html(
+          { ...offerDocument, building: alt.building },
+          `${alt.label} — KAT MALİKLERİ PAYLAŞIM KROKİSİ`,
+        ),
+        795,
+        1000,
+      ),
+    ),
+  );
 
   return generateCustomPDF({
     parcelLine1: offerDocument.parcelTitle,
     date: offerDocument.offerDate,
     p2Header: offerDocument.companyName,
     bodyHtml: offerDocument.page2Content,
-    p3Header: offerDocument.parcelTitle,
-    p3Subtitle: 'KAT MALİKLERİ PAYLAŞIM KROKİSİ',
-    floorPlanImage: diagramPng,
-    floorPlanMimetype: 'image/png',
+    buildingPages: alternatives.map((alt, i) => ({
+      header: offerDocument.parcelTitle,
+      subtitle: `${alt.label} — KAT MALİKLERİ PAYLAŞIM KROKİSİ`,
+      image: diagramPngs[i]!,
+      mimetype: 'image/png',
+    })),
   });
 }

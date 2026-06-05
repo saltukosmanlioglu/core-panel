@@ -37,14 +37,16 @@ export async function deleteOfferDocument(projectId: string, id: string): Promis
 export interface ParcelCalculationAreaResult {
   footprintArea: number | null;
   floorAreas: Array<{ floorNumber: number; netArea: number }> | null;
+  parcelCalculationId: string | null;
 }
 
 export async function getLatestParcelArea(projectId: string): Promise<ParcelCalculationAreaResult> {
   const res = await apiClient.get(`${basePath(projectId)}/parcel-area`);
-  const data = res.data as { footprintArea?: number | null; floorAreas?: Array<{ floorNumber: number; netArea: number }> | null };
+  const data = res.data as { footprintArea?: number | null; floorAreas?: Array<{ floorNumber: number; netArea: number }> | null; parcelCalculationId?: string | null };
   return {
     footprintArea: data.footprintArea ?? null,
     floorAreas: data.floorAreas ?? null,
+    parcelCalculationId: data.parcelCalculationId ?? null,
   };
 }
 

@@ -56,6 +56,12 @@ export interface OfferBuilding {
   roofFloor: RoofFloor;
 }
 
+export interface OfferAlternative {
+  id: string;
+  label: string;
+  building: OfferBuilding;
+}
+
 export interface OfferDocument {
   id: string;
   projectId: string;
@@ -65,6 +71,8 @@ export interface OfferDocument {
   tcmbRate: string;
   companyName: string;
   building: OfferBuilding;
+  alternatives: OfferAlternative[];
+  parcelCalculationId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,4 +84,6 @@ export interface OfferDocumentPayload {
   tcmbRate: string;
   companyName: string;
   building: OfferBuilding;
+  alternatives: OfferAlternative[];
+  parcelCalculationId: string | null;
 }

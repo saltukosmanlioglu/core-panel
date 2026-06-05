@@ -9,6 +9,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Divider,
   IconButton,
   Stack,
   Tooltip,
@@ -31,25 +32,12 @@ import type {
 } from '../types';
 import { formatArea, numberFormatter } from '../utils';
 
-function computeFloorAreaBreakdown(
-  footprintArea: number,
-  footprintVertices: Point[],
-  edgeOverhangValues: number[],
-  floorCount: number,
-): Array<{ floorNumber: number; netArea: number }> | null {
-  if (footprintVertices.length < 3) return null;
-  const cikmaEtkisi = footprintVertices.reduce((sum, v, i) => {
-    const next = footprintVertices[(i + 1) % footprintVertices.length]!;
-    const lengthM = Math.sqrt((next.x - v.x) ** 2 + (next.y - v.y) ** 2) / 100;
-    return sum + lengthM * (edgeOverhangValues[i] ?? 0);
-  }, 0);
-  if (cikmaEtkisi <= 0) return null;
-  return Array.from({ length: floorCount }, (_, i) => ({
-    floorNumber: i + 1,
-    netArea: i === 0
-      ? Math.round(footprintArea * 100) / 100
-      : Math.round((footprintArea + cikmaEtkisi) * 100) / 100,
-  }));
+function computePolygonAreaM2(vertices: Point[]): number {
+  if (vertices.length < 3) return 0;
+  return Math.abs(vertices.reduce((sum, v, i) => {
+    const next = vertices[(i + 1) % vertices.length]!;
+    return sum + (v.x * next.y - next.x * v.y);
+  }, 0)) / 2 / 10000;
 }
 
 interface PerFloorOverhangPolygon {
@@ -125,27 +113,80 @@ export function Result({
 
       {calculationError ? <Alert severity="error" sx={{ fontSize: 12, py: 0.5 }}>{calculationError}</Alert> : null}
 
-      {calculationResult && (() => {
-        const edgeOverhangValues = edgeOverhangs.map((value, index) =>
-          (edgeOverhangActive[index] ?? true) ? (parseFloat(String(value)) || 0) : 0,
-        );
-        const breakdown = computeFloorAreaBreakdown(
-          calculationResult.footprintArea,
-          calculationResult.footprintVertices,
-          edgeOverhangValues,
-          calculationResult.floorCount,
-        );
-        if (!breakdown) return null;
-        const upperFloor = breakdown.find((r) => r.floorNumber > 1);
-        if (!upperFloor) return null;
-        const extraArea = upperFloor.netArea - calculationResult.footprintArea;
-        if (extraArea <= 0) return null;
-        return (
-          <Typography sx={{ fontSize: 12, color: 'text.secondary', fontStyle: 'italic' }}>
-            Üst katlarda çıkma ile ek alan: {numberFormatter.format(extraArea)} m²
-          </Typography>
-        );
-      })()}
+      {calculationResult ? (
+        <Card variant="outlined" sx={{ borderRadius: 1, borderColor: '#e2e8f0' }}>
+          <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+              Hesaplama Detayları
+            </Typography>
+            <Stack spacing={0.75}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>Taban Oturum Alanı</Typography>
+                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>{numberFormatter.format(calculationResult.footprintArea)} m²</Typography>
+              </Box>
+
+              {(maxOverhangs.front > 0 || maxOverhangs.back > 0 || maxOverhangs.left > 0 || maxOverhangs.right > 0) ? (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Çıkma Miktarları
+                  </Typography>
+                  {maxOverhangs.front > 0 ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Ön Çıkma</Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{numberFormatter.format(maxOverhangs.front)} m</Typography>
+                    </Box>
+                  ) : null}
+                  {maxOverhangs.back > 0 ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Arka Çıkma</Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{numberFormatter.format(maxOverhangs.back)} m</Typography>
+                    </Box>
+                  ) : null}
+                  {maxOverhangs.left > 0 ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Sol Çıkma</Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{numberFormatter.format(maxOverhangs.left)} m</Typography>
+                    </Box>
+                  ) : null}
+                  {maxOverhangs.right > 0 ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Sağ Çıkma</Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{numberFormatter.format(maxOverhangs.right)} m</Typography>
+                    </Box>
+                  ) : null}
+                </>
+              ) : null}
+
+              {perFloorOverhangVertices && perFloorOverhangVertices.length > 0 ? (
+                <>
+                  <Divider sx={{ my: 0.5 }} />
+                  <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Zemin Kat Sonrası Kat Alanı
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>Zemin Kat (1. Kat)</Typography>
+                    <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{numberFormatter.format(calculationResult.footprintArea)} m²</Typography>
+                  </Box>
+                  {perFloorOverhangVertices.length === 1 ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>1. Normal Kat ve üzeri</Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
+                        {numberFormatter.format(computePolygonAreaM2(perFloorOverhangVertices[0]!.vertices))} m²
+                      </Typography>
+                    </Box>
+                  ) : perFloorOverhangVertices.map(({ floor, label, vertices }) => (
+                    <Box key={floor} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{label}</Typography>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{numberFormatter.format(computePolygonAreaM2(vertices))} m²</Typography>
+                    </Box>
+                  ))}
+                </>
+              ) : null}
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card
         variant="outlined"
@@ -231,7 +272,7 @@ export function Result({
             {isSaving ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
           <Typography sx={{ fontSize: 11, color: 'text.secondary', textAlign: { xs: 'left', sm: 'right' } }}>
-            Bu proje için en fazla 3 hesaplama kaydedilebilir. Eski kayıtlar otomatik silinir.
+            Kaydedilen hesaplama bu proje için güncellenecektir.
           </Typography>
         </Box>
       </Box>

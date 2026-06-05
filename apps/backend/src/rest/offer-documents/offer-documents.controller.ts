@@ -39,6 +39,8 @@ function buildInput(bodyValue: unknown): repo.OfferDocumentInput {
     tcmbRate: textOrDefault(body.tcmbRate, '1 Dolar (USD): 45,45 TL'),
     companyName: textOrDefault(body.companyName, ''),
     building: body.building as repo.OfferBuilding,
+    alternatives: Array.isArray(body.alternatives) ? (body.alternatives as repo.OfferAlternative[]) : undefined,
+    parcelCalculationId: typeof body.parcelCalculationId === 'string' ? body.parcelCalculationId : null,
   };
 }
 
@@ -92,7 +94,7 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
   }
 };
 
-export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const create = async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
   try {
     const tdb = await ensureProject(req, res);
     if (!tdb) return;
@@ -100,11 +102,12 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
     const offerDocument = await repo.create(tdb, String(req.params.projectId), buildInput(req.body));
     res.status(201).json({ offerDocument });
   } catch (error) {
-    next(error);
+    console.error('OFFER DOC ERROR:', error);
+    throw error;
   }
 };
 
-export const update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const update = async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
   try {
     const tdb = await ensureProject(req, res);
     if (!tdb) return;
@@ -117,7 +120,8 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
     res.json({ offerDocument });
   } catch (error) {
-    next(error);
+    console.error('OFFER DOC ERROR:', error);
+    throw error;
   }
 };
 
@@ -187,10 +191,12 @@ export const generateCustomPdf = async (req: Request, res: Response, next: NextF
       date: date.trim(),
       p2Header: p2Header?.trim(),
       bodyHtml: bodyHtml.trim(),
-      p3Header: p3Header?.trim(),
-      p3Subtitle: p3Subtitle?.trim(),
-      floorPlanImage: file.buffer,
-      floorPlanMimetype: file.mimetype,
+      buildingPages: [{
+        header: p3Header?.trim() ?? '',
+        subtitle: p3Subtitle?.trim() ?? 'KAT MALİKLERİ PAYLAŞIM KROKİSİ',
+        image: file.buffer,
+        mimetype: file.mimetype,
+      }],
     });
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -207,7 +213,7 @@ export const getParcelArea = async (req: Request, res: Response, next: NextFunct
     if (!tdb) return;
 
     const result = await repo.getParcelCalculationArea(tdb, String(req.params.projectId));
-    res.json({ footprintArea: result.footprintArea, floorAreas: result.floorAreas });
+    res.json({ footprintArea: result.footprintArea, floorAreas: result.floorAreas, parcelCalculationId: result.parcelCalculationId ?? null });
   } catch (error) {
     next(error);
   }

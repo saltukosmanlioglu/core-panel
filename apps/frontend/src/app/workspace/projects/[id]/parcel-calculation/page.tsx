@@ -556,10 +556,7 @@ export default function ParcelCalculationPage() {
       };
       const saved = await createParcelCalculation(projectId, payload);
       setCalculationResult(saved);
-      setCalculations((current) => {
-        const updated = [saved, ...current.filter((item) => item.id !== saved.id)];
-        return updated.slice(0, 3);
-      });
+      setCalculations((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       showSuccess('Hesaplama kaydedildi');
     } catch (saveError) {
       showError(getErrorMessage(saveError, 'Hesaplama kaydedilemedi'));

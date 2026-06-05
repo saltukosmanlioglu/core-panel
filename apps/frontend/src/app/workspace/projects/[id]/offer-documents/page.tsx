@@ -52,6 +52,7 @@ export default function OfferDocumentsPage() {
   const [offerDocuments, setOfferDocuments] = useState<OfferDocument[]>([]);
   const [footprintArea, setFootprintArea] = useState<number | null>(null);
   const [floorAreas, setFloorAreas] = useState<Array<{ floorNumber: number; netArea: number }> | null>(null);
+  const [parcelCalculationId, setParcelCalculationId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -71,6 +72,7 @@ export default function OfferDocumentsPage() {
         setOfferDocuments(documents);
         setFootprintArea(areaResult.footprintArea);
         setFloorAreas(areaResult.floorAreas);
+        setParcelCalculationId(areaResult.parcelCalculationId);
       } catch (error) {
         if (active) showError(getErrorMessage(error, 'Teklif dokümanları yüklenemedi'));
       } finally {
@@ -159,6 +161,7 @@ export default function OfferDocumentsPage() {
           parcelArea={footprintArea}
           floorAreas={floorAreas}
           companyName={companyName}
+          parcelCalculationId={parcelCalculationId}
           onCancel={() => setFormOpen(false)}
           onSave={saveDocument}
           onGeneratePdf={downloadPdf}

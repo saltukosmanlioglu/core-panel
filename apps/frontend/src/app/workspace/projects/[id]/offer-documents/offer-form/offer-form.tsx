@@ -19,6 +19,8 @@ import {
   StepLabel,
   Stepper,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -32,6 +34,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import dynamic from 'next/dynamic';
 import type {
   BasementFloor,
+  OfferAlternative,
   OfferBuilding,
   OfferDocument,
   OfferDocumentPayload,
@@ -62,6 +65,7 @@ interface OfferFormProps {
   parcelArea: number | null;
   floorAreas?: { floorNumber: number; netArea: number }[] | null;
   companyName: string;
+  parcelCalculationId: string | null;
   onCancel: () => void;
   onSave: (payload: OfferDocumentPayload, id?: string) => Promise<OfferDocument>;
   onGeneratePdf: (id: string) => Promise<void>;
@@ -183,24 +187,36 @@ function buildPayloadFromDocument(
   document: OfferDocument | null,
   parcelArea: number | null,
   companyName: string,
+  parcelCalculationId: string | null,
 ): OfferDocumentPayload {
-  return document
-    ? {
+  if (document) {
+    const alts: OfferAlternative[] =
+      document.alternatives && document.alternatives.length > 0
+        ? document.alternatives.map((a) => ({ ...a, building: normalizeBuildingUnitIds(a.building) }))
+        : [{ id: '1', label: 'Alternatif 1', building: normalizeBuildingUnitIds(document.building) }];
+    return {
       parcelTitle: document.parcelTitle,
       offerDate: document.offerDate,
       page2Content: document.page2Content,
       tcmbRate: document.tcmbRate,
       companyName: document.companyName,
-      building: normalizeBuildingUnitIds(document.building),
-    }
-    : {
-      parcelTitle: '',
-      offerDate: today(),
-      page2Content: DEFAULT_PAGE2_HTML,
-      tcmbRate: '1 Dolar (USD): 45,45 TL',
-      companyName,
-      building: defaultBuilding(parcelArea ?? 0),
+      building: alts[0]!.building,
+      alternatives: alts,
+      parcelCalculationId: document.parcelCalculationId ?? parcelCalculationId,
     };
+  }
+  const building = defaultBuilding(parcelArea ?? 0);
+  const alts: OfferAlternative[] = [{ id: '1', label: 'Alternatif 1', building }];
+  return {
+    parcelTitle: '',
+    offerDate: today(),
+    page2Content: DEFAULT_PAGE2_HTML,
+    tcmbRate: '1 Dolar (USD): 45,45 TL',
+    companyName,
+    building,
+    alternatives: alts,
+    parcelCalculationId,
+  };
 }
 
 
@@ -209,31 +225,40 @@ export function OfferForm({
   parcelArea,
   floorAreas,
   companyName,
+  parcelCalculationId,
   onCancel,
   onSave,
   onGeneratePdf,
 }: OfferFormProps) {
   const [activeStep, setActiveStep] = useState(0);
-  const [payload, setPayload] = useState<OfferDocumentPayload>(() => buildPayloadFromDocument(initialDocument, parcelArea, companyName));
+  const [payload, setPayload] = useState<OfferDocumentPayload>(() => buildPayloadFromDocument(initialDocument, parcelArea, companyName, parcelCalculationId));
   const [savedDocument, setSavedDocument] = useState<OfferDocument | null>(initialDocument);
   const [parcelAreaOverride, setParcelAreaOverride] = useState(false);
   const [manualParcelArea, setManualParcelArea] = useState<string>(String(parcelArea ?? 0));
-  const [normalFloorsSame, setNormalFloorsSame] = useState(() =>
-    floorsAreIdentical(buildPayloadFromDocument(initialDocument, parcelArea, companyName).building.normalFloors),
-  );
+  const [normalFloorsSamePerAlt, setNormalFloorsSamePerAlt] = useState<boolean[]>(() => {
+    const initial = buildPayloadFromDocument(initialDocument, parcelArea, companyName, parcelCalculationId);
+    return initial.alternatives.map((alt) => floorsAreIdentical(alt.building.normalFloors));
+  });
   const [floorDraft, setFloorDraft] = useState<FloorDraft | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeAltTab, setActiveAltTab] = useState(0);
+  const [previewAltTab, setPreviewAltTab] = useState(0);
+
+  const activeBuilding = payload.alternatives[activeAltTab]?.building ?? payload.building;
+  const normalFloorsSame = normalFloorsSamePerAlt[activeAltTab] ?? true;
 
   useEffect(() => {
-    const newPayload = buildPayloadFromDocument(initialDocument, parcelArea, companyName);
+    const newPayload = buildPayloadFromDocument(initialDocument, parcelArea, companyName, parcelCalculationId);
     setPayload(newPayload);
     setSavedDocument(initialDocument);
     setManualParcelArea(String(parcelArea ?? 0));
     setActiveStep(0);
-    setNormalFloorsSame(floorsAreIdentical(newPayload.building.normalFloors));
+    setNormalFloorsSamePerAlt(newPayload.alternatives.map((alt) => floorsAreIdentical(alt.building.normalFloors)));
     setFloorDraft(null);
-  }, [initialDocument, parcelArea, companyName]);
+    setActiveAltTab(0);
+    setPreviewAltTab(0);
+  }, [initialDocument, parcelArea, companyName, parcelCalculationId]);
 
   const tabanAlani = parcelAreaOverride
     ? (parseFloat(manualParcelArea) || 0)
@@ -244,7 +269,11 @@ export function OfferForm({
   const canSave = payload.parcelTitle.trim() && payload.offerDate && payload.page2Content.trim();
 
   const updateBuilding = (updater: (building: OfferBuilding) => OfferBuilding) => {
-    setPayload((current) => ({ ...current, building: updater(current.building) }));
+    setPayload((current) => {
+      const alts = [...current.alternatives];
+      alts[activeAltTab] = { ...alts[activeAltTab]!, building: updater(alts[activeAltTab]!.building) };
+      return { ...current, alternatives: alts, building: alts[0]!.building };
+    });
   };
 
   // ── Basement floors ────────────────────────────────────────────────────────
@@ -295,7 +324,11 @@ export function OfferForm({
   };
 
   const handleNormalFloorsSameChange = (checked: boolean) => {
-    setNormalFloorsSame(checked);
+    setNormalFloorsSamePerAlt((current) => {
+      const next = [...current];
+      next[activeAltTab] = checked;
+      return next;
+    });
     if (!checked) return;
     updateBuilding((building) => {
       const templateUnits = building.normalFloors[0]?.units ?? [];
@@ -311,7 +344,7 @@ export function OfferForm({
   };
 
   const openFloorEditor = (target: { kind: 'basement'; index: number } | { kind: 'ground' } | { kind: 'normal'; index: number }) => {
-    const b = payload.building;
+    const b = activeBuilding;
     if (target.kind === 'basement') {
       const floor = b.basementFloors[target.index];
       if (floor) setFloorDraft({ kind: 'basement', index: target.index, floor: deepClone(floor) });
@@ -348,6 +381,43 @@ export function OfferForm({
     setFloorDraft(null);
   };
 
+  const addAlternative = () => {
+    if (payload.alternatives.length >= 5) return;
+    const lastAlt = payload.alternatives[payload.alternatives.length - 1]!;
+    const newIndex = payload.alternatives.length;
+    const newAlt: OfferAlternative = {
+      id: String(Date.now()),
+      label: `Alternatif ${newIndex + 1}`,
+      building: deepClone(lastAlt.building),
+    };
+    setPayload((current) => {
+      const alts = [...current.alternatives, newAlt];
+      return { ...current, alternatives: alts };
+    });
+    setNormalFloorsSamePerAlt((current) => [...current, floorsAreIdentical(newAlt.building.normalFloors)]);
+    setActiveAltTab(newIndex);
+    setFloorDraft(null);
+  };
+
+  const removeAlternative = (index: number) => {
+    if (payload.alternatives.length <= 1) return;
+    setPayload((current) => {
+      const alts = current.alternatives.filter((_, i) => i !== index);
+      return { ...current, alternatives: alts, building: alts[0]!.building };
+    });
+    setNormalFloorsSamePerAlt((current) => current.filter((_, i) => i !== index));
+    setActiveAltTab((current) => Math.min(current, payload.alternatives.length - 2));
+    setFloorDraft(null);
+  };
+
+  const setAlternativeLabel = (index: number, label: string) => {
+    setPayload((current) => {
+      const alts = [...current.alternatives];
+      alts[index] = { ...alts[index]!, label };
+      return { ...current, alternatives: alts };
+    });
+  };
+
   const save = async (): Promise<OfferDocument | null> => {
     if (!canSave) {
       setError('Parsel başlığı, teklif tarihi ve teklif içeriği zorunludur.');
@@ -373,8 +443,8 @@ export function OfferForm({
     await onGeneratePdf(saved.id);
   };
 
-  const previewBuilding = useMemo(() => payload.building, [payload.building]);
-  const previewNumberMap = useMemo(() => computeGlobalNumbers(payload.building), [payload.building]);
+  const previewBuilding = useMemo(() => activeBuilding, [activeBuilding]);
+  const previewNumberMap = useMemo(() => computeGlobalNumbers(activeBuilding), [activeBuilding]);
 
   return (
     <Stack spacing={3}>
@@ -389,6 +459,37 @@ export function OfferForm({
       {/* ── Step 0: Genel Bilgiler ── */}
       {activeStep === 0 ? (
         <Stack spacing={2}>
+          {parcelArea != null ? (
+            <Box sx={{ p: 1.5, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 1 }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.5, mb: 1 }}>
+                Parsel Hesaplama Verileri
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+                <Box>
+                  <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Taban Oturum Alanı</Typography>
+                  <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{parcelArea.toFixed(2)} m²</Typography>
+                </Box>
+                {floorAreas?.find((f) => f.floorNumber === 2) ? (
+                  <Box>
+                    <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Zemin Kat Sonrası Kat Alanı</Typography>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{floorAreas.find((f) => f.floorNumber === 2)!.netArea.toFixed(2)} m²</Typography>
+                  </Box>
+                ) : null}
+                {floorAreas ? (
+                  <Box>
+                    <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>Kat Sayısı</Typography>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{floorAreas.length}</Typography>
+                  </Box>
+                ) : null}
+              </Box>
+            </Box>
+          ) : (
+            <Box sx={{ p: 1.5, bgcolor: '#fefce8', border: '1px solid #fde047', borderRadius: 1 }}>
+              <Typography sx={{ fontSize: 12, color: '#92400e' }}>
+                Bu proje için kayıtlı parsel hesaplama bulunamadı. Lütfen önce parsel hesaplama yapın.
+              </Typography>
+            </Box>
+          )}
           <TextField
             label="Parsel başlığı"
             value={payload.parcelTitle}
@@ -451,6 +552,60 @@ export function OfferForm({
       {/* ── Step 2: Bina Yapısı ── */}
       {activeStep === 2 ? (
         <Stack spacing={3}>
+          {/* ── Alternative tabs ── */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, borderBottom: 1, borderColor: 'divider' }}>
+            <Box
+              role="tablist"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0, overflowX: 'auto' }}
+            >
+              {payload.alternatives.map((alt, i) => (
+                <Box key={alt.id} sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+                  <Tab
+                    value={i}
+                    role="tab"
+                    aria-selected={activeAltTab === i}
+                    tabIndex={activeAltTab === i ? 0 : -1}
+                    onClick={() => { setActiveAltTab(i); setFloorDraft(null); }}
+                    label={alt.label}
+                    sx={{
+                      textTransform: 'none',
+                      minHeight: 42,
+                      pr: payload.alternatives.length > 1 ? 4 : 2,
+                      borderBottom: activeAltTab === i ? 2 : 0,
+                      borderColor: 'primary.main',
+                    }}
+                  />
+                  {payload.alternatives.length > 1 ? (
+                    <IconButton
+                      size="small"
+                      aria-label={`${alt.label} alternatifini sil`}
+                      onClick={(e) => { e.stopPropagation(); removeAlternative(i); }}
+                      sx={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', p: 0.25 }}
+                    >
+                      <CloseIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  ) : null}
+                </Box>
+              ))}
+            </Box>
+            {payload.alternatives.length < 5 ? (
+              <Tooltip title="Yeni alternatif ekle">
+                <IconButton onClick={addAlternative} size="small" sx={{ flexShrink: 0 }}>
+                  <AddIcon />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+          </Box>
+
+          {/* Editable label for active alternative */}
+          <TextField
+            size="small"
+            label="Alternatif adı"
+            value={payload.alternatives[activeAltTab]?.label ?? ''}
+            onChange={(e) => setAlternativeLabel(activeAltTab, e.target.value)}
+            sx={{ maxWidth: 240 }}
+          />
+
           <Box
             sx={{
               display: 'flex',
@@ -467,7 +622,7 @@ export function OfferForm({
                 label="Tüm katlar aynı"
                 sx={{ mr: 0 }}
               />
-              {normalFloorsSame && payload.building.normalFloors.length > 1 ? (
+              {normalFloorsSame && activeBuilding.normalFloors.length > 1 ? (
                 <Alert severity="info" sx={{ py: 0.5, fontSize: 13 }}>
                   Tüm katlar senkronize — bir kattaki değişiklik diğer katlara yansır
                 </Alert>
@@ -477,11 +632,11 @@ export function OfferForm({
                   Normal Kat Ekle
                 </Button>
               </Box>
-              {payload.building.normalFloors.length === 0 ? (
+              {activeBuilding.normalFloors.length === 0 ? (
                 <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz normal kat eklenmedi.</Typography>
               ) : null}
-              {[...payload.building.normalFloors].reverse().map((floor) => {
-                const index = payload.building.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
+              {[...activeBuilding.normalFloors].reverse().map((floor) => {
+                const index = activeBuilding.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
                 return (
                   <FloorCard
                     key={floor.floorNumber}
@@ -490,7 +645,7 @@ export function OfferForm({
                     tabanAlani={tabanAlani}
                     isBasement={false}
                     companyName={companyName}
-                    synced={normalFloorsSame && payload.building.normalFloors.length > 1}
+                    synced={normalFloorsSame && activeBuilding.normalFloors.length > 1}
                     onEdit={() => openFloorEditor({ kind: 'normal', index })}
                     onRemove={() => removeNormalFloor(index)}
                     canRemove
@@ -503,15 +658,15 @@ export function OfferForm({
             <Box sx={{ flex: 1, minWidth: 0, width: { xs: '100%', md: 0 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Switch
-                  checked={payload.building.groundFloor.exists}
+                  checked={activeBuilding.groundFloor.exists}
                   onChange={(e) => updateBuilding((b) => ({ ...b, groundFloor: { ...b.groundFloor, exists: e.target.checked } }))}
                 />
                 <Typography sx={{ fontWeight: 600 }}>Zemin Kat</Typography>
               </Box>
-              {payload.building.groundFloor.exists ? (
+              {activeBuilding.groundFloor.exists ? (
                 <FloorCard
                   label="Zemin Kat"
-                  units={payload.building.groundFloor.units}
+                  units={activeBuilding.groundFloor.units}
                   tabanAlani={tabanAlani}
                   isBasement={false}
                   companyName={companyName}
@@ -527,7 +682,7 @@ export function OfferForm({
                   Bodrum Kat Ekle
                 </Button>
               </Box>
-              {payload.building.basementFloors.map((floor, index) => (
+              {activeBuilding.basementFloors.map((floor, index) => (
                 <FloorCard
                   key={index}
                   label={floor.label}
@@ -540,7 +695,7 @@ export function OfferForm({
                   companyName={companyName}
                   onEdit={() => openFloorEditor({ kind: 'basement', index })}
                   onRemove={() => removeBasementFloor(index)}
-                  canRemove={payload.building.basementFloors.length > 1}
+                  canRemove={activeBuilding.basementFloors.length > 1}
                 />
               ))}
 
@@ -548,17 +703,17 @@ export function OfferForm({
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Switch
-                  checked={payload.building.roofFloor.exists}
+                  checked={activeBuilding.roofFloor.exists}
                   onChange={(e) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, exists: e.target.checked } }))}
                 />
                 <Typography sx={{ fontWeight: 600 }}>Çatı Katı</Typography>
               </Box>
-              {payload.building.roofFloor.exists ? (
+              {activeBuilding.roofFloor.exists ? (
                 <UnitsEditor
                   title="Çatı Katı"
-                  units={payload.building.roofFloor.units}
+                  units={activeBuilding.roofFloor.units}
                   tabanAlani={tabanAlani}
-                  allFloors={payload.building}
+                  allFloors={activeBuilding}
                   numberMap={previewNumberMap}
                   companyName={companyName}
                   onChange={(units) => updateBuilding((b) => ({ ...b, roofFloor: { ...b.roofFloor, units } }))}
@@ -572,7 +727,7 @@ export function OfferForm({
           <FloorEditorModal
             key={floorDraft ? `${floorDraft.kind}-${floorDraft.kind !== 'ground' ? (floorDraft as { index: number }).index : 0}` : 'closed'}
             floorDraft={floorDraft}
-            building={payload.building}
+            building={activeBuilding}
             tabanAlani={floorDraft?.kind === 'normal' ? floorNetArea(floorAreas, floorDraft.floorNumber) : tabanAlani}
             companyName={companyName}
             normalFloorsSame={normalFloorsSame}
@@ -586,9 +741,22 @@ export function OfferForm({
       {activeStep === 3 ? (
         <Stack spacing={2}>
           <Alert severity="info">Teklif kaydedildikten sonra PDF oluşturulur. Eksik statik sayfa dosyası varsa PDF yalnızca ilk 3 sayfa olarak üretilecektir.</Alert>
-          <BuildingPreview parcelTitle={payload.parcelTitle} building={payload.building} floorAreas={floorAreas} />
+          {payload.alternatives.length > 1 ? (
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs value={previewAltTab} onChange={(_, v: number) => setPreviewAltTab(v)}>
+                {payload.alternatives.map((alt, i) => (
+                  <Tab key={alt.id} value={i} label={alt.label} sx={{ textTransform: 'none' }} />
+                ))}
+              </Tabs>
+            </Box>
+          ) : null}
+          <BuildingPreview
+            parcelTitle={payload.parcelTitle}
+            building={payload.alternatives[previewAltTab]?.building ?? activeBuilding}
+            floorAreas={floorAreas}
+          />
           <Button variant="contained" onClick={() => void handleGeneratePdf()} disabled={isSaving}>
-            PDF Oluştur
+            PDF Oluştur{payload.alternatives.length > 1 ? ` (${payload.alternatives.length} alternatif)` : ''}
           </Button>
         </Stack>
       ) : null}
