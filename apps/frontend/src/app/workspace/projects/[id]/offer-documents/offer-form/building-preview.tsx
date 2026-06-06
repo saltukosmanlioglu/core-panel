@@ -170,7 +170,7 @@ function NormalFloorRow({ floor, numMap, floorAreas }: { floor: NormalFloor; num
   const sublabel = floorEntry ? `${floorEntry.netArea.toFixed(2)} m²` : undefined;
   return (
     <FloorRow
-      label={`${floor.floorNumber}.NORMAL KAT`}
+      label={`${floor.floorNumber}. KAT`}
       units={floor.units}
       numMap={numMap}
       sublabel={sublabel}

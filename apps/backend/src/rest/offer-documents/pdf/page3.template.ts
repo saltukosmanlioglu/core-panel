@@ -28,16 +28,10 @@ function bottomStreetHtml(labels?: StreetLabels): string {
   return labels?.bottom ? `<div class="street-bottom">${escapeHtml(labels.bottom)}</div>` : '';
 }
 
-function unitsAreaLabel(units: OfferUnit[]): string | undefined {
-  const total = units.reduce((sum, unit) => sum + (Number.isFinite(unit.brutM2) ? unit.brutM2 : 0), 0);
-  return total > 0 ? formatM2(total) : undefined;
-}
-
-function floorLabelHtml(label: string, areaLabel?: string): string {
+function floorLabelHtml(label: string): string {
   return `
     <div class="floor-label">
       <span class="floor-label-main">${escapeHtml(label)}</span>
-      ${areaLabel ? `<span class="floor-label-area">${escapeHtml(areaLabel)}</span>` : ''}
     </div>
   `;
 }
@@ -50,14 +44,14 @@ function unitsRowHtml(units: OfferUnit[], label: string, streetLabels?: StreetLa
       <div class="floor-cells">
         ${units.length > 0 ? units.map(unitHtml).join('') : '<div class="empty-unit">Birim eklenmedi</div>'}
       </div>
-      ${floorLabelHtml(label, unitsAreaLabel(units))}
+      ${floorLabelHtml(label)}
     </div>
     ${bottomStreetHtml(streetLabels)}
   `;
 }
 
 function normalFloorHtml(floor: NormalFloor): string {
-  return unitsRowHtml(floor.units, `${floor.floorNumber}.NORMAL KAT`, undefined, 'normal-floor');
+  return unitsRowHtml(floor.units, `${floor.floorNumber}. KAT`, undefined, 'normal-floor');
 }
 
 function basementFloorHtml(floor: BasementFloor): string {
@@ -169,13 +163,6 @@ export function page3Html(offerDocument: OfferDocument, subtitleLine?: string): 
             text-decoration: underline;
             line-height: 1.15;
             padding: 1mm;
-          }
-          .floor-label-area {
-            display: block;
-            margin-top: 1mm;
-            font-size: 12px;
-            font-weight: 900;
-            text-decoration: none;
           }
           .unit,
           .empty-unit,

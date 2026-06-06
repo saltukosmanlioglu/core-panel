@@ -615,7 +615,7 @@ export function OfferForm({
               width: '100%',
             }}
           >
-            {/* Normal katlar */}
+            {/* Katlar */}
             <Box sx={{ flex: 1, minWidth: 0, width: { xs: '100%', md: 0 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <FormControlLabel
                 control={<Checkbox checked={normalFloorsSame} onChange={(e) => handleNormalFloorsSameChange(e.target.checked)} />}
@@ -629,18 +629,18 @@ export function OfferForm({
               ) : null}
               <Box>
                 <Button startIcon={<AddIcon />} onClick={addNormalFloor} variant="outlined" size="small">
-                  Normal Kat Ekle
+                  Kat Ekle
                 </Button>
               </Box>
               {activeBuilding.normalFloors.length === 0 ? (
-                <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz normal kat eklenmedi.</Typography>
+                <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz kat eklenmedi.</Typography>
               ) : null}
               {[...activeBuilding.normalFloors].reverse().map((floor) => {
                 const index = activeBuilding.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
                 return (
                   <FloorCard
                     key={floor.floorNumber}
-                    label={`${floor.floorNumber}. Normal Kat`}
+                    label={`${floor.floorNumber}. Kat`}
                     units={floor.units}
                     tabanAlani={tabanAlani}
                     isBasement={false}
@@ -935,7 +935,7 @@ function FloorEditorModal({
     !localDraft ? '' :
     localDraft.kind === 'basement' ? `${localDraft.floor.label} Düzenle` :
     localDraft.kind === 'ground' ? 'Zemin Kat Düzenle' :
-    `${localDraft.floorNumber}. Normal Kat Düzenle`;
+    `${localDraft.floorNumber}. Kat Düzenle`;
 
   // Validation
   let validationAlert: React.ReactNode = null;
@@ -1069,10 +1069,10 @@ function FloorEditorModal({
           ) : (
             <>
               {normalFloorsSame && building.normalFloors.length > 1 ? (
-                <Alert severity="info">Değişiklikler tüm normal katlara uygulanacak.</Alert>
+                <Alert severity="info">Değişiklikler tüm katlara uygulanacak.</Alert>
               ) : null}
               <UnitsEditor
-                title={`${localDraft.floorNumber}. Normal Kat Birimleri`}
+                title={`${localDraft.floorNumber}. Kat Birimleri`}
                 units={localDraft.units}
                 tabanAlani={tabanAlani}
                 allFloors={draftBuilding}
@@ -1153,7 +1153,7 @@ function collectAboveGroundUnits(building: OfferBuilding): UnitRef[] {
     .slice()
     .sort((a, b) => a.floorNumber - b.floorNumber)
     .forEach((floor) => {
-      floor.units.forEach((unit) => pushUnit(`${floor.floorNumber}. Normal Kat`, unit));
+      floor.units.forEach((unit) => pushUnit(`${floor.floorNumber}. Kat`, unit));
     });
 
   if (building.roofFloor.exists) {

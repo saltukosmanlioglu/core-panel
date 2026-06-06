@@ -133,7 +133,8 @@
       "Bash(xargs cat -n)",
       "Bash(npm exec -- tsx -e ' *)",
       "Bash(ls -lh Montserrat*.ttf)",
-      "Bash(file Montserrat*.ttf)"
+      "Bash(file Montserrat*.ttf)",
+      "Bash(npm ls *)"
     ]
   }
 }

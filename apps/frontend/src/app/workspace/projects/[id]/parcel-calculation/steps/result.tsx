@@ -170,7 +170,7 @@ export function Result({
                   </Box>
                   {perFloorOverhangVertices.length === 1 ? (
                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>1. Normal Kat ve üzeri</Typography>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>1. Kat ve üzeri</Typography>
                       <Typography sx={{ fontSize: 12, fontWeight: 600 }}>
                         {numberFormatter.format(computePolygonAreaM2(perFloorOverhangVertices[0]!.vertices))} m²
                       </Typography>

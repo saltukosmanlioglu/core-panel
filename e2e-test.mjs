@@ -340,7 +340,7 @@ async function run() {
 
   const step2Text = await page.textContent('body');
   log(`Step 2 has "Alternatif 1": ${step2Text.includes('Alternatif 1')}`);
-  log(`Step 2 has "Normal Kat Ekle": ${step2Text.includes('Normal Kat Ekle')}`);
+  log(`Step 2 has "Kat Ekle": ${step2Text.includes('Kat Ekle')}`);
   log(`Step 2 has "Zemin Kat": ${step2Text.includes('Zemin Kat')}`);
 
   // ── 2f. Add a second alternative ─────────────────────────────────────────────
