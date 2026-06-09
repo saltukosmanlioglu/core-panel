@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import Anthropic from '@anthropic-ai/sdk';
 import * as XLSX from 'xlsx';
 import * as comparisonsRepo from './tender-comparisons.repo';
 import * as offerFilesRepo from '../tender-offer-files/tender-offer-files.repo';
 import { AppError } from '../../lib/AppError';
 import { UPLOADS_DIR } from '../../config/paths';
+import { env } from '../../config/env';
 import { TenantDb } from '../../lib/tenantDb';
 import type { ComparisonPriceCell, ComparisonResult, ComparisonSummary } from '../../models/tender-comparison.model';
 
@@ -406,14 +408,12 @@ function parseXlsxOffer(filePath: string, tenantId: string, tenantName: string):
 }
 
 async function parsePdfOffer(filePath: string, tenantId: string, tenantName: string): Promise<ParsedOffer> {
-  const Anthropic = require('@anthropic-ai/sdk').default as typeof import('@anthropic-ai/sdk').default;
-  const { env } = require('../../config/env') as typeof import('../../config/env');
   const fileBuffer = fs.readFileSync(filePath);
   const base64 = fileBuffer.toString('base64');
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
   const message = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: env.CLAUDE_MODEL,
     max_tokens: 4096,
     messages: [
       {

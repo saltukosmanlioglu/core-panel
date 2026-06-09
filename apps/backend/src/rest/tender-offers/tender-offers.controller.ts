@@ -65,9 +65,7 @@ export const bulkUpdateItems = async (req: Request, res: Response, next: NextFun
     const parsed = bulkUpdateOfferItemsSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Doğrulama hatası', code: 'VALIDATION_ERROR' }); return; }
     const offerId = String(req.params.offerId);
-    for (const item of parsed.data.items) {
-      await repo.upsertOfferItem(companyId, offerId, item.itemId, item.materialUnitPrice, item.laborUnitPrice);
-    }
+    await repo.bulkUpsertOfferItems(companyId, offerId, parsed.data.items);
     res.json({ status: 'ok' });
   } catch (err) { next(err); }
 };
@@ -75,7 +73,16 @@ export const bulkUpdateItems = async (req: Request, res: Response, next: NextFun
 export const submit = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const companyId = getCompanyId(req, res); if (!companyId) return;
-    const offer = await repo.updateStatus(companyId, String(req.params.offerId), 'submitted');
+    const offerId = String(req.params.offerId);
+
+    // Verify the offer exists and belongs to the requesting user's company
+    const existing = await repo.findById(companyId, offerId);
+    if (!existing) {
+      res.status(404).json({ error: 'Teklif bulunamadı', code: 'NOT_FOUND' });
+      return;
+    }
+
+    const offer = await repo.updateStatus(companyId, offerId, 'submitted');
     if (!offer) { res.status(404).json({ error: 'Teklif bulunamadı', code: 'NOT_FOUND' }); return; }
     res.json({ offer });
   } catch (err) { next(err); }

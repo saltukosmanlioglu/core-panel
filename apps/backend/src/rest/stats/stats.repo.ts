@@ -1,28 +1,33 @@
 import { count, eq } from 'drizzle-orm';
-import { db } from '../../db/connection';
+import { db, pool } from '../../db/connection';
 import { companies, users } from '../../db/schema';
 import { TenantDb } from '../../lib/tenantDb';
+import { getTenantSchemaName } from '../../services/schemaService';
 
 export async function getCounts(): Promise<{
   companies: number;
   tenants: number;
   users: number;
 }> {
-  const [[companiesCount], [usersCount]] = await Promise.all([
+  const [[companiesCount], [usersCount], companyRows] = await Promise.all([
     db.select({ count: count() }).from(companies),
     db.select({ count: count() }).from(users),
+    db.select({ id: companies.id }).from(companies),
   ]);
-  const companyRows = await db.select({ id: companies.id }).from(companies);
-  const tenantCounts = await Promise.all(
-    companyRows.map((company) => {
-      const tdb = new TenantDb(company.id);
-      return tdb.query<{ count: string }>(`SELECT COUNT(*) AS count FROM ${tdb.ref('tenants')}`);
-    }),
-  );
+
+  let tenants = 0;
+  if (companyRows.length > 0) {
+    // Build a single UNION ALL query across all tenant schemas to avoid N+1
+    const unionSql = companyRows
+      .map((c) => `SELECT COUNT(*)::int AS cnt FROM "${getTenantSchemaName(c.id)}".tenants`)
+      .join(' UNION ALL ');
+    const { rows } = await pool.query<{ total: number }>(`SELECT SUM(cnt)::int AS total FROM (${unionSql}) t`);
+    tenants = Number(rows[0]?.total ?? 0);
+  }
 
   return {
     companies: Number(companiesCount?.count ?? 0),
-    tenants: tenantCounts.reduce((sum, result) => sum + Number(result.rows[0]?.count ?? 0), 0),
+    tenants,
     users: Number(usersCount?.count ?? 0),
   };
 }

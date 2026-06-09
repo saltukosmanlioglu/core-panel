@@ -5,3 +5,5 @@ export * from './types/company';
 export * from './types/fileInfo';
 export * from './types/tender';
 export * from './enums';
+export * from './types/metraj';
+export * from './metraj/calculate';

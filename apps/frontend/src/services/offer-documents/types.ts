@@ -2,7 +2,7 @@ export type OwnerType = 'mila' | 'tapu' | null;
 export type UnitType = 'daire' | 'dukkan' | 'depo' | 'siginak' | 'ortak_alan' | 'diger';
 
 export interface OfferUnit {
-  id: number;
+  id: string;
   ownerType: OwnerType;
   ownerName: string;
   unitType: UnitType;
@@ -10,11 +10,11 @@ export interface OfferUnit {
   paymentAmount: number | null;
   label: string | null;
   unitNumber: number | null;
-  linkedUnitId: number | null;
+  linkedUnitId: string | null;
   linkedUnitLabel: string | null;
   manualM2Override: boolean;
-  mergedWithIds: number[];
-  isMergedInto: number | null;
+  mergedWithIds: string[];
+  isMergedInto: string | null;
 }
 
 export interface StreetLabels {

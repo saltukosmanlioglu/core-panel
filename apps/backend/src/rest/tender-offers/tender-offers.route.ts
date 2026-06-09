@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { validateUUID } from '../../middleware/validateUUID';
 import { resolveCompany } from '../../middleware/resolveCompany';
+import { requireAdminAccess } from '../../middleware/requireAdminAccess';
 import * as controller from './tender-offers.controller';
 
 // Mounted at /tenders/:tenderId/offers — mergeParams: true
@@ -17,5 +18,5 @@ offerActionsRouter.use(resolveCompany);
 offerActionsRouter.get('/:offerId/items', validateUUID('offerId'), controller.getOfferItems);
 offerActionsRouter.put('/:offerId/items', validateUUID('offerId'), controller.bulkUpdateItems);
 offerActionsRouter.post('/:offerId/submit', validateUUID('offerId'), controller.submit);
-offerActionsRouter.post('/:offerId/approve', validateUUID('offerId'), controller.approve);
-offerActionsRouter.post('/:offerId/reject', validateUUID('offerId'), controller.reject);
+offerActionsRouter.post('/:offerId/approve', requireAdminAccess, validateUUID('offerId'), controller.approve);
+offerActionsRouter.post('/:offerId/reject', requireAdminAccess, validateUUID('offerId'), controller.reject);

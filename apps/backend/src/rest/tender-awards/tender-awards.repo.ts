@@ -82,11 +82,35 @@ export async function bulkUpsert(
   items: UpsertAwardItemRequest[],
   userId: string,
 ): Promise<TenderAwardItemRecord[]> {
-  const results: TenderAwardItemRecord[] = [];
-
-  for (const item of items) {
-    results.push(await upsertItem(tdb, tenderId, item, userId));
-  }
-
-  return results;
+  const table = tdb.ref('tender_award_items');
+  return tdb.withTransaction(async (query) => {
+    const results: TenderAwardItemRecord[] = [];
+    for (const item of items) {
+      const { rows } = await query<TenderAwardItemRow>(
+        `INSERT INTO ${table}
+          (tender_id, sira_no, description, awarded_tenant_id, status, note, awarded_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (tender_id, sira_no)
+         DO UPDATE SET
+           description = EXCLUDED.description,
+           awarded_tenant_id = EXCLUDED.awarded_tenant_id,
+           status = EXCLUDED.status,
+           note = EXCLUDED.note,
+           awarded_by = EXCLUDED.awarded_by,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          tenderId,
+          item.siraNo,
+          item.description ?? null,
+          item.awardedTenantId,
+          item.status,
+          item.note ?? null,
+          userId,
+        ],
+      );
+      results.push(mapRow(rows[0]!));
+    }
+    return results;
+  });
 }

@@ -108,7 +108,7 @@ export function footerHtml(companyName: string): string {
   `;
 }
 
-export function unitHtml(unit: OfferUnit): string {
+export function unitHtml(unit: OfferUnit, badgeNumber?: string): string {
   const isMila = unit.ownerType === 'mila';
   const isNullOwner = unit.ownerType === null;
   const cssClass = isMila ? 'mila' : isNullOwner ? 'null-owner' : 'tapu';
@@ -116,7 +116,10 @@ export function unitHtml(unit: OfferUnit): string {
     ? `<div class="unit-payment">Ödeme: ${escapeHtml(formatTry(unit.paymentAmount))}</div>`
     : '';
   const label = unit.label ? `<div class="unit-label">${escapeHtml(unit.label)}</div>` : '';
-  const badgeNumber = unit.unitNumber != null ? unit.unitNumber : unit.id;
+  const displayBadgeNumber = badgeNumber ?? (unit.unitNumber != null ? String(unit.unitNumber) : null);
+  const badge = displayBadgeNumber
+    ? `<div class="unit-badge">${escapeHtml(displayBadgeNumber)}</div>`
+    : '';
   const linkedLabel = unit.linkedUnitLabel
     ? `<div class="unit-linked">${escapeHtml(unit.linkedUnitLabel)}</div>`
     : '';
@@ -125,7 +128,7 @@ export function unitHtml(unit: OfferUnit): string {
       <div class="unit-owner">${escapeHtml(unit.ownerName)}</div>
       <div class="unit-area">Brüt: ${escapeHtml(formatM2(unit.brutM2))}</div>
       ${payment}
-      <div class="unit-badge">${escapeHtml(badgeNumber)}</div>
+      ${badge}
       ${linkedLabel}
       ${label}
     </div>

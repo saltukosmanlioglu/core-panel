@@ -1,10 +1,12 @@
+import crypto from 'crypto';
 import { TenantDb } from '../../lib/tenantDb';
+import { env } from '../../config/env';
 
 export type OwnerType = 'mila' | 'tapu' | null;
 export type UnitType = 'daire' | 'dukkan' | 'depo' | 'siginak' | 'ortak_alan' | 'diger';
 
 export interface OfferUnit {
-  id: number;
+  id: string;
   ownerType: OwnerType;
   ownerName: string;
   unitType: UnitType;
@@ -12,11 +14,11 @@ export interface OfferUnit {
   paymentAmount: number | null;
   label: string | null;
   unitNumber: number | null;
-  linkedUnitId: number | null;
+  linkedUnitId: string | null;
   linkedUnitLabel: string | null;
   manualM2Override: boolean;
-  mergedWithIds: number[];
-  isMergedInto: number | null;
+  mergedWithIds: string[];
+  isMergedInto: string | null;
 }
 
 export interface StreetLabels {
@@ -180,9 +182,30 @@ function normalizeStreetLabels(value: unknown): StreetLabels {
 }
 
 const VALID_UNIT_TYPES: UnitType[] = ['daire', 'dukkan', 'depo', 'siginak', 'ortak_alan', 'diger'];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function normalizeUnit(value: unknown, index: number, companyName: string): OfferUnit {
+function isValidUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_REGEX.test(value);
+}
+
+function unitIdKey(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
+function normalizeUnitId(value: unknown): string {
+  return isValidUuid(value) ? value : crypto.randomUUID();
+}
+
+function normalizeUnitRef(value: unknown, idMap: Map<string, string>): string | null {
+  const key = unitIdKey(value);
+  if (!key) return null;
+  return idMap.get(key) ?? (isValidUuid(value) ? value : null);
+}
+
+function normalizeUnit(value: unknown, index: number, companyName: string, idMap: Map<string, string>): OfferUnit {
   const record = asRecord(value);
+  const id = normalizeUnitRef(record.id, idMap) ?? normalizeUnitId(record.id);
 
   const ownerType: OwnerType = record.ownerType === 'mila' ? 'mila'
     : record.ownerType === null ? null
@@ -195,20 +218,18 @@ function normalizeUnit(value: unknown, index: number, companyName: string): Offe
     : ownerType === 'tapu' ? 'TAPU SAHİBİ'
     : '';
 
-  const linkedUnitId = record.linkedUnitId === null || record.linkedUnitId === undefined
-    ? null
-    : (Number.isFinite(Number(record.linkedUnitId)) ? Number(record.linkedUnitId) : null);
+  const linkedUnitId = normalizeUnitRef(record.linkedUnitId, idMap);
 
   const mergedWithIds = Array.isArray(record.mergedWithIds)
-    ? (record.mergedWithIds as unknown[]).map(Number).filter(Number.isFinite)
+    ? (record.mergedWithIds as unknown[])
+      .map((mergedId) => normalizeUnitRef(mergedId, idMap))
+      .filter((mergedId): mergedId is string => mergedId !== null)
     : [];
 
-  const isMergedInto = record.isMergedInto === null || record.isMergedInto === undefined
-    ? null
-    : (Number.isFinite(Number(record.isMergedInto)) ? Number(record.isMergedInto) : null);
+  const isMergedInto = normalizeUnitRef(record.isMergedInto, idMap);
 
   return {
-    id: numberOr(record.id, index + 1),
+    id,
     ownerType,
     ownerName: textOr(record.ownerName, defaultName),
     unitType,
@@ -228,12 +249,47 @@ function normalizeUnit(value: unknown, index: number, companyName: string): Offe
   };
 }
 
-function normalizeUnits(value: unknown, companyName: string): OfferUnit[] {
-  return Array.isArray(value) ? value.map((v, i) => normalizeUnit(v, i, companyName)) : [];
+function addUnitIdsToMap(value: unknown, idMap: Map<string, string>): void {
+  if (!Array.isArray(value)) return;
+  for (const item of value) {
+    const record = asRecord(item);
+    const key = unitIdKey(record.id);
+    if (key) idMap.set(key, normalizeUnitId(record.id));
+  }
+}
+
+function buildUnitIdMap(record: Record<string, unknown>): Map<string, string> {
+  const idMap = new Map<string, string>();
+  addUnitIdsToMap(asRecord(record.groundFloor).units, idMap);
+  addUnitIdsToMap(asRecord(record.roofFloor).units, idMap);
+
+  if (Array.isArray(record.normalFloors)) {
+    for (const item of record.normalFloors) {
+      addUnitIdsToMap(asRecord(item).units, idMap);
+    }
+  }
+
+  if (Array.isArray(record.basementFloors)) {
+    for (const item of record.basementFloors) {
+      addUnitIdsToMap(asRecord(item).units, idMap);
+    }
+  }
+
+  return idMap;
+}
+
+function normalizeUnits(value: unknown, companyName: string, buildingIdMap?: Map<string, string>): OfferUnit[] {
+  if (!Array.isArray(value)) return [];
+
+  const idMap = buildingIdMap ?? new Map<string, string>();
+  if (!buildingIdMap) addUnitIdsToMap(value, idMap);
+
+  return value.map((v, i) => normalizeUnit(v, i, companyName, idMap));
 }
 
 function normalizeBuilding(value: unknown, companyName = ''): OfferBuilding {
   const record = asRecord(value);
+  const unitIdMap = buildUnitIdMap(record);
   const basementFloors = Array.isArray(record.basementFloors)
     ? record.basementFloors.map((item, index) => {
       const floor = asRecord(item);
@@ -244,7 +300,7 @@ function normalizeBuilding(value: unknown, companyName = ''): OfferBuilding {
           ? null
           : Math.max(0, numberOr(floor.commonAreaM2, 0)),
         commonAreaLabel: textOrNull(floor.commonAreaLabel) ?? 'ORTAK ALAN',
-        units: normalizeUnits(floor.units, companyName),
+        units: normalizeUnits(floor.units, companyName, unitIdMap),
         streetLabels: normalizeStreetLabels(floor.streetLabels),
       };
     })
@@ -256,7 +312,7 @@ function normalizeBuilding(value: unknown, companyName = ''): OfferBuilding {
       const floor = asRecord(item);
       return {
         floorNumber: Math.max(1, Math.trunc(numberOr(floor.floorNumber, index + 1))),
-        units: normalizeUnits(floor.units, companyName),
+        units: normalizeUnits(floor.units, companyName, unitIdMap),
       };
     })
     : defaultBuilding.normalFloors;
@@ -266,13 +322,13 @@ function normalizeBuilding(value: unknown, companyName = ''): OfferBuilding {
     basementFloors: basementFloors.length > 0 ? basementFloors : defaultBuilding.basementFloors,
     groundFloor: {
       exists: groundFloor.exists !== false,
-      units: normalizeUnits(groundFloor.units, companyName),
+      units: normalizeUnits(groundFloor.units, companyName, unitIdMap),
       streetLabels: normalizeStreetLabels(groundFloor.streetLabels),
     },
     normalFloors: normalFloors.length > 0 ? normalFloors : defaultBuilding.normalFloors,
     roofFloor: {
       exists: roofFloor.exists === true,
-      units: normalizeUnits(roofFloor.units, companyName),
+      units: normalizeUnits(roofFloor.units, companyName, unitIdMap),
     },
   };
 }
@@ -331,29 +387,6 @@ export async function findById(tdb: TenantDb, projectId: string, id: string): Pr
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
-function getTenantSchemaName(tdb: TenantDb): string | null {
-  const match = /^"([^"]+)"\."offer_documents"$/.exec(tdb.ref('offer_documents'));
-  return match?.[1] ?? null;
-}
-
-async function hasOfferDocumentsColumn(tdb: TenantDb, columnName: string): Promise<boolean> {
-  const schemaName = getTenantSchemaName(tdb);
-  if (!schemaName) return false;
-
-  const { rows } = await tdb.query<{ exists: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1
-       FROM information_schema.columns
-       WHERE table_schema = $1
-         AND table_name = 'offer_documents'
-         AND column_name = $2
-     ) AS exists`,
-    [schemaName, columnName],
-  );
-
-  return rows[0]?.exists === true;
-}
-
 function buildAlternativesJson(data: OfferDocumentInput, companyName: string): string {
   const alts = data.alternatives ?? [{ id: '1', label: 'Alternatif 1', building: data.building }];
   return JSON.stringify(alts.map((a) => ({
@@ -367,62 +400,23 @@ export async function create(tdb: TenantDb, projectId: string, data: OfferDocume
   const companyName = data.companyName ?? '';
   const primaryBuilding = data.alternatives?.[0]?.building ?? data.building;
   const buildingJson = JSON.stringify(normalizeBuilding(primaryBuilding, companyName));
-  const hasCompanyNameColumn = await hasOfferDocumentsColumn(tdb, 'company_name');
-  const hasAlternativesColumn = hasCompanyNameColumn && await hasOfferDocumentsColumn(tdb, 'alternatives');
-
-  if (hasAlternativesColumn) {
-    const alternativesJson = buildAlternativesJson(data, companyName);
-    const { rows } = await tdb.query<OfferDocumentRow>(
-      `INSERT INTO ${tdb.ref('offer_documents')}
-         (project_id, parcel_title, offer_date, page2_content, tcmb_rate, company_name, building, alternatives, parcel_calculation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
-       RETURNING *`,
-      [
-        projectId,
-        data.parcelTitle,
-        data.offerDate,
-        data.page2Content,
-        data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
-        companyName,
-        buildingJson,
-        alternativesJson,
-        data.parcelCalculationId ?? null,
-      ],
-    );
-    return mapRow(rows[0]!);
-  }
-
-  if (!hasCompanyNameColumn) {
-    const { rows } = await tdb.query<OfferDocumentRow>(
-      `INSERT INTO ${tdb.ref('offer_documents')}
-         (project_id, parcel_title, offer_date, page2_content, tcmb_rate, building)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-       RETURNING *`,
-      [
-        projectId,
-        data.parcelTitle,
-        data.offerDate,
-        data.page2Content,
-        data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
-        buildingJson,
-      ],
-    );
-    return mapRow(rows[0]!);
-  }
+  const alternativesJson = buildAlternativesJson(data, companyName);
 
   const { rows } = await tdb.query<OfferDocumentRow>(
     `INSERT INTO ${tdb.ref('offer_documents')}
-       (project_id, parcel_title, offer_date, page2_content, tcmb_rate, company_name, building)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+       (project_id, parcel_title, offer_date, page2_content, tcmb_rate, company_name, building, alternatives, parcel_calculation_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
      RETURNING *`,
     [
       projectId,
       data.parcelTitle,
       data.offerDate,
       data.page2Content,
-      data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
+      data.tcmbRate ?? env.TCMB_DEFAULT_RATE,
       companyName,
       buildingJson,
+      alternativesJson,
+      data.parcelCalculationId ?? null,
     ],
   );
   return mapRow(rows[0]!);
@@ -437,63 +431,7 @@ export async function update(
   const companyName = data.companyName ?? '';
   const primaryBuilding = data.alternatives?.[0]?.building ?? data.building;
   const buildingJson = JSON.stringify(normalizeBuilding(primaryBuilding, companyName));
-  const hasCompanyNameColumn = await hasOfferDocumentsColumn(tdb, 'company_name');
-  const hasAlternativesColumn = hasCompanyNameColumn && await hasOfferDocumentsColumn(tdb, 'alternatives');
-
-  if (hasAlternativesColumn) {
-    const alternativesJson = buildAlternativesJson(data, companyName);
-    const { rows } = await tdb.query<OfferDocumentRow>(
-      `UPDATE ${tdb.ref('offer_documents')}
-       SET parcel_title = $3,
-           offer_date = $4,
-           page2_content = $5,
-           tcmb_rate = $6,
-           company_name = $7,
-           building = $8::jsonb,
-           alternatives = $9::jsonb,
-           parcel_calculation_id = $10,
-           updated_at = NOW()
-       WHERE project_id = $1 AND id = $2
-       RETURNING *`,
-      [
-        projectId,
-        id,
-        data.parcelTitle,
-        data.offerDate,
-        data.page2Content,
-        data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
-        companyName,
-        buildingJson,
-        alternativesJson,
-        data.parcelCalculationId ?? null,
-      ],
-    );
-    return rows[0] ? mapRow(rows[0]) : null;
-  }
-
-  if (!hasCompanyNameColumn) {
-    const { rows } = await tdb.query<OfferDocumentRow>(
-      `UPDATE ${tdb.ref('offer_documents')}
-       SET parcel_title = $3,
-           offer_date = $4,
-           page2_content = $5,
-           tcmb_rate = $6,
-           building = $7::jsonb,
-           updated_at = NOW()
-       WHERE project_id = $1 AND id = $2
-       RETURNING *`,
-      [
-        projectId,
-        id,
-        data.parcelTitle,
-        data.offerDate,
-        data.page2Content,
-        data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
-        buildingJson,
-      ],
-    );
-    return rows[0] ? mapRow(rows[0]) : null;
-  }
+  const alternativesJson = buildAlternativesJson(data, companyName);
 
   const { rows } = await tdb.query<OfferDocumentRow>(
     `UPDATE ${tdb.ref('offer_documents')}
@@ -503,6 +441,8 @@ export async function update(
          tcmb_rate = $6,
          company_name = $7,
          building = $8::jsonb,
+         alternatives = $9::jsonb,
+         parcel_calculation_id = $10,
          updated_at = NOW()
      WHERE project_id = $1 AND id = $2
      RETURNING *`,
@@ -512,9 +452,11 @@ export async function update(
       data.parcelTitle,
       data.offerDate,
       data.page2Content,
-      data.tcmbRate ?? '1 Dolar (USD): 45,45 TL',
+      data.tcmbRate ?? env.TCMB_DEFAULT_RATE,
       companyName,
       buildingJson,
+      alternativesJson,
+      data.parcelCalculationId ?? null,
     ],
   );
   return rows[0] ? mapRow(rows[0]) : null;

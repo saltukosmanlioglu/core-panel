@@ -82,94 +82,89 @@ function cloneUnits(units: OfferUnit[]): OfferUnit[] {
   }));
 }
 
-function getBuildingUnits(building: OfferBuilding): OfferUnit[] {
-  return [
-    ...building.basementFloors.flatMap((floor) => floor.units),
-    ...(building.groundFloor.exists ? building.groundFloor.units : []),
-    ...building.normalFloors.flatMap((floor) => floor.units),
-    ...(building.roofFloor.exists ? building.roofFloor.units : []),
-  ];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_REGEX.test(value);
 }
 
-function getNextUnitId(building: OfferBuilding, extraUnits: OfferUnit[] = []): number {
-  const maxId = [...getBuildingUnits(building), ...extraUnits].reduce((max, unit) => Math.max(max, unit.id), 0);
-  return maxId + 1;
+function unitIdKey(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
 }
 
-function createUnitIdFactory(building: OfferBuilding): () => number {
-  let nextId = getNextUnitId(building);
-  return () => {
-    const id = nextId;
-    nextId += 1;
-    return id;
-  };
+function rawUnitId(unit: OfferUnit): unknown {
+  return (unit as { id: unknown }).id;
 }
 
-function cloneUnitsWithFreshIds(units: OfferUnit[], nextId: () => number): OfferUnit[] {
-  const idMap = new Map<number, number>();
-  units.forEach((unit) => idMap.set(unit.id, nextId()));
+function normalizeUnitId(value: unknown): string {
+  return isValidUuid(value) ? value : crypto.randomUUID();
+}
 
-  return units.map((unit) => ({
-    ...unit,
-    id: idMap.get(unit.id) ?? unit.id,
-    mergedWithIds: (unit.mergedWithIds ?? []).map((id) => idMap.get(id) ?? id),
-    isMergedInto: unit.isMergedInto === null ? null : (idMap.get(unit.isMergedInto) ?? unit.isMergedInto),
-    linkedUnitId: unit.linkedUnitId === null ? null : (idMap.get(unit.linkedUnitId) ?? unit.linkedUnitId),
-  }));
+function normalizeUnitRef(value: unknown, idMap: Map<string, string>): string | null {
+  const key = unitIdKey(value);
+  if (!key) return null;
+  return idMap.get(key) ?? (isValidUuid(value) ? value : null);
+}
+
+function addUnitsToIdMap(units: OfferUnit[], idMap: Map<string, string>, forceFresh = false): void {
+  for (const unit of units) {
+    const id = rawUnitId(unit);
+    const key = unitIdKey(id);
+    if (key) idMap.set(key, forceFresh ? crypto.randomUUID() : normalizeUnitId(id));
+  }
+}
+
+function buildBuildingUnitIdMap(building: OfferBuilding): Map<string, string> {
+  const idMap = new Map<string, string>();
+  addUnitsToIdMap(building.groundFloor.units, idMap);
+  for (const floor of building.normalFloors) addUnitsToIdMap(floor.units, idMap);
+  addUnitsToIdMap(building.roofFloor.units, idMap);
+  for (const floor of building.basementFloors) addUnitsToIdMap(floor.units, idMap);
+  return idMap;
+}
+
+function remapUnits(units: OfferUnit[], idMap: Map<string, string>): OfferUnit[] {
+  return units.map((unit) => {
+    const id = normalizeUnitRef(rawUnitId(unit), idMap) ?? normalizeUnitId(rawUnitId(unit));
+    return {
+      ...unit,
+      id,
+      mergedWithIds: (unit.mergedWithIds ?? [])
+        .map((mergedId) => normalizeUnitRef(mergedId, idMap))
+        .filter((mergedId): mergedId is string => mergedId !== null),
+      isMergedInto: normalizeUnitRef(unit.isMergedInto, idMap),
+      linkedUnitId: normalizeUnitRef(unit.linkedUnitId, idMap),
+    };
+  });
+}
+
+function cloneUnitsWithFreshIds(units: OfferUnit[]): OfferUnit[] {
+  const idMap = new Map<string, string>();
+  addUnitsToIdMap(units, idMap, true);
+  return remapUnits(units, idMap);
 }
 
 function normalizeBuildingUnitIds(building: OfferBuilding): OfferBuilding {
-  const usedIds = new Set<number>();
-  const preferredGlobalId = new Map<number, number>();
-  let nextId = getNextUnitId(building);
-
-  const assignIds = (units: OfferUnit[]): { units: OfferUnit[]; localIdMap: Map<number, number> } => {
-    const localIdMap = new Map<number, number>();
-    const assignedUnits = units.map((unit) => {
-      let id = unit.id;
-      if (usedIds.has(id)) {
-        id = nextId;
-        nextId += 1;
-      }
-      usedIds.add(id);
-      if (!preferredGlobalId.has(unit.id)) preferredGlobalId.set(unit.id, id);
-      localIdMap.set(unit.id, id);
-      return { ...unit, id, mergedWithIds: [...(unit.mergedWithIds ?? [])] };
-    });
-
-    return { units: assignedUnits, localIdMap };
-  };
-
-  const remapRelations = (units: OfferUnit[], localIdMap: Map<number, number>): OfferUnit[] =>
-    units.map((unit) => ({
-      ...unit,
-      mergedWithIds: (unit.mergedWithIds ?? []).map((id) => localIdMap.get(id) ?? id),
-      isMergedInto: unit.isMergedInto === null ? null : (localIdMap.get(unit.isMergedInto) ?? unit.isMergedInto),
-      linkedUnitId: unit.linkedUnitId === null ? null : (preferredGlobalId.get(unit.linkedUnitId) ?? unit.linkedUnitId),
-    }));
-
-  const groundResult = assignIds(building.groundFloor.units);
-  const normalResults = building.normalFloors.map((floor) => ({ floor, result: assignIds(floor.units) }));
-  const roofResult = assignIds(building.roofFloor.units);
-  const basementResults = building.basementFloors.map((floor) => ({ floor, result: assignIds(floor.units) }));
+  const idMap = buildBuildingUnitIdMap(building);
 
   return {
     ...building,
     groundFloor: {
       ...building.groundFloor,
-      units: remapRelations(groundResult.units, groundResult.localIdMap),
+      units: remapUnits(building.groundFloor.units, idMap),
     },
-    normalFloors: normalResults.map(({ floor, result }) => ({
+    normalFloors: building.normalFloors.map((floor) => ({
       ...floor,
-      units: remapRelations(result.units, result.localIdMap),
+      units: remapUnits(floor.units, idMap),
     })),
     roofFloor: {
       ...building.roofFloor,
-      units: remapRelations(roofResult.units, roofResult.localIdMap),
+      units: remapUnits(building.roofFloor.units, idMap),
     },
-    basementFloors: basementResults.map(({ floor, result }) => ({
+    basementFloors: building.basementFloors.map((floor) => ({
       ...floor,
-      units: remapRelations(result.units, result.localIdMap),
+      units: remapUnits(floor.units, idMap),
     })),
   };
 }
@@ -282,13 +277,12 @@ export function OfferForm({
     updateBuilding((building) => {
       const idx = building.basementFloors.length;
       const m2 = calculateUnitM2(tabanAlani, 0, 2);
-      const nextId = createUnitIdFactory(building);
       const newFloor: BasementFloor = {
         label: `${idx + 1}. BODRUM KAT`,
         isCommonArea: true,
         commonAreaM2: tabanAlani || null,
         commonAreaLabel: 'ORTAK ALAN',
-        units: [makeUnit(nextId(), m2, undefined, 'depo'), makeUnit(nextId(), m2, undefined, 'depo')],
+        units: [makeUnit(m2, undefined, 'depo'), makeUnit(m2, undefined, 'depo')],
         streetLabels: emptyStreetLabels,
       };
       return { ...building, basementFloors: [...building.basementFloors, newFloor] };
@@ -307,9 +301,8 @@ export function OfferForm({
   const addNormalFloor = () => {
     updateBuilding((building) => {
       const idx = building.normalFloors.length;
-      const templateUnits = building.normalFloors[0]?.units ?? [makeUnit(1), makeUnit(2)];
-      const nextId = createUnitIdFactory(building);
-      const newFloor = { floorNumber: idx + 1, units: cloneUnitsWithFreshIds(templateUnits, nextId) };
+      const templateUnits = building.normalFloors[0]?.units ?? [makeUnit(), makeUnit()];
+      const newFloor = { floorNumber: idx + 1, units: cloneUnitsWithFreshIds(templateUnits) };
       return { ...building, normalFloors: [...building.normalFloors, newFloor] };
     });
   };
@@ -332,12 +325,11 @@ export function OfferForm({
     if (!checked) return;
     updateBuilding((building) => {
       const templateUnits = building.normalFloors[0]?.units ?? [];
-      const nextId = createUnitIdFactory(building);
       return {
         ...building,
         normalFloors: building.normalFloors.map((floor, index) => ({
           floorNumber: floor.floorNumber,
-          units: index === 0 ? cloneUnits(templateUnits) : cloneUnitsWithFreshIds(templateUnits, nextId),
+          units: index === 0 ? cloneUnits(templateUnits) : cloneUnitsWithFreshIds(templateUnits),
         })),
       };
     });
@@ -367,11 +359,10 @@ export function OfferForm({
         return { ...building, groundFloor: { ...building.groundFloor, units: draft.units, streetLabels: draft.streetLabels } };
       }
       if (draft.kind === 'normal') {
-        const nextId = createUnitIdFactory(building);
         const normalFloors = normalFloorsSame
           ? building.normalFloors.map((f, i) => ({
             ...f,
-            units: i === draft.index ? draft.units : cloneUnitsWithFreshIds(draft.units, nextId),
+            units: i === draft.index ? draft.units : cloneUnitsWithFreshIds(draft.units),
           }))
           : building.normalFloors.map((f, i) => (i === draft.index ? { ...f, units: draft.units } : f));
         return { ...building, normalFloors };
@@ -1097,8 +1088,8 @@ function FloorEditorModal({
 // ── Helper: collect units for linkedUnit dropdown ────────────────────────────
 
 interface UnitRef {
-  id: number;
-  unitId: number;
+  id: string;
+  unitId: string;
   label: string;       // shown in the dropdown
   linkLabel?: string;  // stored as linkedUnitLabel on the unit
 }
@@ -1135,7 +1126,7 @@ function collectAboveGroundUnits(building: OfferBuilding): UnitRef[] {
     if (unit.isMergedInto || (unit.unitType !== 'daire' && unit.unitType !== 'dukkan')) return;
     const globalNum = numMap.get(unit.id);
     const typeLabel = unit.unitType === 'dukkan' ? 'Dükkan' : 'Daire';
-    const numberLabel = globalNum ?? String(unit.id);
+    const numberLabel = globalNum ?? '?';
 
     refs.push({
       id: unit.id,
@@ -1179,7 +1170,7 @@ function UnitsEditor({
   units: OfferUnit[];
   tabanAlani: number;
   allFloors: OfferBuilding;
-  numberMap?: Map<number, string>;
+  numberMap?: Map<string, string>;
   isBasement?: boolean;
   companyName: string;
   onChange: (units: OfferUnit[]) => void;
@@ -1197,7 +1188,7 @@ function UnitsEditor({
 
   const addUnit = () => {
     const defaultUnitType: UnitType = isBasement ? 'depo' : 'daire';
-    const newUnit = makeUnit(getNextUnitId(allFloors, units), autoM2, undefined, defaultUnitType);
+    const newUnit = makeUnit(autoM2, undefined, defaultUnitType);
     const recalc = [...units, newUnit].map((u) =>
       u.manualM2Override ? u : { ...u, brutM2: calculateUnitM2(tabanAlani, 0, units.length + 1) },
     );
@@ -1211,7 +1202,7 @@ function UnitsEditor({
     onChange(next.map((u) => u.manualM2Override ? u : { ...u, brutM2: recalcM2 }));
   };
 
-  const mergeUnits = (primaryIdx: number, secondaryId: number) => {
+  const mergeUnits = (primaryIdx: number, secondaryId: string) => {
     const primary = units[primaryIdx];
     const secondary = units.find((u) => u.id === secondaryId);
     if (!secondary) return;
@@ -1255,14 +1246,16 @@ function UnitsEditor({
 
           // Secondary (absorbed) unit — show collapsed indicator
           if (unit.isMergedInto != null) {
-            const mergedIntoNumber = numberMap?.get(unit.isMergedInto) ?? String(unit.isMergedInto);
+            const unitNumberLabel = globalNumber ? `#${globalNumber}` : 'Numarasız birim';
+            const mergedIntoNumber = numberMap?.get(unit.isMergedInto);
+            const mergedIntoLabel = mergedIntoNumber ? `#${mergedIntoNumber}` : 'seçili birim';
             return (
               <Box
                 key={index}
                 sx={{ p: 1, bgcolor: '#f9fafb', border: '1px dashed #d1d5db', borderRadius: 1, opacity: 0.65 }}
               >
                 <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                  Birim {globalNumber ? `#${globalNumber}` : `#${unit.id}`} ({unit.ownerName}) — #{mergedIntoNumber} ile birleştirildi
+                  Birim {unitNumberLabel} ({unit.ownerName}) — {mergedIntoLabel} ile birleştirildi
                 </Typography>
               </Box>
             );
@@ -1382,9 +1375,9 @@ function UnitsEditor({
                         if (val === '') {
                           updateUnit(index, { linkedUnitId: null, linkedUnitLabel: null });
                         } else {
-                          const ref = linkedRefs.find((r) => r.unitId === Number(val));
+                          const ref = linkedRefs.find((r) => r.unitId === val);
                           updateUnit(index, {
-                            linkedUnitId: Number(val),
+                            linkedUnitId: val,
                             linkedUnitLabel: ref ? (ref.linkLabel ?? `${ref.label}'e ait`) : null,
                           });
                         }
@@ -1447,12 +1440,17 @@ function UnitsEditor({
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: 1, pt: 0.5 }}>
                     <TextField
                       size="small" select label="Birleştirilecek birim" value=""
-                      onChange={(e) => { if (e.target.value) mergeUnits(index, Number(e.target.value)); }}
+                      onChange={(e) => { if (e.target.value) mergeUnits(index, e.target.value); }}
                       sx={{ minWidth: 220 }} autoFocus
                     >
-                      {mergeTargets.map((t) => (
-                        <MenuItem key={t.id} value={t.id}>{t.ownerName} (#{numberMap?.get(t.id) ?? t.id})</MenuItem>
-                      ))}
+                      {mergeTargets.map((t) => {
+                        const targetNumber = numberMap?.get(t.id);
+                        return (
+                          <MenuItem key={t.id} value={t.id}>
+                            {t.ownerName}{targetNumber ? ` (#${targetNumber})` : ''}
+                          </MenuItem>
+                        );
+                      })}
                     </TextField>
                     <Button size="small" onClick={() => setMergingIdx(null)}>İptal</Button>
                   </Box>
@@ -1536,9 +1534,9 @@ function UnitsEditor({
                     if (val === '') {
                       updateUnit(index, { linkedUnitId: null, linkedUnitLabel: null });
                     } else {
-                      const ref = linkedRefs.find((r) => r.unitId === Number(val));
+                      const ref = linkedRefs.find((r) => r.unitId === val);
                       updateUnit(index, {
-                        linkedUnitId: Number(val),
+                        linkedUnitId: val,
                         linkedUnitLabel: ref ? (ref.linkLabel ?? `${ref.label}'e ait`) : null,
                       });
                     }
@@ -1592,13 +1590,18 @@ function UnitsEditor({
                     select
                     label="Birleştirilecek birim"
                     value=""
-                    onChange={(e) => { if (e.target.value) mergeUnits(index, Number(e.target.value)); }}
+                    onChange={(e) => { if (e.target.value) mergeUnits(index, e.target.value); }}
                     sx={{ minWidth: 220 }}
                     autoFocus
                   >
-                    {mergeTargets.map((t) => (
-                      <MenuItem key={t.id} value={t.id}>{t.ownerName} (#{numberMap?.get(t.id) ?? t.id})</MenuItem>
-                    ))}
+                    {mergeTargets.map((t) => {
+                      const targetNumber = numberMap?.get(t.id);
+                      return (
+                        <MenuItem key={t.id} value={t.id}>
+                          {t.ownerName}{targetNumber ? ` (#${targetNumber})` : ''}
+                        </MenuItem>
+                      );
+                    })}
                   </TextField>
                   <Button size="small" onClick={() => setMergingIdx(null)}>İptal</Button>
                 </Box>

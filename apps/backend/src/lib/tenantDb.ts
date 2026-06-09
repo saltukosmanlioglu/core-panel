@@ -46,6 +46,34 @@ export class TenantDb {
     const result = await pool.query<T>(text, params);
     return { rows: result.rows, rowCount: result.rowCount ?? 0 };
   }
+
+  /**
+   * Run multiple queries inside a single database transaction.
+   * The callback receives a `query` function bound to the same pg client so
+   * all statements share the connection and are rolled back atomically on error.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async withTransaction<TResult>(
+    fn: (query: <T extends Record<string, any>>(text: string, params?: unknown[]) => Promise<{ rows: T[]; rowCount: number }>) => Promise<TResult>,
+  ): Promise<TResult> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const txQuery = async <T extends Record<string, any>>(text: string, params: unknown[] = []) => {
+        const result = await client.query<T>(text, params);
+        return { rows: result.rows, rowCount: result.rowCount ?? 0 };
+      };
+      const result = await fn(txQuery);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 export function getTdb(req: Pick<Request, 'resolvedCompanyId'>): TenantDb {

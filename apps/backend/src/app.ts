@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -8,6 +9,8 @@ import { env } from './config/env';
 import { UPLOADS_DIR } from './config/paths';
 import { errorHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
+import { verifyToken } from './middleware/verifyToken';
+import { checkIsActive } from './middleware/checkIsActive';
 import baseRouter from './rest/base-router';
 
 const app = express();
@@ -38,22 +41,29 @@ app.use(cookieParser(env.COOKIE_SECRET));
 // Rate limiting
 app.use('/api', apiLimiter);
 
-// Local uploads — allow cross-origin image/model loading (frontend is on a different port)
-const setUploadHeaders = (res: express.Response, filePath?: string) => {
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Access-Control-Allow-Origin', env.FRONTEND_URL);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+// Authenticated file-streaming endpoint (replaces unauthenticated express.static).
+// Matches any path under /api/files/**, e.g. /api/files/logos/logo-uuid.png
+app.get('/api/files/*', verifyToken, checkIsActive, (req, res) => {
+  const relativePath = (req.params as Record<string, string>)['0'] ?? '';
+  const resolved = path.resolve(UPLOADS_DIR, relativePath);
 
-  if (filePath && path.extname(filePath).toLowerCase() === '.glb') {
+  // Prevent path traversal
+  if (!resolved.startsWith(UPLOADS_DIR + path.sep) && resolved !== UPLOADS_DIR) {
+    res.status(400).json({ error: 'Invalid file path', code: 'INVALID_PATH' });
+    return;
+  }
+
+  if (!fs.existsSync(resolved)) {
+    res.status(404).json({ error: 'File not found', code: 'NOT_FOUND' });
+    return;
+  }
+
+  if (path.extname(resolved).toLowerCase() === '.glb') {
     res.setHeader('Content-Type', 'model/gltf-binary');
   }
-};
 
-app.use('/uploads', (req, res, next) => {
-  setUploadHeaders(res, req.path);
-
-  next();
-}, express.static(UPLOADS_DIR, { setHeaders: setUploadHeaders }));
+  res.sendFile(resolved);
+});
 
 // Routes
 app.use('/api', baseRouter);

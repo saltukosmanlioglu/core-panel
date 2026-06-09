@@ -9,6 +9,7 @@ import {
   CropFree as CropFreeIcon,
   Description as DescriptionIcon,
   Gavel as GavelIcon,
+  FormatListNumbered as MetrajIcon,
 } from '@mui/icons-material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import { usePathname, useRouter } from 'next/navigation';
@@ -46,6 +47,7 @@ export function WorkspaceLayout({ children, groups }: WorkspaceLayoutProps) {
             children: [
               { label: 'Taban Oturum Alanı', icon: <CropFreeIcon fontSize="small" />, href: `${projectBase}/parcel-calculation`, color: '#0ea5e9' },
               { label: 'Teklif Oluştur', icon: <DescriptionIcon fontSize="small" />, href: `${projectBase}/offer-documents`, color: '#1B3A5C' },
+              { label: 'Metraj', icon: <MetrajIcon fontSize="small" />, href: `${projectBase}/metraj`, color: '#7C3AED' },
             ],
           },
           {

@@ -48,7 +48,7 @@ export const getAll = async (req: Request, res: Response, next: NextFunction): P
 
 export const getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (req.userCompanyId && req.userCompanyId !== req.params.id) {
+    if (req.userCompanyId !== req.params.id) {
       res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }
@@ -65,7 +65,7 @@ export const getById = async (req: Request, res: Response, next: NextFunction): 
 
 export const reprovision = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (req.userCompanyId && req.userCompanyId !== req.params.id) {
+    if (req.userCompanyId !== req.params.id) {
       res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }
@@ -78,7 +78,7 @@ export const reprovision = async (req: Request, res: Response, next: NextFunctio
 
 export const update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (req.userCompanyId && req.userCompanyId !== req.params.id) {
+    if (req.userCompanyId !== req.params.id) {
       res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }
@@ -106,7 +106,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
 
 export const uploadLogo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (req.userCompanyId && req.userCompanyId !== req.params.id) {
+    if (req.userCompanyId !== req.params.id) {
       res.status(403).json({ error: 'Erişim reddedildi', code: 'FORBIDDEN' });
       return;
     }

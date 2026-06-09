@@ -104,27 +104,52 @@ export async function finalizeTender(
   userId: string,
   note?: string,
 ): Promise<{ status: 'awarded' }> {
-  const { rowCount } = await tdb.query(
-    `UPDATE ${tdb.ref('tenders')}
-     SET status = 'awarded', updated_at = NOW()
-     WHERE id = $1`,
+  // Pre-condition: tender must exist and not already be awarded
+  const { rows: tenderRows } = await tdb.query<{ status: string }>(
+    `SELECT status FROM ${tdb.ref('tenders')} WHERE id = $1 LIMIT 1`,
     [tenderId],
   );
-
-  if (rowCount === 0) {
+  const tender = tenderRows[0];
+  if (!tender) {
     throw new AppError('İhale bulunamadı', 404, 'NOT_FOUND');
   }
+  if (tender.status === 'awarded') {
+    throw new AppError('İhale zaten sonuçlandırılmış', 409, 'ALREADY_AWARDED');
+  }
 
-  await auditRepo.create(
-    tdb,
-    tenderId,
-    'tender_finalized',
-    {
-      note: note ?? null,
-      finalizedBy: userId,
-    },
-    userId,
+  // Pre-condition: tender must have at least one item
+  const { rows: itemRows } = await tdb.query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM ${tdb.ref('tender_items')} WHERE tender_id = $1`,
+    [tenderId],
   );
+  if (Number(itemRows[0]?.count ?? 0) === 0) {
+    throw new AppError('İhaleye kalem eklenmeden sonuçlandırılamaz', 400, 'NO_ITEMS');
+  }
+
+  // Pre-condition: at least one submitted offer
+  const { rows: offerRows } = await tdb.query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM ${tdb.ref('tender_offers')} WHERE tender_id = $1 AND status = 'submitted'`,
+    [tenderId],
+  );
+  if (Number(offerRows[0]?.count ?? 0) === 0) {
+    throw new AppError('Teklif alınmadan ihale sonuçlandırılamaz', 400, 'NO_SUBMITTED_OFFERS');
+  }
+
+  // Atomically update status and write audit log
+  await tdb.withTransaction(async (query) => {
+    const { rowCount } = await query(
+      `UPDATE ${tdb.ref('tenders')} SET status = 'awarded', updated_at = NOW() WHERE id = $1`,
+      [tenderId],
+    );
+    if (rowCount === 0) {
+      throw new AppError('İhale bulunamadı', 404, 'NOT_FOUND');
+    }
+    await query(
+      `INSERT INTO ${tdb.ref('tender_audit_logs')} (tender_id, action, details, created_by)
+       VALUES ($1, $2, $3, $4)`,
+      [tenderId, 'tender_finalized', JSON.stringify({ note: note ?? null, finalizedBy: userId }), userId],
+    );
+  });
 
   return { status: 'awarded' };
 }

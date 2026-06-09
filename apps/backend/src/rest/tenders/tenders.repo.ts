@@ -15,9 +15,10 @@ interface TenderRow {
   updated_at: Date;
 }
 
-function mapRow(row: TenderRow) {
+function mapRow(row: TenderRow, companyId?: string) {
   return {
     id: row.id,
+    companyId: companyId ?? null,
     projectId: row.project_id,
     projectName: row.project_name,
     categoryId: row.category_id,
@@ -65,7 +66,7 @@ export async function findAll(companyId: string, options: FindAllOptions = {}): 
      ORDER BY t.created_at ${sortOrder}${limitClause}`,
     params,
   );
-  return rows.map(mapRow);
+  return rows.map((row) => mapRow(row, companyId));
 }
 
 export async function findAllAcrossCompanies(options: FindAllOptions = {}): Promise<TenderRecord[]> {
@@ -83,8 +84,16 @@ export async function findAllAcrossCompanies(options: FindAllOptions = {}): Prom
 export async function findByIdAcrossCompanies(id: string): Promise<TenderRecord | null> {
   const allCompanies = await companiesRepo.findAll();
   for (const company of allCompanies) {
-    const record = await findById(company.id, id);
-    if (record) return record;
+    const tdb = new TenantDb(company.id);
+    const { rows } = await tdb.query<TenderRow>(
+      `SELECT t.*, p.name AS project_name, c.name AS category_name
+       FROM ${tdb.ref('tenders')} t
+       LEFT JOIN ${tdb.ref('projects')} p ON t.project_id = p.id
+       LEFT JOIN ${tdb.ref('categories')} c ON t.category_id = c.id
+       WHERE t.id = $1 LIMIT 1`,
+      [id],
+    );
+    if (rows[0]) return mapRow(rows[0], company.id);
   }
   return null;
 }
@@ -116,7 +125,7 @@ export async function findById(companyId: string, id: string): Promise<TenderRec
      LIMIT 1`,
     [id],
   );
-  return rows[0] ? mapRow(rows[0]) : null;
+  return rows[0] ? mapRow(rows[0], companyId) : null;
 }
 
 export async function create(
@@ -144,7 +153,7 @@ export async function create(
       data.deadline ?? null,
     ],
   );
-  return mapRow(rows[0]!);
+  return mapRow(rows[0]!, companyId);
 }
 
 export async function update(
@@ -176,7 +185,7 @@ export async function update(
      RETURNING *, NULL::text AS project_name, NULL::text AS category_name`,
     params,
   );
-  return rows[0] ? mapRow(rows[0]) : null;
+  return rows[0] ? mapRow(rows[0], companyId) : null;
 }
 
 export async function deleteById(companyId: string, id: string): Promise<boolean> {

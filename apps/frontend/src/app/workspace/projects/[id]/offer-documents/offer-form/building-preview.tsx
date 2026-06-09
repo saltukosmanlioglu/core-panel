@@ -97,7 +97,7 @@ function FloorRow({
   label: string;
   sublabel?: string;
   units: OfferUnit[];
-  numMap: Map<number, string>;
+  numMap: Map<string, string>;
   hasSideMargin?: boolean;
   overrideM2?: string;
 }) {
@@ -134,7 +134,7 @@ function FloorRow({
   );
 }
 
-function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<number, string> }) {
+function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<string, string> }) {
   const visibleUnits = floor.exists ? floor.units.filter((u) => !u.isMergedInto) : [];
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: `1fr ${LABEL_COL}` }}>
@@ -160,7 +160,7 @@ function RoofRow({ floor, numMap }: { floor: RoofFloor; numMap: Map<number, stri
   );
 }
 
-function NormalFloorRow({ floor, numMap, floorAreas }: { floor: NormalFloor; numMap: Map<number, string>; floorAreas?: { floorNumber: number; netArea: number }[] | null }) {
+function NormalFloorRow({ floor, numMap, floorAreas }: { floor: NormalFloor; numMap: Map<string, string>; floorAreas?: { floorNumber: number; netArea: number }[] | null }) {
   const visibleUnits = floor.units.filter((u) => !u.isMergedInto);
   const visibleUnitCount = Math.max(1, visibleUnits.length);
   const floorEntry = floorAreas?.find((fa) => fa.floorNumber === floor.floorNumber + 1);
@@ -179,7 +179,7 @@ function NormalFloorRow({ floor, numMap, floorAreas }: { floor: NormalFloor; num
   );
 }
 
-function BasementFloorRow({ floor, numMap, hasSideMargin }: { floor: BasementFloor; numMap: Map<number, string>; hasSideMargin?: boolean }) {
+function BasementFloorRow({ floor, numMap, hasSideMargin }: { floor: BasementFloor; numMap: Map<string, string>; hasSideMargin?: boolean }) {
   if (floor.isCommonArea) {
     return (
       <Box

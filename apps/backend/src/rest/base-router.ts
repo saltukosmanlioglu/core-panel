@@ -20,6 +20,7 @@ import tenderAwardsRouter from './tender-awards/tender-awards.route';
 import tenderAuditLogsRouter from './tender-audit-logs/tender-audit-logs.route';
 import parcelCalculationsRouter from './parcel-calculations/parcel-calculations.route';
 import offerDocumentsRouter from './offer-documents/offer-documents.route';
+import metrajRouter from './metraj/metraj.route';
 
 
 const baseRouter = Router();
@@ -42,6 +43,7 @@ baseRouter.use('/tenders/:tenderId/item-notes', verifyToken, checkIsActive, tend
 baseRouter.use('/tenders/:tenderId/awards', verifyToken, checkIsActive, tenderAwardsRouter);
 baseRouter.use('/tenders/:tenderId/audit-log', verifyToken, checkIsActive, tenderAuditLogsRouter);
 baseRouter.use('/projects/:projectId/offer-documents', verifyToken, checkIsActive, offerDocumentsRouter);
+baseRouter.use('/', verifyToken, checkIsActive, metrajRouter);
 
 baseRouter.use('/', verifyToken, checkIsActive, parcelCalculationsRouter);
 

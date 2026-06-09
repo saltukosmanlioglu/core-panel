@@ -190,6 +190,26 @@ export async function upsertOfferItem(
   );
 }
 
+export async function bulkUpsertOfferItems(
+  companyId: string,
+  offerId: string,
+  items: { itemId: string; materialUnitPrice: number; laborUnitPrice: number }[],
+): Promise<void> {
+  const tdb = new TenantDb(companyId);
+  const table = tdb.ref('tender_offer_items');
+  await tdb.withTransaction(async (query) => {
+    for (const item of items) {
+      await query(
+        `INSERT INTO ${table} (offer_id, item_id, material_unit_price, labor_unit_price)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (offer_id, item_id) DO UPDATE
+           SET material_unit_price = $3, labor_unit_price = $4, updated_at = NOW()`,
+        [offerId, item.itemId, item.materialUnitPrice, item.laborUnitPrice],
+      );
+    }
+  });
+}
+
 interface ComparisonItemRow {
   item_id: string;
   row_no: number;

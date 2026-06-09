@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import Anthropic from '@anthropic-ai/sdk';
 import mammoth from 'mammoth';
 import { env } from '../../config/env';
 import { AppError } from '../../lib/AppError';
+
 
 export interface Edge {
   label: string;
@@ -84,7 +86,6 @@ export interface ParcelDocumentExtractionResult {
   zoningInfo: ZoningExtractionResult;
 }
 
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
 const CM_PER_METER = 100;
 const SQ_CM_PER_SQ_M = 10000;
 
@@ -483,16 +484,43 @@ export function calculateFootprint(
 }
 
 export function calculateOverhangArea(footprintVertices: Point[], overhang: Overhang): number {
-  if (footprintVertices.length === 0) return 0;
+  if (footprintVertices.length < 3) return 0;
 
-  const box = boundingBox(footprintVertices);
-  const minX = box.minX - overhang.left * CM_PER_METER;
-  const maxX = box.maxX + overhang.right * CM_PER_METER;
-  const minY = box.minY - overhang.back * CM_PER_METER;
-  const maxY = box.maxY + overhang.front * CM_PER_METER;
-  const areaSqCm = Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+  // Use the maximum overhang depth as a uniform outward polygon offset.
+  // This is conservative (slightly over-estimates for asymmetric overhangs) but
+  // correct for the common case of uniform çıkma, and avoids the large error
+  // introduced by bounding-box expansion on non-rectangular footprints.
+  const maxOffsetCm = Math.max(overhang.front, overhang.back, overhang.left, overhang.right) * CM_PER_METER;
+  if (maxOffsetCm <= 0) return calculatePolygonArea(footprintVertices);
 
-  return roundArea(areaSqCm / SQ_CM_PER_SQ_M);
+  const clockwise = signedArea(footprintVertices) < 0;
+  const n = footprintVertices.length;
+
+  const expanded: Point[] = footprintVertices.map((curr, i) => {
+    const prev = footprintVertices[(i - 1 + n) % n]!;
+    const next = footprintVertices[(i + 1) % n]!;
+
+    // Inward normals for the two adjacent edges; negate them for outward offset.
+    const prevNormal = normalizedInwardNormal(prev, curr, clockwise);
+    const nextNormal = normalizedInwardNormal(curr, next, clockwise);
+    const prevOffset = { x: -prevNormal.x * maxOffsetCm, y: -prevNormal.y * maxOffsetCm };
+    const nextOffset = { x: -nextNormal.x * maxOffsetCm, y: -nextNormal.y * maxOffsetCm };
+
+    const prevDirection = normalizedEdgeVector(prev, curr);
+    const nextDirection = normalizedEdgeVector(curr, next);
+
+    // Find the miter intersection of the two outward-offset edge lines.
+    const miterPoint = lineIntersection(
+      { x: prev.x + prevOffset.x, y: prev.y + prevOffset.y },
+      prevDirection,
+      { x: curr.x + nextOffset.x, y: curr.y + nextOffset.y },
+      nextDirection,
+    ) ?? { x: curr.x + prevOffset.x + nextOffset.x, y: curr.y + prevOffset.y + nextOffset.y };
+
+    return { x: round(miterPoint.x), y: round(miterPoint.y) };
+  });
+
+  return roundArea(calculatePolygonArea(expanded));
 }
 
 function extractJsonObject(text: string): unknown {
@@ -682,7 +710,6 @@ async function extractSingleDocument<T>(
   systemPrompt: string,
 ): Promise<T> {
   try {
-    const Anthropic = require('@anthropic-ai/sdk').default as typeof import('@anthropic-ai/sdk').default;
     const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
     const mimeType = mediaTypeFromPath(filePath);
     const extractedText = await extractTextFromFile(filePath, mimeType);
@@ -697,7 +724,7 @@ async function extractSingleDocument<T>(
       ];
 
     const message = await client.messages.create({
-      model: CLAUDE_MODEL,
+      model: env.CLAUDE_MODEL,
       max_tokens: 1000,
       temperature: 0,
       system: systemPrompt,

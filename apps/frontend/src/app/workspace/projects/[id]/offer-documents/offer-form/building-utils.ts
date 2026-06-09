@@ -6,9 +6,9 @@ import type {
   UnitType,
 } from '@/services/offer-documents/types';
 
-export function computeGlobalNumbers(building: OfferBuilding): Map<number, string> {
-  const map = new Map<number, string>();
-  const aboveGroundLinkCounts = new Map<number, number>();
+export function computeGlobalNumbers(building: OfferBuilding): Map<string, string> {
+  const map = new Map<string, string>();
+  const aboveGroundLinkCounts = new Map<string, number>();
 
   let nextNumber = 1;
   const aboveGround: OfferUnit[] = [
@@ -88,10 +88,10 @@ const UNIT_TYPE_NAMES: Record<UnitType, string> = {
   diger: '',
 };
 
-export function makeUnit(id: number, brutM2 = 0, unitNumber?: number, unitType: UnitType = 'daire'): OfferUnit {
+export function makeUnit(brutM2 = 0, unitNumber?: number, unitType: UnitType = 'daire'): OfferUnit {
   const isNullOwner = unitType === 'siginak' || unitType === 'ortak_alan';
   return {
-    id,
+    id: crypto.randomUUID(),
     ownerType: isNullOwner ? null : 'tapu',
     ownerName: UNIT_TYPE_NAMES[unitType],
     unitType,
@@ -117,24 +117,24 @@ export function defaultBuilding(tabanAlani = 0): OfferBuilding {
         isCommonArea: true,
         commonAreaM2: tabanAlani || null,
         commonAreaLabel: 'ORTAK ALAN',
-        units: [makeUnit(7, brutM2, undefined, 'depo'), makeUnit(8, brutM2, undefined, 'depo')],
+        units: [makeUnit(brutM2, undefined, 'depo'), makeUnit(brutM2, undefined, 'depo')],
         streetLabels: emptyStreetLabels,
       },
     ],
     groundFloor: {
       exists: true,
-      units: [makeUnit(1, brutM2), makeUnit(2, brutM2)],
+      units: [makeUnit(brutM2), makeUnit(brutM2)],
       streetLabels: emptyStreetLabels,
     },
     normalFloors: [
       {
         floorNumber: 1,
-        units: [makeUnit(3, brutM2), makeUnit(4, brutM2)],
+        units: [makeUnit(brutM2), makeUnit(brutM2)],
       },
     ],
     roofFloor: {
       exists: false,
-      units: [makeUnit(5, brutM2), makeUnit(6, brutM2)],
+      units: [makeUnit(brutM2), makeUnit(brutM2)],
     },
   };
 }

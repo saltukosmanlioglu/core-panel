@@ -1,5 +1,6 @@
 import type {
   BasementFloor,
+  OfferBuilding,
   NormalFloor,
   OfferDocument,
   OfferUnit,
@@ -36,13 +37,66 @@ function floorLabelHtml(label: string): string {
   `;
 }
 
-function unitsRowHtml(units: OfferUnit[], label: string, streetLabels?: StreetLabels, rowClass = ''): string {
+function computeGlobalNumbers(building: OfferBuilding): Map<string, string> {
+  const map = new Map<string, string>();
+  const aboveGroundLinkCounts = new Map<string, number>();
+
+  let nextNumber = 1;
+  const aboveGround: OfferUnit[] = [
+    ...(building.groundFloor.exists ? building.groundFloor.units : []),
+    ...building.normalFloors
+      .slice()
+      .sort((a, b) => a.floorNumber - b.floorNumber)
+      .flatMap((floor) => floor.units),
+    ...(building.roofFloor.exists ? building.roofFloor.units : []),
+  ];
+
+  for (const unit of aboveGround) {
+    if (!unit.isMergedInto && (unit.unitType === 'daire' || unit.unitType === 'dukkan')) {
+      map.set(unit.id, String(nextNumber));
+      nextNumber += 1;
+    }
+  }
+
+  for (const floor of building.basementFloors) {
+    if (floor.isCommonArea) continue;
+
+    for (const unit of floor.units) {
+      if (unit.isMergedInto || (unit.unitType !== 'daire' && unit.unitType !== 'dukkan')) continue;
+
+      if (unit.linkedUnitId !== null) {
+        const linkedNumber = map.get(unit.linkedUnitId);
+        if (linkedNumber) {
+          const subNumber = (aboveGroundLinkCounts.get(unit.linkedUnitId) ?? 0) + 1;
+          aboveGroundLinkCounts.set(unit.linkedUnitId, subNumber);
+          map.set(unit.id, `${linkedNumber}.${subNumber}`);
+          continue;
+        }
+      }
+
+      map.set(unit.id, String(nextNumber));
+      nextNumber += 1;
+    }
+  }
+
+  return map;
+}
+
+function unitsRowHtml(
+  units: OfferUnit[],
+  label: string,
+  numberMap: Map<string, string>,
+  streetLabels?: StreetLabels,
+  rowClass = '',
+): string {
   const classes = ['floor-row', rowClass].filter(Boolean).join(' ');
   return `
     <div class="${classes}">
       ${streetLabelsHtml(streetLabels)}
       <div class="floor-cells">
-        ${units.length > 0 ? units.map(unitHtml).join('') : '<div class="empty-unit">Birim eklenmedi</div>'}
+        ${units.length > 0
+          ? units.map((unit) => unitHtml(unit, numberMap.get(unit.id))).join('')
+          : '<div class="empty-unit">Birim eklenmedi</div>'}
       </div>
       ${floorLabelHtml(label)}
     </div>
@@ -50,11 +104,11 @@ function unitsRowHtml(units: OfferUnit[], label: string, streetLabels?: StreetLa
   `;
 }
 
-function normalFloorHtml(floor: NormalFloor): string {
-  return unitsRowHtml(floor.units, `${floor.floorNumber}. KAT`, undefined, 'normal-floor');
+function normalFloorHtml(floor: NormalFloor, numberMap: Map<string, string>): string {
+  return unitsRowHtml(floor.units, `${floor.floorNumber}. KAT`, numberMap, undefined, 'normal-floor');
 }
 
-function basementFloorHtml(floor: BasementFloor): string {
+function basementFloorHtml(floor: BasementFloor, numberMap: Map<string, string>): string {
   if (floor.isCommonArea) {
     return `
       <div class="floor-row basement basement-common">
@@ -70,16 +124,21 @@ function basementFloorHtml(floor: BasementFloor): string {
     `;
   }
 
-  return unitsRowHtml(floor.units, floor.label, floor.streetLabels, 'basement basement-units');
+  return unitsRowHtml(floor.units, floor.label, numberMap, floor.streetLabels, 'basement basement-units');
 }
 
 export function page3Html(offerDocument: OfferDocument, subtitleLine?: string): string {
   const building = offerDocument.building;
+  const numberMap = computeGlobalNumbers(building);
   const floors = [
-    ...(building.roofFloor.exists ? [unitsRowHtml(building.roofFloor.units, 'ÇATI KATI', undefined, 'roof-floor')] : []),
-    ...building.normalFloors.slice().reverse().map(normalFloorHtml),
-    ...(building.groundFloor.exists ? [unitsRowHtml(building.groundFloor.units, 'ZEMİN KAT', building.groundFloor.streetLabels, 'ground-floor')] : []),
-    ...building.basementFloors.map(basementFloorHtml),
+    ...(building.roofFloor.exists
+      ? [unitsRowHtml(building.roofFloor.units, 'ÇATI KATI', numberMap, undefined, 'roof-floor')]
+      : []),
+    ...building.normalFloors.slice().reverse().map((floor) => normalFloorHtml(floor, numberMap)),
+    ...(building.groundFloor.exists
+      ? [unitsRowHtml(building.groundFloor.units, 'ZEMİN KAT', numberMap, building.groundFloor.streetLabels, 'ground-floor')]
+      : []),
+    ...building.basementFloors.map((floor) => basementFloorHtml(floor, numberMap)),
   ];
 
   return `
