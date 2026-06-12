@@ -10,6 +10,20 @@ const PG_ERRORS: Record<string, { status: number; error: string; code: string }>
   '23502': { status: 400, error: 'Zorunlu alan eksik', code: 'NULL_VIOLATION' },
 };
 
+function getPgError(err: unknown): Record<string, unknown> | null {
+  let current: unknown = err;
+
+  while (current && typeof current === 'object') {
+    const record = current as Record<string, unknown>;
+    if (typeof record.code === 'string') {
+      return record;
+    }
+    current = record.cause;
+  }
+
+  return null;
+}
+
 export function errorHandler(
   err: Error,
   req: Request,
@@ -24,11 +38,17 @@ export function errorHandler(
   }
 
   // Handle known Postgres errors before anything else
-  const errAsUnknown = err as unknown as Record<string, unknown>;
-  const pgCode = typeof errAsUnknown.code === 'string' ? errAsUnknown.code : undefined;
-  if (pgCode && PG_ERRORS[pgCode]) {
+  const pgErr = getPgError(err);
+  const pgCode = typeof pgErr?.code === 'string' ? pgErr.code : undefined;
+  if (pgErr && pgCode && PG_ERRORS[pgCode]) {
     const pgError = PG_ERRORS[pgCode]!;
-    console.error(`[${new Date().toISOString()}] PG Error ${pgCode} — ${req.method} ${req.path}`, err.message);
+    console.error(`[${new Date().toISOString()}] PG Error ${pgCode} — ${req.method} ${req.path}`, {
+      message: pgErr.message ?? err.message,
+      detail: pgErr.detail,
+      constraint: pgErr.constraint,
+      table: pgErr.table,
+      stack: err.stack,
+    });
     res.status(pgError.status).json({ error: pgError.error, code: pgError.code });
     return;
   }
@@ -40,6 +60,15 @@ export function errorHandler(
     statusCode,
     code: appErr?.code ?? (statusCode >= 500 ? 'INTERNAL_ERROR' : 'ERROR'),
     message: err.message,
+    cause: pgErr
+      ? {
+          code: pgErr.code,
+          message: pgErr.message,
+          detail: pgErr.detail,
+          constraint: pgErr.constraint,
+          table: pgErr.table,
+        }
+      : undefined,
     stack: err.stack,
   });
 
