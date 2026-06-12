@@ -43,8 +43,9 @@ app.use('/api', apiLimiter);
 
 // Authenticated file-streaming endpoint (replaces unauthenticated express.static).
 // Matches any path under /api/files/**, e.g. /api/files/logos/logo-uuid.png
-app.get('/api/files/*', verifyToken, checkIsActive, (req, res) => {
-  const relativePath = (req.params as Record<string, string>)['0'] ?? '';
+app.get('/api/files/*filePath', verifyToken, checkIsActive, (req, res) => {
+  const filePathParam = (req.params as Record<string, string | string[]>)['filePath'];
+  const relativePath = Array.isArray(filePathParam) ? filePathParam.join('/') : filePathParam ?? '';
   const resolved = path.resolve(UPLOADS_DIR, relativePath);
 
   // Prevent path traversal

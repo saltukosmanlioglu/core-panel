@@ -5,7 +5,6 @@ const required = [
   'FRONTEND_URL',
   'MFA_ENCRYPTION_KEY',
   'ANTHROPIC_API_KEY',
-  'MESHY_API_KEY',
 ] as const;
 
 for (const key of required) {
@@ -30,7 +29,6 @@ export const env = {
   FRONTEND_URL: process.env.FRONTEND_URL!,
   MFA_ENCRYPTION_KEY: process.env.MFA_ENCRYPTION_KEY!,
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
-  MESHY_API_KEY: process.env.MESHY_API_KEY!,
   NODE_ENV: process.env.NODE_ENV ?? 'development',
   TCMB_DEFAULT_RATE: process.env.TCMB_DEFAULT_RATE ?? '1 Dolar (USD): 45,45 TL',
   CLAUDE_MODEL: process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6',

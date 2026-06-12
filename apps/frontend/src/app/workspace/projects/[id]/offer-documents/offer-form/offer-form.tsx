@@ -66,13 +66,16 @@ interface OfferFormProps {
   floorAreas?: { floorNumber: number; netArea: number }[] | null;
   companyName: string;
   parcelCalculationId: string | null;
-  onCancel: () => void;
   onSave: (payload: OfferDocumentPayload, id?: string) => Promise<OfferDocument>;
   onGeneratePdf: (id: string) => Promise<void>;
 }
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function cloneUnits(units: OfferUnit[]): OfferUnit[] {
@@ -152,6 +155,7 @@ function normalizeBuildingUnitIds(building: OfferBuilding): OfferBuilding {
     ...building,
     groundFloor: {
       ...building.groundFloor,
+      exists: true,
       units: remapUnits(building.groundFloor.units, idMap),
     },
     normalFloors: building.normalFloors.map((floor) => ({
@@ -191,7 +195,7 @@ function buildPayloadFromDocument(
         : [{ id: '1', label: 'Alternatif 1', building: normalizeBuildingUnitIds(document.building) }];
     return {
       parcelTitle: document.parcelTitle,
-      offerDate: document.offerDate,
+      offerDate: today(),
       page2Content: document.page2Content,
       tcmbRate: document.tcmbRate,
       companyName: document.companyName,
@@ -221,7 +225,6 @@ export function OfferForm({
   floorAreas,
   companyName,
   parcelCalculationId,
-  onCancel,
   onSave,
   onGeneratePdf,
 }: OfferFormProps) {
@@ -261,7 +264,7 @@ export function OfferForm({
   const floorNetArea = (fa: typeof floorAreas, floorNumber: number) =>
     fa?.find((f) => f.floorNumber === floorNumber + 1)?.netArea ?? tabanAlani;
 
-  const canSave = payload.parcelTitle.trim() && payload.offerDate && payload.page2Content.trim();
+  const canSave = payload.parcelTitle.trim() && payload.page2Content.trim();
 
   const updateBuilding = (updater: (building: OfferBuilding) => OfferBuilding) => {
     setPayload((current) => {
@@ -411,13 +414,13 @@ export function OfferForm({
 
   const save = async (): Promise<OfferDocument | null> => {
     if (!canSave) {
-      setError('Parsel başlığı, teklif tarihi ve teklif içeriği zorunludur.');
+      setError('Parsel başlığı ve teklif içeriği zorunludur.');
       return null;
     }
     try {
       setIsSaving(true);
       setError(null);
-      const saved = await onSave(payload, savedDocument?.id);
+      const saved = await onSave({ ...payload, offerDate: today() }, savedDocument?.id);
       setSavedDocument(saved);
       return saved;
     } catch (saveError) {
@@ -436,6 +439,24 @@ export function OfferForm({
 
   const previewBuilding = useMemo(() => activeBuilding, [activeBuilding]);
   const previewNumberMap = useMemo(() => computeGlobalNumbers(activeBuilding), [activeBuilding]);
+  const stepNavigation = (
+    <Box sx={{ display: 'flex', justifyContent: activeStep === 0 ? 'flex-end' : 'space-between', gap: 2, pt: 1 }}>
+      {activeStep > 0 ? (
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => setActiveStep((s) => s - 1)}
+        >
+          Geri
+        </Button>
+      ) : null}
+      {activeStep < steps.length - 1 ? (
+        <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={() => setActiveStep((s) => s + 1)}>
+          İleri
+        </Button>
+      ) : null}
+    </Box>
+  );
 
   return (
     <Stack spacing={3}>
@@ -446,6 +467,7 @@ export function OfferForm({
       </Stepper>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
+      {stepNavigation}
 
       {/* ── Step 0: Genel Bilgiler ── */}
       {activeStep === 0 ? (
@@ -487,26 +509,12 @@ export function OfferForm({
             onChange={(e) => setPayload((c) => ({ ...c, parcelTitle: e.target.value }))}
             fullWidth
           />
-          <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
-            <Box sx={{ flex: 1 }}>
-              <TextField
-                label="Teklif tarihi"
-                type="date"
-                value={payload.offerDate}
-                onChange={(e) => setPayload((c) => ({ ...c, offerDate: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
-                fullWidth
-              />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <TextField
-                label="TCMB dolar kuru"
-                value={payload.tcmbRate}
-                onChange={(e) => setPayload((c) => ({ ...c, tcmbRate: e.target.value }))}
-                fullWidth
-              />
-            </Box>
-          </Box>
+          <TextField
+            label="TCMB dolar kuru"
+            value={payload.tcmbRate}
+            onChange={(e) => setPayload((c) => ({ ...c, tcmbRate: e.target.value }))}
+            fullWidth
+          />
           <Box>
             <TextField
               label="Taban oturum alanı"
@@ -613,11 +621,6 @@ export function OfferForm({
                 label="Tüm katlar aynı"
                 sx={{ mr: 0 }}
               />
-              {normalFloorsSame && activeBuilding.normalFloors.length > 1 ? (
-                <Alert severity="info" sx={{ py: 0.5, fontSize: 13 }}>
-                  Tüm katlar senkronize — bir kattaki değişiklik diğer katlara yansır
-                </Alert>
-              ) : null}
               <Box>
                 <Button startIcon={<AddIcon />} onClick={addNormalFloor} variant="outlined" size="small">
                   Kat Ekle
@@ -626,44 +629,38 @@ export function OfferForm({
               {activeBuilding.normalFloors.length === 0 ? (
                 <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>Henüz kat eklenmedi.</Typography>
               ) : null}
-              {[...activeBuilding.normalFloors].reverse().map((floor) => {
-                const index = activeBuilding.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
-                return (
-                  <FloorCard
-                    key={floor.floorNumber}
-                    label={`${floor.floorNumber}. Kat`}
-                    units={floor.units}
-                    tabanAlani={tabanAlani}
-                    isBasement={false}
-                    companyName={companyName}
-                    synced={normalFloorsSame && activeBuilding.normalFloors.length > 1}
-                    onEdit={() => openFloorEditor({ kind: 'normal', index })}
-                    onRemove={() => removeNormalFloor(index)}
-                    canRemove
-                  />
-                );
-              })}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                {[...activeBuilding.normalFloors].reverse().map((floor) => {
+                  const index = activeBuilding.normalFloors.findIndex((f) => f.floorNumber === floor.floorNumber);
+                  return (
+                    <FloorCard
+                      key={floor.floorNumber}
+                      label={`${floor.floorNumber}. Kat`}
+                      units={floor.units}
+                      tabanAlani={tabanAlani}
+                      isBasement={false}
+                      companyName={companyName}
+                      synced={normalFloorsSame && activeBuilding.normalFloors.length > 1}
+                      onEdit={() => openFloorEditor({ kind: 'normal', index })}
+                      onRemove={() => removeNormalFloor(index)}
+                      canRemove
+                    />
+                  );
+                })}
+              </Box>
             </Box>
 
             {/* Zemin kat + bodrum katlar + çatı katı */}
             <Box sx={{ flex: 1, minWidth: 0, width: { xs: '100%', md: 0 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Switch
-                  checked={activeBuilding.groundFloor.exists}
-                  onChange={(e) => updateBuilding((b) => ({ ...b, groundFloor: { ...b.groundFloor, exists: e.target.checked } }))}
-                />
-                <Typography sx={{ fontWeight: 600 }}>Zemin Kat</Typography>
-              </Box>
-              {activeBuilding.groundFloor.exists ? (
-                <FloorCard
-                  label="Zemin Kat"
-                  units={activeBuilding.groundFloor.units}
-                  tabanAlani={tabanAlani}
-                  isBasement={false}
-                  companyName={companyName}
-                  onEdit={() => openFloorEditor({ kind: 'ground' })}
-                />
-              ) : null}
+              <Typography sx={{ fontWeight: 600 }}>Zemin Kat</Typography>
+              <FloorCard
+                label="Zemin Kat"
+                units={activeBuilding.groundFloor.units}
+                tabanAlani={tabanAlani}
+                isBasement={false}
+                companyName={companyName}
+                onEdit={() => openFloorEditor({ kind: 'ground' })}
+              />
 
               <Divider />
 
@@ -673,22 +670,24 @@ export function OfferForm({
                   Bodrum Kat Ekle
                 </Button>
               </Box>
-              {activeBuilding.basementFloors.map((floor, index) => (
-                <FloorCard
-                  key={index}
-                  label={floor.label}
-                  units={floor.units}
-                  isCommonArea={floor.isCommonArea}
-                  commonAreaM2={floor.commonAreaM2}
-                  commonAreaLabel={floor.commonAreaLabel}
-                  tabanAlani={tabanAlani}
-                  isBasement
-                  companyName={companyName}
-                  onEdit={() => openFloorEditor({ kind: 'basement', index })}
-                  onRemove={() => removeBasementFloor(index)}
-                  canRemove={activeBuilding.basementFloors.length > 1}
-                />
-              ))}
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                {activeBuilding.basementFloors.map((floor, index) => (
+                  <FloorCard
+                    key={floor.label}
+                    label={floor.label}
+                    units={floor.units}
+                    isCommonArea={floor.isCommonArea}
+                    commonAreaM2={floor.commonAreaM2}
+                    commonAreaLabel={floor.commonAreaLabel}
+                    tabanAlani={tabanAlani}
+                    isBasement
+                    companyName={companyName}
+                    onEdit={() => openFloorEditor({ kind: 'basement', index })}
+                    onRemove={() => removeBasementFloor(index)}
+                    canRemove={activeBuilding.basementFloors.length > 1}
+                  />
+                ))}
+              </Box>
 
               <Divider />
 
@@ -752,26 +751,6 @@ export function OfferForm({
         </Stack>
       ) : null}
 
-      {/* Navigation */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, pt: 1 }}>
-        <Button
-          variant="outlined"
-          startIcon={activeStep === 0 ? undefined : <ArrowBackIcon />}
-          onClick={activeStep === 0 ? onCancel : () => setActiveStep((s) => s - 1)}
-        >
-          {activeStep === 0 ? 'Vazgeç' : 'Geri'}
-        </Button>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="outlined" onClick={() => void save()} disabled={isSaving || !canSave}>
-            Kaydet
-          </Button>
-          {activeStep < steps.length - 1 ? (
-            <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={() => setActiveStep((s) => s + 1)}>
-              İleri
-            </Button>
-          ) : null}
-        </Box>
-      </Box>
     </Stack>
   );
 }
@@ -806,15 +785,15 @@ function FloorCard({
   canRemove?: boolean;
 }) {
   const visibleUnits = units.filter((u) => !u.isMergedInto);
-  const totalM2 = visibleUnits.reduce((s, u) => s + u.brutM2, 0);
+  const totalM2 = round2(visibleUnits.reduce((s, u) => s + u.brutM2, 0));
   const tapuCount = visibleUnits.filter((u) => u.ownerType === 'tapu').length;
   const milaCount = visibleUnits.filter((u) => u.ownerType === 'mila').length;
   const nullCount = visibleUnits.filter((u) => u.ownerType === null).length;
-  const netAlan = tabanAlani;
+  const netAlan = round2(tabanAlani);
   const hasWarning =
     !isCommonArea &&
     visibleUnits.length > 0 &&
-    (isBasement ? totalM2 > tabanAlani : totalM2 > netAlan);
+    (isBasement ? totalM2 > round2(tabanAlani) : totalM2 > netAlan);
 
   return (
     <Box
@@ -835,7 +814,7 @@ function FloorCard({
             <Tooltip
               title={
                 isBasement
-                  ? `Toplam m² (${totalM2.toFixed(2)}) taban alanını (${tabanAlani}) aşıyor`
+                  ? `Toplam m² (${totalM2.toFixed(2)}) taban alanını (${round2(tabanAlani).toFixed(2)}) aşıyor`
                   : `Toplam m² (${totalM2.toFixed(2)}) net alanı (${netAlan.toFixed(2)}) aşıyor`
               }
             >
@@ -859,9 +838,11 @@ function FloorCard({
         )}
       </Box>
       <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
-        <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>
-          Düzenle
-        </Button>
+        <Tooltip title="Düzenle">
+          <IconButton size="small" onClick={onEdit}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         {canRemove && onRemove ? (
           <Tooltip title="Katı kaldır">
             <IconButton size="small" color="error" onClick={onRemove}>
@@ -932,8 +913,8 @@ function FloorEditorModal({
   let validationAlert: React.ReactNode = null;
   if (localDraft?.kind === 'ground' || localDraft?.kind === 'normal') {
     const visibleUnits = localDraft.units.filter((u) => !u.isMergedInto);
-    const totalM2 = visibleUnits.reduce((s, u) => s + u.brutM2, 0);
-    const netAlan = tabanAlani;
+    const totalM2 = round2(visibleUnits.reduce((s, u) => s + u.brutM2, 0));
+    const netAlan = round2(tabanAlani);
     if (totalM2 > netAlan) {
       validationAlert = (
         <Alert severity="error">
@@ -943,11 +924,12 @@ function FloorEditorModal({
     }
   } else if (localDraft?.kind === 'basement' && !localDraft.floor.isCommonArea) {
     const visibleUnits = localDraft.floor.units.filter((u) => !u.isMergedInto);
-    const totalM2 = visibleUnits.reduce((s, u) => s + u.brutM2, 0);
-    if (totalM2 > tabanAlani) {
+    const totalM2 = round2(visibleUnits.reduce((s, u) => s + u.brutM2, 0));
+    const netAlan = round2(tabanAlani);
+    if (totalM2 > netAlan) {
       validationAlert = (
         <Alert severity="warning">
-          Birim toplamı ({totalM2.toFixed(2)} m²) taban alanını ({tabanAlani} m²) aşıyor.
+          Birim toplamı ({totalM2.toFixed(2)} m²) taban alanını ({netAlan.toFixed(2)} m²) aşıyor.
         </Alert>
       );
     }
@@ -1059,9 +1041,6 @@ function FloorEditorModal({
             </>
           ) : (
             <>
-              {normalFloorsSame && building.normalFloors.length > 1 ? (
-                <Alert severity="info">Değişiklikler tüm katlara uygulanacak.</Alert>
-              ) : null}
               <UnitsEditor
                 title={`${localDraft.floorNumber}. Kat Birimleri`}
                 units={localDraft.units}

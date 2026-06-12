@@ -4,7 +4,7 @@ import { PDFDocument, PDFFont, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { chromium } from 'playwright';
 import type { OfferDocument } from '../offer-documents.repo';
-import { page3Html } from './page3.template';
+import { buildOfferHtml } from './offer-html-template';
 
 const PAGE_H = 842.25;
 const NAVY = rgb(27 / 255, 58 / 255, 75 / 255);
@@ -190,33 +190,32 @@ export async function generateCustomPDF(input: CustomPdfInput): Promise<Buffer> 
 // ── Adapter for existing OfferDocument-based generation ───────────────────────
 
 export async function generateOfferPDF(offerDocument: OfferDocument): Promise<Buffer> {
-  const alternatives = offerDocument.alternatives.length > 0
-    ? offerDocument.alternatives
-    : [{ id: '1', label: 'Alternatif 1', building: offerDocument.building }];
+  const html = buildOfferHtml(offerDocument);
+  const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  let mainPdfBytes: Buffer | undefined;
 
-  const diagramPngs = await Promise.all(
-    alternatives.map((alt) =>
-      renderHtmlToPng(
-        page3Html(
-          { ...offerDocument, building: alt.building },
-          `${alt.label} — KAT MALİKLERİ PAYLAŞIM KROKİSİ`,
-        ),
-        795,
-        1000,
-      ),
-    ),
-  );
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle' });
+    const pdf = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+    });
+    mainPdfBytes = Buffer.from(pdf);
+  } finally {
+    await browser.close();
+  }
 
-  return generateCustomPDF({
-    parcelLine1: offerDocument.parcelTitle,
-    date: offerDocument.offerDate,
-    p2Header: offerDocument.companyName,
-    bodyHtml: offerDocument.page2Content,
-    buildingPages: alternatives.map((alt, i) => ({
-      header: offerDocument.parcelTitle,
-      subtitle: `${alt.label} — KAT MALİKLERİ PAYLAŞIM KROKİSİ`,
-      image: diagramPngs[i]!,
-      mimetype: 'image/png',
-    })),
-  });
+  if (!mainPdfBytes) throw new Error('Failed to render offer PDF');
+
+  const staticPdfBytes = fs.readFileSync(resolveAsset('pages-4-5.pdf'));
+  const mainDoc = await PDFDocument.load(mainPdfBytes);
+  const staticDoc = await PDFDocument.load(staticPdfBytes);
+  const copiedPages = await mainDoc.copyPages(staticDoc, staticDoc.getPageIndices());
+  copiedPages.forEach(page => mainDoc.addPage(page));
+
+  const mergedBytes = await mainDoc.save();
+  return Buffer.from(mergedBytes);
 }
