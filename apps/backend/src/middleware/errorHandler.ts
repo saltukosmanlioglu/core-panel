@@ -36,15 +36,12 @@ export function errorHandler(
   const appErr = err instanceof AppError ? err : null;
   const statusCode = appErr?.statusCode ?? 500;
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
-      statusCode,
-      message: err.message,
-      stack: err.stack,
-    });
-  } else {
-    console.error(`[${new Date().toISOString()}] ${req.method} ${req.path} ${statusCode}`);
-  }
+  console.error(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
+    statusCode,
+    code: appErr?.code ?? (statusCode >= 500 ? 'INTERNAL_ERROR' : 'ERROR'),
+    message: err.message,
+    stack: err.stack,
+  });
 
   const clientMessage =
     statusCode >= 500
