@@ -2,7 +2,7 @@ services:
   - type: web
     name: core-panel-backend
     runtime: node
-    buildCommand: npm install && npm run build -w packages/shared && npm run build -w apps/backend
+    buildCommand: npm install && npm run build -w packages/shared && npm run build -w apps/backend && npm exec -w apps/backend -- playwright install --with-deps chromium
     startCommand: node apps/backend/dist/server.js
     envVars:
       - key: NODE_ENV

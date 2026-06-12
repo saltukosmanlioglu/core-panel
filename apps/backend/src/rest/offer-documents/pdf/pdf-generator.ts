@@ -12,9 +12,14 @@ const NAVY = rgb(27 / 255, 58 / 255, 75 / 255);
 // ── Asset resolution ──────────────────────────────────────────────────────────
 
 function resolveAsset(filename: string): string {
-  const local = path.resolve(__dirname, 'assets', filename);
-  if (fs.existsSync(local)) return local;
-  return path.resolve(process.cwd(), 'src/rest/offer-documents/pdf/assets', filename);
+  const candidates = [
+    path.resolve(__dirname, 'assets', filename),
+    path.resolve(process.cwd(), 'apps/backend/src/rest/offer-documents/pdf/assets', filename),
+    path.resolve(process.cwd(), 'src/rest/offer-documents/pdf/assets', filename),
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (found) return found;
+  throw new Error(`PDF asset not found: ${filename}. Checked: ${candidates.join(', ')}`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

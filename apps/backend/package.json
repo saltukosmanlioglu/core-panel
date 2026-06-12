@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc && rm -rf dist/migrations/tenant && mkdir -p dist/migrations/tenant && cp -R src/migrations/tenant/. dist/migrations/tenant",
+    "build": "tsc && rm -rf dist/migrations/tenant && mkdir -p dist/migrations/tenant && cp -R src/migrations/tenant/. dist/migrations/tenant && rm -rf dist/rest/offer-documents/pdf/assets && mkdir -p dist/rest/offer-documents/pdf/assets && cp -R src/rest/offer-documents/pdf/assets/. dist/rest/offer-documents/pdf/assets",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
